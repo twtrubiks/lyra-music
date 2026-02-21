@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Lyra Music: Simplified lyre icon for small sizes (tray icon, etc.) -->
+  <!-- Solid filled lyre silhouette — no star dots, for max clarity at 32x32 -->
+  <path d="M8.5,6.5 L23.5,6.5 C24.8,13 22,20.5 20,24.5 Q16,28.5 12,24.5 C10,20.5 7.2,13 8.5,6.5 Z"
+        fill="#e94560" stroke="#e94560" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

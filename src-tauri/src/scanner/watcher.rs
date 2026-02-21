@@ -1,0 +1,184 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use rusqlite::Connection;
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::error::AppError;
+use crate::metadata::reader;
+use crate::scanner::folder_scanner;
+use crate::storage::library_repo;
+
+enum WatcherCommand {
+    Watch(String),
+    Unwatch(String),
+    Shutdown,
+}
+
+pub struct FolderWatcher {
+    cmd_tx: mpsc::Sender<WatcherCommand>,
+}
+
+impl FolderWatcher {
+    pub fn new(db: Arc<Mutex<Connection>>, app_handle: AppHandle) -> Result<Self, AppError> {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<WatcherCommand>();
+        let (event_tx, event_rx) = mpsc::channel();
+
+        let mut watcher = RecommendedWatcher::new(
+            move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    let _ = event_tx.send(event);
+                }
+            },
+            Config::default(),
+        )
+        .map_err(|e| AppError::Watcher(format!("Failed to create watcher: {e}")))?;
+
+        let db_clone = Arc::<Mutex<Connection>>::clone(&db);
+        let app_handle_clone = app_handle.clone();
+
+        std::thread::spawn(move || {
+            let mut watched_paths: HashSet<PathBuf> = HashSet::new();
+            let debounce_duration = Duration::from_secs(2);
+            let mut pending_events: Vec<notify::Event> = Vec::new();
+            let mut last_event_time: Option<Instant> = None;
+
+            loop {
+                // Check for commands (non-blocking)
+                while let Ok(cmd) = cmd_rx.try_recv() {
+                    match cmd {
+                        WatcherCommand::Watch(path) => {
+                            let p = PathBuf::from(&path);
+                            if watched_paths.insert(p.clone()) {
+                                if let Err(e) = watcher.watch(&p, RecursiveMode::Recursive) {
+                                    eprintln!("Failed to watch {path}: {e}");
+                                }
+                            }
+                        }
+                        WatcherCommand::Unwatch(path) => {
+                            let p = PathBuf::from(&path);
+                            if watched_paths.remove(&p) {
+                                let _ = watcher.unwatch(&p);
+                            }
+                        }
+                        WatcherCommand::Shutdown => return,
+                    }
+                }
+
+                // Collect file events (non-blocking)
+                while let Ok(event) = event_rx.try_recv() {
+                    pending_events.push(event);
+                    last_event_time = Some(Instant::now());
+                }
+
+                // Process debounced events
+                if let Some(last_time) = last_event_time {
+                    if last_time.elapsed() >= debounce_duration && !pending_events.is_empty() {
+                        let events = std::mem::take(&mut pending_events);
+                        last_event_time = None;
+
+                        let mut changed = false;
+
+                        for event in events {
+                            match event.kind {
+                                EventKind::Create(_) | EventKind::Modify(_) => {
+                                    for path in &event.paths {
+                                        if let Some(path_str) = path.to_str() {
+                                            if folder_scanner::is_supported_audio_file(path_str)
+                                                && path.is_file()
+                                            {
+                                                if let Ok(conn) = db_clone.lock() {
+                                                    if process_new_file(
+                                                        &conn,
+                                                        &app_handle_clone,
+                                                        path_str,
+                                                    )
+                                                    .is_ok()
+                                                    {
+                                                        changed = true;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                EventKind::Remove(_) => {
+                                    for path in &event.paths {
+                                        if let Some(path_str) = path.to_str() {
+                                            if folder_scanner::is_supported_audio_file(path_str) {
+                                                if let Ok(conn) = db_clone.lock() {
+                                                    if let Ok(Some(cover_path)) =
+                                                        library_repo::delete_track_by_path(
+                                                            &conn, path_str,
+                                                        )
+                                                    {
+                                                        let _ = std::fs::remove_file(&cover_path);
+                                                    }
+                                                    changed = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if changed {
+                            let _ = app_handle_clone.emit("library-changed", ());
+                        }
+                    }
+                }
+
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+
+        Ok(FolderWatcher { cmd_tx })
+    }
+
+    pub fn watch(&self, folder_path: &str) -> Result<(), AppError> {
+        self.cmd_tx
+            .send(WatcherCommand::Watch(folder_path.to_string()))
+            .map_err(|e| AppError::Watcher(format!("Failed to send watch command: {e}")))
+    }
+
+    pub fn unwatch(&self, folder_path: &str) -> Result<(), AppError> {
+        self.cmd_tx
+            .send(WatcherCommand::Unwatch(folder_path.to_string()))
+            .map_err(|e| AppError::Watcher(format!("Failed to send unwatch command: {e}")))
+    }
+}
+
+impl Drop for FolderWatcher {
+    fn drop(&mut self) {
+        let _ = self.cmd_tx.send(WatcherCommand::Shutdown);
+    }
+}
+
+fn process_new_file(
+    conn: &Connection,
+    app_handle: &AppHandle,
+    file_path: &str,
+) -> Result<(), AppError> {
+    let mut track = reader::read_metadata(file_path)?;
+    let id = library_repo::insert_track(conn, &track)?;
+    track.id = id;
+
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Generic(format!("failed to get app data dir: {e}")))?;
+
+    if let Some((data, mime)) = reader::extract_cover_art_bytes(file_path) {
+        if let Ok(cover_path) = reader::save_cover_art(&app_data_dir, id, &data, &mime) {
+            let _ = library_repo::update_cover_art_path(conn, id, &cover_path);
+        }
+    }
+
+    Ok(())
+}

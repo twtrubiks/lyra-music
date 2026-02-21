@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Lyra Music default capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
+    "dialog:default",
+    "dialog:allow-open",
+    "core:event:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

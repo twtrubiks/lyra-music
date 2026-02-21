@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Lyra Music: Abstract Lyre + Constellation hybrid icon -->
+  <!-- Lyre frame: crossbar, arms, soundbox -->
+  <g fill="none" stroke="#e94560" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Crossbar (top horizontal bar) -->
+    <line x1="135" y1="108" x2="377" y2="108"/>
+    <!-- Left arm (curves inward from crossbar to soundbox) -->
+    <path d="M135,108 C118,220 158,338 190,402"/>
+    <!-- Right arm (mirror of left) -->
+    <path d="M377,108 C394,220 354,338 322,402"/>
+    <!-- Soundbox (bottom arc / resonance chamber) -->
+    <path d="M190,402 Q256,458 322,402"/>
+  </g>
+  <!-- Star-string dots (representing Lyra constellation stars) -->
+  <!-- Top dot: Vega (brightest, slightly larger) -->
+  <circle cx="256" cy="185" r="16" fill="#ff6b81"/>
+  <!-- Middle dot -->
+  <circle cx="256" cy="268" r="12" fill="#ff6b81"/>
+  <!-- Bottom dot -->
+  <circle cx="256" cy="348" r="12" fill="#ff6b81"/>
+</svg>

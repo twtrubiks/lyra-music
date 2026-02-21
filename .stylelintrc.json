@@ -1,0 +1,11 @@
+{
+  "extends": ["stylelint-config-standard", "stylelint-config-html/svelte"],
+  "rules": {
+    "selector-pseudo-class-no-unknown": [true, {
+      "ignorePseudoClasses": ["global"]
+    }],
+    "no-descending-specificity": null,
+    "custom-property-pattern": null,
+    "selector-class-pattern": null
+  }
+}
