@@ -3,7 +3,7 @@ use tauri::{AppHandle, Manager, State};
 use crate::error::AppError;
 use crate::metadata::{reader, writer};
 use crate::models::browse::{AlbumSummary, ArtistSummary};
-use crate::models::track::{Track, TrackDetails};
+use crate::models::track::{FailedFile, ImportResult, Track, TrackDetails};
 use crate::scanner::folder_scanner;
 use crate::storage::library_repo;
 use crate::DbState;
@@ -13,7 +13,7 @@ fn process_audio_file(
     conn: &rusqlite::Connection,
     app_data_dir: &std::path::Path,
     file_path: &str,
-) -> Result<Option<Track>, AppError> {
+) -> Result<Result<Track, FailedFile>, AppError> {
     match reader::read_metadata(file_path) {
         Ok(mut track) => {
             let id = library_repo::insert_track(conn, &track)?;
@@ -27,9 +27,12 @@ fn process_audio_file(
             }
 
             track.cover_art = None;
-            Ok(Some(track))
+            Ok(Ok(track))
         }
-        Err(_) => Ok(None),
+        Err(e) => Ok(Err(FailedFile {
+            file_path: file_path.to_string(),
+            error: e.to_string(),
+        })),
     }
 }
 
@@ -39,7 +42,7 @@ pub fn scan_folder(
     db: State<DbState>,
     watcher_state: State<WatcherState>,
     app_handle: AppHandle,
-) -> Result<Vec<Track>, AppError> {
+) -> Result<ImportResult, AppError> {
     let file_paths = folder_scanner::scan_folder(&folder_path)?;
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
 
@@ -53,9 +56,11 @@ pub fn scan_folder(
     let tx = conn.unchecked_transaction()?;
 
     let mut tracks = Vec::new();
+    let mut failed_files = Vec::new();
     for path in file_paths {
-        if let Some(track) = process_audio_file(&tx, &app_data_dir, &path)? {
-            tracks.push(track);
+        match process_audio_file(&tx, &app_data_dir, &path)? {
+            Ok(track) => tracks.push(track),
+            Err(failed) => failed_files.push(failed),
         }
     }
 
@@ -67,7 +72,10 @@ pub fn scan_folder(
         }
     }
 
-    Ok(tracks)
+    Ok(ImportResult {
+        tracks,
+        failed_files,
+    })
 }
 
 #[tauri::command]
@@ -75,7 +83,7 @@ pub fn import_paths(
     paths: Vec<String>,
     db: State<DbState>,
     app_handle: AppHandle,
-) -> Result<Vec<Track>, AppError> {
+) -> Result<ImportResult, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let app_data_dir = app_handle
         .path()
@@ -96,14 +104,19 @@ pub fn import_paths(
 
     let tx = conn.unchecked_transaction()?;
     let mut tracks = Vec::new();
+    let mut failed_files = Vec::new();
     for file_path in audio_files {
-        if let Some(track) = process_audio_file(&tx, &app_data_dir, &file_path)? {
-            tracks.push(track);
+        match process_audio_file(&tx, &app_data_dir, &file_path)? {
+            Ok(track) => tracks.push(track),
+            Err(failed) => failed_files.push(failed),
         }
     }
     tx.commit()?;
 
-    Ok(tracks)
+    Ok(ImportResult {
+        tracks,
+        failed_files,
+    })
 }
 
 #[tauri::command]

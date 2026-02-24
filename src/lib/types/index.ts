@@ -12,6 +12,16 @@ export interface Track {
   last_played_at: string | null;
 }
 
+export interface FailedFile {
+  file_path: string;
+  error: string;
+}
+
+export interface ImportResult {
+  tracks: Track[];
+  failed_files: FailedFile[];
+}
+
 export interface Playlist {
   id: number;
   name: string;

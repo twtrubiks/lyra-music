@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Track, TrackDetails, ArtistSummary, AlbumSummary } from '$lib/types';
+import type { Track, TrackDetails, ArtistSummary, AlbumSummary, ImportResult } from '$lib/types';
 
-export async function scanFolder(folderPath: string): Promise<Track[]> {
+export async function scanFolder(folderPath: string): Promise<ImportResult> {
   return invoke('scan_folder', { folderPath });
 }
 
@@ -29,7 +29,7 @@ export async function getTrackDetails(id: number): Promise<TrackDetails> {
   return invoke('get_track_details', { id });
 }
 
-export async function importPaths(paths: string[]): Promise<Track[]> {
+export async function importPaths(paths: string[]): Promise<ImportResult> {
   return invoke('import_paths', { paths });
 }
 

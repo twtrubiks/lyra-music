@@ -2,7 +2,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import * as libraryApi from '$lib/api/library';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
-  import { notifyCritical } from '$lib/logic/error-handler';
+  import { notifyCritical, notifyImportResult } from '$lib/logic/error-handler';
   import { pushError } from '$lib/state/errorState.svelte';
 
   const library = getLibraryState();
@@ -18,9 +18,9 @@
       if (folderPath) {
         library.isScanning = true;
         try {
-          await libraryApi.scanFolder(folderPath);
-          const allTracks = await libraryApi.getAllTracks();
-          library.allTracks = allTracks;
+          const result = await libraryApi.scanFolder(folderPath);
+          library.allTracks = await libraryApi.getAllTracks();
+          notifyImportResult(result);
         } finally {
           library.isScanning = false;
         }

@@ -12,7 +12,7 @@
   import { getPlayerState } from '$lib/state/playerState.svelte';
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
   import { mapKeyToAction } from '$lib/logic/keyboard';
-  import { warnNonCritical, notifyCritical } from '$lib/logic/error-handler';
+  import { warnNonCritical, notifyCritical, notifyImportResult } from '$lib/logic/error-handler';
   import { pushError } from '$lib/state/errorState.svelte';
   import * as playbackApi from '$lib/api/playback';
   import * as libraryApi from '$lib/api/library';
@@ -34,8 +34,9 @@
     if (library.isScanning || paths.length === 0) return;
     library.isScanning = true;
     try {
-      await libraryApi.importPaths(paths);
+      const result = await libraryApi.importPaths(paths);
       library.allTracks = await libraryApi.getAllTracks();
+      notifyImportResult(result);
     } catch (err) {
       notifyCritical('Import dropped files', err);
     } finally {

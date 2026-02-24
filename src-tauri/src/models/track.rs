@@ -1,6 +1,18 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedFile {
+    pub file_path: String,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportResult {
+    pub tracks: Vec<Track>,
+    pub failed_files: Vec<FailedFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: i64,
     pub file_path: String,
