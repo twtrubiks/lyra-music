@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rusqlite::Connection;
 
 use lyra_music_lib::models::track::Track;
