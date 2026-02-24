@@ -146,6 +146,14 @@ pub fn reorder_playlist(
     Ok(())
 }
 
+pub fn rename_playlist(conn: &Connection, id: i64, new_name: &str) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE playlists SET name = ?1 WHERE id = ?2",
+        params![new_name, id],
+    )?;
+    Ok(())
+}
+
 pub fn delete_playlist(conn: &Connection, id: i64) -> Result<(), AppError> {
     conn.execute("DELETE FROM playlists WHERE id = ?1", params![id])?;
     Ok(())

@@ -61,6 +61,18 @@ pub fn reorder_playlist(
 }
 
 #[tauri::command]
+pub fn rename_playlist(id: i64, new_name: String, db: State<DbState>) -> Result<(), AppError> {
+    let trimmed = new_name.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Generic(
+            "Playlist name cannot be empty".to_string(),
+        ));
+    }
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    playlist_repo::rename_playlist(&conn, id, trimmed)
+}
+
+#[tauri::command]
 pub fn delete_playlist(id: i64, db: State<DbState>) -> Result<(), AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     playlist_repo::delete_playlist(&conn, id)

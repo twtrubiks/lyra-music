@@ -136,6 +136,7 @@ pub fn run() {
             commands::library::get_watched_folders,
             // Playlist commands
             commands::playlist::create_playlist,
+            commands::playlist::rename_playlist,
             commands::playlist::get_all_playlists,
             commands::playlist::get_playlist_tracks,
             commands::playlist::add_to_playlist,

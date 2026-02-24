@@ -3,12 +3,15 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
+  import { tick } from 'svelte';
 
   const playlistState = getPlaylistState();
 
   let newPlaylistName = $state('');
   let showNewInput = $state(false);
   let dragOverPlaylistId = $state<number | null>(null);
+  let editingPlaylistId = $state<number | null>(null);
+  let editingName = $state('');
 
   function goToLibrary() {
     playlistState.activeView = { kind: 'library' };
@@ -50,6 +53,40 @@
       showNewInput = false;
       newPlaylistName = '';
     }
+  }
+
+  async function startRename(pl: { id: number; name: string }) {
+    editingPlaylistId = pl.id;
+    editingName = pl.name;
+    await tick();
+    document.querySelector<HTMLInputElement>('.rename-input input')?.focus();
+  }
+
+  async function commitRename() {
+    if (editingPlaylistId === null) return;
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      cancelRename();
+      return;
+    }
+    try {
+      await playlistApi.renamePlaylist(editingPlaylistId, trimmed);
+      const lists = await playlistApi.getAllPlaylists();
+      playlistState.playlists = lists;
+    } catch (err) {
+      notifyCritical('Rename playlist', err);
+    }
+    cancelRename();
+  }
+
+  function cancelRename() {
+    editingPlaylistId = null;
+    editingName = '';
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') commitRename();
+    if (e.key === 'Escape') cancelRename();
   }
 
   async function handleDeletePlaylist(id: number) {
@@ -203,14 +240,29 @@
         ondragleave={handleDragLeave}
         ondrop={(e) => handleDrop(e, pl.id)}
       >
-        <button class="nav-item playlist-btn" onclick={() => goToPlaylist(pl.id)}>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path
-              d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"
+        {#if editingPlaylistId === pl.id}
+          <div class="rename-input">
+            <input
+              type="text"
+              bind:value={editingName}
+              onkeydown={handleRenameKeydown}
+              onblur={commitRename}
             />
-          </svg>
-          {pl.name}
-        </button>
+          </div>
+        {:else}
+          <button
+            class="nav-item playlist-btn"
+            onclick={() => goToPlaylist(pl.id)}
+            ondblclick={() => startRename(pl)}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path
+                d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"
+              />
+            </svg>
+            {pl.name}
+          </button>
+        {/if}
         <button
           class="delete-btn"
           onclick={() => handleDeletePlaylist(pl.id)}
@@ -380,6 +432,23 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .rename-input {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px 4px 16px;
+  }
+
+  .rename-input input {
+    width: 100%;
+    background: #16213e;
+    border: 1px solid #e94560;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #eee;
+    font-size: 13px;
+    outline: none;
   }
 
   .delete-btn {
