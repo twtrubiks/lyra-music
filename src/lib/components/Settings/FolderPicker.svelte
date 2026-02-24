@@ -3,22 +3,30 @@
   import * as libraryApi from '$lib/api/library';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { pushError } from '$lib/state/errorState.svelte';
 
   const library = getLibraryState();
 
   async function pickFolder() {
     try {
       const selected = await open({ directory: true });
-      if (selected && typeof selected === 'string') {
+      console.log('[lyra] dialog open() returned:', selected, typeof selected);
+
+      const raw = Array.isArray(selected) ? selected[0] : selected;
+      const folderPath = raw ? String(raw) : null;
+
+      if (folderPath) {
         library.isScanning = true;
         try {
-          await libraryApi.scanFolder(selected);
-          // Refresh the full library after scan
+          await libraryApi.scanFolder(folderPath);
           const allTracks = await libraryApi.getAllTracks();
           library.allTracks = allTracks;
         } finally {
           library.isScanning = false;
         }
+      } else if (selected !== null) {
+        console.warn('[lyra] Unexpected dialog result:', selected);
+        pushError('Folder selection returned an unexpected value', 'warn');
       }
     } catch (err) {
       notifyCritical('Scan folder', err);

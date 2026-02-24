@@ -13,6 +13,7 @@
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
   import { mapKeyToAction } from '$lib/logic/keyboard';
   import { warnNonCritical, notifyCritical } from '$lib/logic/error-handler';
+  import { pushError } from '$lib/state/errorState.svelte';
   import * as playbackApi from '$lib/api/playback';
   import * as libraryApi from '$lib/api/library';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -27,6 +28,20 @@
 
   let isDragOver = $state(false);
   let draggedPathCount = $state(0);
+  let tauriDragDropActive = $state(false);
+
+  async function importDroppedPaths(paths: string[]) {
+    if (library.isScanning || paths.length === 0) return;
+    library.isScanning = true;
+    try {
+      await libraryApi.importPaths(paths);
+      library.allTracks = await libraryApi.getAllTracks();
+    } catch (err) {
+      notifyCritical('Import dropped files', err);
+    } finally {
+      library.isScanning = false;
+    }
+  }
 
   $effect(() => {
     let unlisten: (() => void) | undefined;
@@ -34,6 +49,8 @@
       try {
         unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
           const { payload } = event;
+          console.log('[lyra] Tauri drag-drop event:', payload.type, payload);
+          tauriDragDropActive = true;
           if (payload.type === 'enter') {
             isDragOver = true;
             draggedPathCount = payload.paths.length;
@@ -42,23 +59,19 @@
           } else if (payload.type === 'drop') {
             isDragOver = false;
             draggedPathCount = 0;
-            if (library.isScanning || payload.paths.length === 0) return;
-            library.isScanning = true;
-            try {
-              await libraryApi.importPaths(payload.paths);
-              library.allTracks = await libraryApi.getAllTracks();
-            } catch (err) {
-              notifyCritical('Import dropped files', err);
-            } finally {
-              library.isScanning = false;
+            if (payload.paths.length === 0) {
+              console.warn('[lyra] Drop event received but paths array is empty');
+              pushError('Drop event received but no file paths were provided', 'warn');
+              return;
             }
+            await importDroppedPaths(payload.paths);
           } else {
             isDragOver = false;
             draggedPathCount = 0;
           }
         });
-      } catch {
-        /* Webview API not available in dev mode */
+      } catch (err) {
+        console.warn('[lyra] Tauri onDragDropEvent not available, using HTML5 fallback:', err);
       }
     })();
     return () => {
@@ -147,6 +160,42 @@
     };
   });
 
+  // HTML5 drag-drop fallback (for Linux/WebKitGTK where Tauri native events may not fire)
+  function handleHtml5DragOver(e: DragEvent) {
+    if (tauriDragDropActive) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    isDragOver = true;
+  }
+
+  function handleHtml5DragLeave(e: DragEvent) {
+    if (tauriDragDropActive) return;
+    if (e.relatedTarget && (e.currentTarget as Node)?.contains(e.relatedTarget as Node)) return;
+    isDragOver = false;
+  }
+
+  async function handleHtml5Drop(e: DragEvent) {
+    if (tauriDragDropActive) return;
+    e.preventDefault();
+    isDragOver = false;
+
+    const uriList = e.dataTransfer?.getData('text/uri-list') ?? '';
+    console.log('[lyra] HTML5 drop, text/uri-list:', uriList);
+
+    const paths = uriList
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('file://'))
+      .map((uri) => decodeURIComponent(new URL(uri).pathname));
+
+    if (paths.length > 0) {
+      await importDroppedPaths(paths);
+    } else {
+      console.warn('[lyra] HTML5 drop: no file:// URIs found in dataTransfer');
+      pushError('Could not read dropped file paths. Try using Scan Folder instead.', 'warn');
+    }
+  }
+
   function handleGlobalKeydown(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -232,7 +281,13 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<div class="app-layout" class:mini={player.miniMode}>
+<div
+  class="app-layout"
+  class:mini={player.miniMode}
+  ondragover={handleHtml5DragOver}
+  ondragleave={handleHtml5DragLeave}
+  ondrop={handleHtml5Drop}
+>
   <div class="sidebar-area">
     <Sidebar />
   </div>
