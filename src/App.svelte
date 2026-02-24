@@ -284,6 +284,7 @@
 <div
   class="app-layout"
   class:mini={player.miniMode}
+  role="application"
   ondragover={handleHtml5DragOver}
   ondragleave={handleHtml5DragLeave}
   ondrop={handleHtml5Drop}
