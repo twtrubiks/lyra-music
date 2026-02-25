@@ -28,6 +28,7 @@ export interface Playlist {
   track_ids: number[];
   last_position_track_id: number | null;
   last_position_secs: number | null;
+  sort_order: number;
 }
 
 export interface TrackDetails {

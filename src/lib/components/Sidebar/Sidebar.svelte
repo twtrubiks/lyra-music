@@ -3,6 +3,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
+  import { moveByKeyboard } from '$lib/logic/reorder';
   import { tick } from 'svelte';
 
   const playlistState = getPlaylistState();
@@ -12,6 +13,23 @@
   let dragOverPlaylistId = $state<number | null>(null);
   let editingPlaylistId = $state<number | null>(null);
   let editingName = $state('');
+
+  // Context menu state
+  let showPlaylistMenu = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+  let contextPlaylistId = $state<number | null>(null);
+
+  let canMoveUp = $derived(
+    contextPlaylistId !== null &&
+      playlistState.playlists.length > 1 &&
+      playlistState.playlists[0]?.id !== contextPlaylistId,
+  );
+  let canMoveDown = $derived(
+    contextPlaylistId !== null &&
+      playlistState.playlists.length > 1 &&
+      playlistState.playlists[playlistState.playlists.length - 1]?.id !== contextPlaylistId,
+  );
 
   function goToLibrary() {
     playlistState.activeView = { kind: 'library' };
@@ -105,6 +123,86 @@
     }
   }
 
+  // Context menu handlers
+  function handlePlaylistContextMenu(e: MouseEvent, playlistId: number) {
+    e.preventDefault();
+    contextPlaylistId = playlistId;
+    menuX = e.clientX;
+    menuY = e.clientY;
+    showPlaylistMenu = true;
+  }
+
+  function closePlaylistMenu() {
+    showPlaylistMenu = false;
+  }
+
+  function handleWindowClick(e: MouseEvent) {
+    if (showPlaylistMenu) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.context-menu')) {
+        closePlaylistMenu();
+      }
+    }
+  }
+
+  async function movePlaylist(playlistId: number, direction: 'up' | 'down') {
+    const playlists = playlistState.playlists;
+    const newOrder = moveByKeyboard(playlists, new Set([playlistId]), direction);
+    if (!newOrder) return;
+    // Optimistic update
+    const map = new Map(playlists.map((p) => [p.id, p]));
+    playlistState.playlists = newOrder.map((id) => map.get(id)!);
+    try {
+      await playlistApi.reorderPlaylists(newOrder);
+    } catch (err) {
+      warnNonCritical('Reorder playlists', err);
+      const lists = await playlistApi.getAllPlaylists();
+      playlistState.playlists = lists;
+    }
+  }
+
+  function handleMenuMoveUp() {
+    if (contextPlaylistId !== null && canMoveUp) {
+      movePlaylist(contextPlaylistId, 'up');
+    }
+    closePlaylistMenu();
+  }
+
+  function handleMenuMoveDown() {
+    if (contextPlaylistId !== null && canMoveDown) {
+      movePlaylist(contextPlaylistId, 'down');
+    }
+    closePlaylistMenu();
+  }
+
+  function handleMenuRename() {
+    if (contextPlaylistId !== null) {
+      const pl = playlistState.playlists.find((p) => p.id === contextPlaylistId);
+      if (pl) startRename(pl);
+    }
+    closePlaylistMenu();
+  }
+
+  function handleMenuDelete() {
+    if (contextPlaylistId !== null) {
+      handleDeletePlaylist(contextPlaylistId);
+    }
+    closePlaylistMenu();
+  }
+
+  function handleWindowKeydown(e: KeyboardEvent) {
+    if (
+      e.ctrlKey &&
+      e.shiftKey &&
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      playlistState.activeView.kind === 'playlist'
+    ) {
+      e.preventDefault();
+      const direction = e.key === 'ArrowUp' ? 'up' : 'down';
+      movePlaylist(playlistState.activeView.playlistId, direction);
+    }
+  }
+
   // Drag-and-drop: add track to playlist
   function handleDragOver(e: DragEvent, playlistId: number) {
     if (!e.dataTransfer?.types.includes('application/x-track-id')) return;
@@ -143,6 +241,8 @@
     })();
   });
 </script>
+
+<svelte:window onclick={handleWindowClick} onkeydown={handleWindowKeydown} />
 
 <aside class="sidebar">
   <div class="brand">
@@ -239,6 +339,7 @@
         ondragover={(e) => handleDragOver(e, pl.id)}
         ondragleave={handleDragLeave}
         ondrop={(e) => handleDrop(e, pl.id)}
+        oncontextmenu={(e) => handlePlaylistContextMenu(e, pl.id)}
       >
         {#if editingPlaylistId === pl.id}
           <div class="rename-input">
@@ -277,6 +378,32 @@
       </div>
     {/each}
   </div>
+
+  {#if showPlaylistMenu}
+    <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu">
+      <button
+        class="menu-item"
+        class:menu-item-disabled={!canMoveUp}
+        role="menuitem"
+        onclick={handleMenuMoveUp}
+      >
+        ▲ 上移 <span class="shortcut">Ctrl+Shift+↑</span>
+      </button>
+      <button
+        class="menu-item"
+        class:menu-item-disabled={!canMoveDown}
+        role="menuitem"
+        onclick={handleMenuMoveDown}
+      >
+        ▼ 下移 <span class="shortcut">Ctrl+Shift+↓</span>
+      </button>
+      <div class="menu-divider"></div>
+      <button class="menu-item" role="menuitem" onclick={handleMenuRename}>重新命名</button>
+      <button class="menu-item menu-item-danger" role="menuitem" onclick={handleMenuDelete}
+        >刪除</button
+      >
+    </div>
+  {/if}
 
   <div class="bottom-actions">
     <FolderPicker />
@@ -478,5 +605,67 @@
   .bottom-actions {
     padding: 16px;
     margin-top: auto;
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: #1e1e3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 12px;
+    background: transparent;
+    border: none;
+    color: #ddd;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+  }
+
+  .menu-item:hover {
+    background: rgb(233 69 96 / 20%);
+    color: #fff;
+  }
+
+  .menu-item-danger {
+    color: #e94560;
+  }
+
+  .menu-item-danger:hover {
+    background: rgb(233 69 96 / 30%);
+    color: #ff6b84;
+  }
+
+  .menu-item-disabled {
+    color: #555;
+    cursor: default;
+  }
+
+  .menu-item-disabled:hover {
+    background: transparent;
+    color: #555;
+  }
+
+  .menu-divider {
+    height: 1px;
+    background: #3a3a5a;
+    margin: 4px 0;
+  }
+
+  .shortcut {
+    margin-left: auto;
+    color: #666;
+    font-size: 11px;
   }
 </style>

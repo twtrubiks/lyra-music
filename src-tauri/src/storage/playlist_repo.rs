@@ -5,24 +5,40 @@ use crate::models::playlist::Playlist;
 use crate::models::track::Track;
 
 pub fn create_playlist(conn: &Connection, name: &str) -> Result<i64, AppError> {
-    conn.execute("INSERT INTO playlists (name) VALUES (?1)", params![name])?;
+    let max_order: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(sort_order), -1) FROM playlists",
+        [],
+        |row| row.get(0),
+    )?;
+
+    conn.execute(
+        "INSERT INTO playlists (name, sort_order) VALUES (?1, ?2)",
+        params![name, max_order + 1],
+    )?;
 
     Ok(conn.last_insert_rowid())
 }
 
 pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, AppError> {
-    let mut stmt = conn
-        .prepare("SELECT id, name, last_track_id, last_position_secs FROM playlists ORDER BY id")?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, last_track_id, last_position_secs, sort_order FROM playlists ORDER BY sort_order",
+    )?;
 
     let playlists = stmt
         .query_map([], |row| {
             let playlist_id: i64 = row.get(0)?;
-            Ok((playlist_id, row.get(1)?, row.get(2)?, row.get(3)?))
+            Ok((
+                playlist_id,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
         })?
-        .collect::<Result<Vec<(i64, String, Option<i64>, Option<f64>)>, _>>()?;
+        .collect::<Result<Vec<(i64, String, Option<i64>, Option<f64>, i64)>, _>>()?;
 
     let mut result = Vec::new();
-    for (id, name, last_track_id, last_pos) in playlists {
+    for (id, name, last_track_id, last_pos, sort_order) in playlists {
         let track_ids = get_playlist_track_ids(conn, id)?;
         result.push(Playlist {
             id,
@@ -30,6 +46,7 @@ pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, AppError> {
             track_ids,
             last_position_track_id: last_track_id,
             last_position_secs: last_pos,
+            sort_order,
         });
     }
 
@@ -170,6 +187,20 @@ pub fn save_playback_position(
         params![track_id, secs, playlist_id],
     )?;
 
+    Ok(())
+}
+
+pub fn reorder_playlists(conn: &Connection, playlist_ids: &[i64]) -> Result<(), AppError> {
+    let tx = conn.unchecked_transaction()?;
+    for (i, playlist_id) in playlist_ids.iter().enumerate() {
+        #[allow(clippy::cast_possible_wrap)]
+        let sort_order = i as i64;
+        tx.execute(
+            "UPDATE playlists SET sort_order = ?1 WHERE id = ?2",
+            params![sort_order, playlist_id],
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }
 

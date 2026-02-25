@@ -7,4 +7,5 @@ pub struct Playlist {
     pub track_ids: Vec<i64>,
     pub last_position_track_id: Option<i64>,
     pub last_position_secs: Option<f64>,
+    pub sort_order: i64,
 }

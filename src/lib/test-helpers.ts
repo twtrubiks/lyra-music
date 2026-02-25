@@ -24,6 +24,7 @@ export function createMockPlaylist(overrides: Partial<Playlist> = {}): Playlist 
     track_ids: [],
     last_position_track_id: null,
     last_position_secs: null,
+    sort_order: 0,
     ...overrides,
   };
 }

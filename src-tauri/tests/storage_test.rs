@@ -916,6 +916,70 @@ fn test_play_count_survives_in_all_queries() {
 }
 
 // ============================================================
+// Reorder playlists (sort_order) tests
+// ============================================================
+
+#[test]
+fn test_reorder_playlists_basic() {
+    let conn = common::create_test_db();
+    let pl1 = playlist_repo::create_playlist(&conn, "PL 1").unwrap();
+    let pl2 = playlist_repo::create_playlist(&conn, "PL 2").unwrap();
+    let pl3 = playlist_repo::create_playlist(&conn, "PL 3").unwrap();
+
+    // Reorder to [3, 1, 2]
+    playlist_repo::reorder_playlists(&conn, &[pl3, pl1, pl2]).unwrap();
+
+    let playlists = playlist_repo::get_all_playlists(&conn).unwrap();
+    assert_eq!(playlists.len(), 3);
+    assert_eq!(playlists[0].id, pl3);
+    assert_eq!(playlists[1].id, pl1);
+    assert_eq!(playlists[2].id, pl2);
+}
+
+#[test]
+fn test_reorder_playlists_preserves_data() {
+    let conn = common::create_test_db();
+    let t1 = library_repo::insert_track(&conn, &common::create_test_track(1)).unwrap();
+
+    let pl1 = playlist_repo::create_playlist(&conn, "Alpha").unwrap();
+    let pl2 = playlist_repo::create_playlist(&conn, "Beta").unwrap();
+
+    playlist_repo::add_to_playlist(&conn, pl1, t1).unwrap();
+    playlist_repo::save_playback_position(&conn, pl1, t1, 99.5).unwrap();
+
+    // Reorder to [pl2, pl1]
+    playlist_repo::reorder_playlists(&conn, &[pl2, pl1]).unwrap();
+
+    let playlists = playlist_repo::get_all_playlists(&conn).unwrap();
+    assert_eq!(playlists[0].id, pl2);
+    assert_eq!(playlists[0].name, "Beta");
+
+    assert_eq!(playlists[1].id, pl1);
+    assert_eq!(playlists[1].name, "Alpha");
+    assert_eq!(playlists[1].track_ids, vec![t1]);
+    assert_eq!(playlists[1].last_position_track_id, Some(t1));
+    assert_eq!(playlists[1].last_position_secs, Some(99.5));
+}
+
+#[test]
+fn test_create_playlist_auto_sort_order() {
+    let conn = common::create_test_db();
+    playlist_repo::create_playlist(&conn, "First").unwrap();
+    playlist_repo::create_playlist(&conn, "Second").unwrap();
+    playlist_repo::create_playlist(&conn, "Third").unwrap();
+
+    let playlists = playlist_repo::get_all_playlists(&conn).unwrap();
+    assert_eq!(playlists.len(), 3);
+    // Created in order, so sort_order should be 0, 1, 2
+    assert_eq!(playlists[0].sort_order, 0);
+    assert_eq!(playlists[1].sort_order, 1);
+    assert_eq!(playlists[2].sort_order, 2);
+    assert_eq!(playlists[0].name, "First");
+    assert_eq!(playlists[1].name, "Second");
+    assert_eq!(playlists[2].name, "Third");
+}
+
+// ============================================================
 // Scan folder remove tests
 // ============================================================
 

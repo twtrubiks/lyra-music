@@ -28,7 +28,8 @@ pub fn create_test_db() -> Connection {
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT NOT NULL,
             last_track_id   INTEGER,
-            last_position_secs REAL DEFAULT 0.0
+            last_position_secs REAL DEFAULT 0.0,
+            sort_order  INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS playlist_tracks (

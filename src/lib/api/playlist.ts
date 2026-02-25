@@ -25,6 +25,10 @@ export async function reorderPlaylist(playlistId: number, trackIds: number[]): P
   return invoke('reorder_playlist', { playlistId, trackIds });
 }
 
+export async function reorderPlaylists(playlistIds: number[]): Promise<void> {
+  return invoke('reorder_playlists', { playlistIds });
+}
+
 export async function renamePlaylist(id: number, newName: string): Promise<void> {
   return invoke('rename_playlist', { id, newName });
 }

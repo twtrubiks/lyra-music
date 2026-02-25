@@ -127,6 +127,25 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         )?;
     }
 
+    if current_version < 7 {
+        conn.execute_batch(
+            "
+            ALTER TABLE playlists ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+            INSERT INTO schema_version (version) VALUES (7);
+        ",
+        )?;
+        backfill_playlist_sort_order(conn)?;
+    }
+
+    Ok(())
+}
+
+fn backfill_playlist_sort_order(conn: &Connection) -> Result<(), AppError> {
+    conn.execute_batch(
+        "UPDATE playlists SET sort_order = (
+            SELECT COUNT(*) FROM playlists p2 WHERE p2.id < playlists.id
+        );",
+    )?;
     Ok(())
 }
 

@@ -61,6 +61,12 @@ pub fn reorder_playlist(
 }
 
 #[tauri::command]
+pub fn reorder_playlists(playlist_ids: Vec<i64>, db: State<DbState>) -> Result<(), AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    playlist_repo::reorder_playlists(&conn, &playlist_ids)
+}
+
+#[tauri::command]
 pub fn rename_playlist(id: i64, new_name: String, db: State<DbState>) -> Result<(), AppError> {
     let trimmed = new_name.trim();
     if trimmed.is_empty() {

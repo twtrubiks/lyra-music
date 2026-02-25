@@ -142,6 +142,7 @@ pub fn run() {
             commands::playlist::add_to_playlist,
             commands::playlist::remove_from_playlist,
             commands::playlist::reorder_playlist,
+            commands::playlist::reorder_playlists,
             commands::playlist::delete_playlist,
             commands::playlist::save_playback_position,
             commands::playlist::get_last_playback_position,
