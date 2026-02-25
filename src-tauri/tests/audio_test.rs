@@ -4,11 +4,11 @@ use lyra_music_lib::audio::AudioPlayer;
 
 /// AudioPlayer::new() requires a working audio output device.
 /// In CI environments without audio hardware this will panic.
-/// All audio tests are marked #[ignore] so they only run when
-/// explicitly requested with `cargo test -- --ignored`.
+/// All audio tests are gated behind the `audio-tests` feature flag.
+/// Run with: `cargo test --features audio-tests`
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_audio_player_new() {
     let player = AudioPlayer::new().expect("need audio device");
     assert!(!player.is_playing());
@@ -17,7 +17,7 @@ fn test_audio_player_new() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_set_volume_clamp() {
     let mut player = AudioPlayer::new().expect("need audio device");
 
@@ -38,7 +38,7 @@ fn test_set_volume_clamp() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_load_nonexistent_file() {
     let mut player = AudioPlayer::new().expect("need audio device");
     let result = player.load_and_play("/nonexistent/file.mp3", 0.0);
@@ -46,7 +46,7 @@ fn test_load_nonexistent_file() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_load_and_play_wav() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let wav_path = common::create_test_wav(dir.path(), "play_test.wav");
@@ -58,7 +58,7 @@ fn test_load_and_play_wav() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_pause_and_resume() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let wav_path = common::create_test_wav(dir.path(), "pause_test.wav");
@@ -75,7 +75,7 @@ fn test_pause_and_resume() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_stop() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let wav_path = common::create_test_wav(dir.path(), "stop_test.wav");
@@ -91,7 +91,7 @@ fn test_stop() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_try_seek_no_active_playback() {
     let mut player = AudioPlayer::new().expect("need audio device");
     let result = player.try_seek(10.0);
@@ -99,7 +99,7 @@ fn test_try_seek_no_active_playback() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_set_current_track_id() {
     let mut player = AudioPlayer::new().expect("need audio device");
     assert!(player.get_current_track_id().is_none());
@@ -112,7 +112,7 @@ fn test_set_current_track_id() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_default_volume() {
     let player = AudioPlayer::new().expect("need audio device");
     assert!((player.get_volume() - 0.5).abs() < f32::EPSILON);
@@ -123,7 +123,7 @@ fn test_default_volume() {
 // ============================================================
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_audio_player_new_returns_result() {
     // AudioPlayer::new() now returns Result<Self, AppError>
     let result = AudioPlayer::new();
@@ -136,7 +136,7 @@ fn test_audio_player_new_returns_result() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_load_and_play_corrupted_file() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -154,7 +154,7 @@ fn test_load_and_play_corrupted_file() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_load_and_play_empty_file() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -171,7 +171,7 @@ fn test_load_and_play_empty_file() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_load_and_play_directory_path() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -186,7 +186,7 @@ fn test_load_and_play_directory_path() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_queue_next_with_no_active_sink() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -203,7 +203,7 @@ fn test_queue_next_with_no_active_sink() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_queue_next_with_nonexistent_file() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -227,7 +227,7 @@ fn test_queue_next_with_nonexistent_file() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_queue_next_with_corrupted_file() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -253,7 +253,7 @@ fn test_queue_next_with_corrupted_file() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_has_track_ended_before_loading() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -266,7 +266,7 @@ fn test_has_track_ended_before_loading() {
 }
 
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_stop_resets_state() {
     let player_result = AudioPlayer::new();
     if player_result.is_err() {
@@ -294,21 +294,17 @@ fn test_stop_resets_state() {
 
 /// Mod 7: queue_next is idempotent — calling it twice does not double-append.
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_queue_next_skips_when_already_queued() {
     let dir = tempfile::tempdir().unwrap();
     let wav1 = common::create_test_wav(dir.path(), "track1.wav");
     let wav2 = common::create_test_wav(dir.path(), "track2.wav");
 
     let mut player = AudioPlayer::new().expect("need audio device");
-    player
-        .load_and_play(wav1.to_str().unwrap(), 0.0)
-        .unwrap();
+    player.load_and_play(wav1.to_str().unwrap(), 0.0).unwrap();
 
     // First queue succeeds
-    player
-        .queue_next(wav2.to_str().unwrap(), 2, 0.0)
-        .unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.0).unwrap();
     assert!(player.is_gapless_queued());
 
     // Second queue is a no-op (returns Ok, does not append again)
@@ -320,7 +316,7 @@ fn test_queue_next_skips_when_already_queued() {
 /// Mod 5: acknowledge_track_ended sets track_loaded=false,
 /// preventing has_track_ended from re-firing.
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_acknowledge_track_ended_prevents_refire() {
     let dir = tempfile::tempdir().unwrap();
     let wav = common::create_test_wav(dir.path(), "ack_test.wav");
@@ -349,7 +345,7 @@ fn test_acknowledge_track_ended_prevents_refire() {
 
 /// Mod 1 basic: check_gapless_transition returns false when nothing is queued.
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_check_gapless_transition_without_queue() {
     let dir = tempfile::tempdir().unwrap();
     let wav = common::create_test_wav(dir.path(), "no_queue.wav");
@@ -363,7 +359,7 @@ fn test_check_gapless_transition_without_queue() {
 /// Mod 1+2: full gapless lifecycle — load short track, queue next,
 /// wait for first to finish, verify transition fires and state is correct.
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_gapless_transition_full_lifecycle() {
     let dir = tempfile::tempdir().unwrap();
     let wav1 = common::create_test_wav(dir.path(), "short1.wav"); // 0.1s
@@ -373,9 +369,7 @@ fn test_gapless_transition_full_lifecycle() {
     player.load_and_play(wav1.to_str().unwrap(), 0.1).unwrap();
     player.set_current_track_id(Some(1));
 
-    player
-        .queue_next(wav2.to_str().unwrap(), 2, 0.1)
-        .unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.1).unwrap();
     assert!(player.is_gapless_queued());
 
     // Wait for first track to finish (0.1s + margin)
@@ -403,7 +397,7 @@ fn test_gapless_transition_full_lifecycle() {
 /// Mod 3 (indirect): native seek preserves gapless state.
 /// (The fallback path clears it, but WAV seek uses the native path.)
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_seek_preserves_gapless_on_native_seek() {
     let dir = tempfile::tempdir().unwrap();
     let wav1 = common::create_test_wav(dir.path(), "seek1.wav");
@@ -411,9 +405,7 @@ fn test_seek_preserves_gapless_on_native_seek() {
 
     let mut player = AudioPlayer::new().expect("need audio device");
     player.load_and_play(wav1.to_str().unwrap(), 0.1).unwrap();
-    player
-        .queue_next(wav2.to_str().unwrap(), 2, 0.1)
-        .unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.1).unwrap();
     assert!(player.is_gapless_queued());
 
     // Native seek (WAV supports it) should not clear gapless
@@ -427,7 +419,7 @@ fn test_seek_preserves_gapless_on_native_seek() {
 /// has_track_ended returns false while gapless is queued,
 /// even if the sink becomes empty (the queued track is playing).
 #[test]
-#[ignore]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
 fn test_track_ended_false_when_gapless_queued() {
     let dir = tempfile::tempdir().unwrap();
     let wav1 = common::create_test_wav(dir.path(), "ended1.wav");
@@ -435,9 +427,7 @@ fn test_track_ended_false_when_gapless_queued() {
 
     let mut player = AudioPlayer::new().expect("need audio device");
     player.load_and_play(wav1.to_str().unwrap(), 0.1).unwrap();
-    player
-        .queue_next(wav2.to_str().unwrap(), 2, 0.1)
-        .unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.1).unwrap();
 
     // Even after first track finishes, has_track_ended is false
     // because gapless_queued is true

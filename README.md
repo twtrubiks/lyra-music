@@ -80,7 +80,8 @@ npm run tauri build   # 正式建置
 ```bash
 npm run test                    # 前端單元測試 (Vitest, 10 個測試檔)
 npm run check                   # 類型檢查
-cd src-tauri && cargo test      # 後端整合測試 (10 個測試檔)
+cd src-tauri && cargo test      # 後端整合測試 (10 個測試檔，音訊測試預設跳過)
+cd src-tauri && cargo test --features audio-tests  # 含音訊測試 (需音訊裝置)
 npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
 

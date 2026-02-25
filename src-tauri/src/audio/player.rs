@@ -243,7 +243,7 @@ impl AudioPlayer {
         if !self.gapless_queued {
             return false;
         }
-        let len = self.sink.as_ref().map(|s| s.len()).unwrap_or(0);
+        let len = self.sink.as_ref().map_or(0, rodio::Sink::len);
         if len <= 1 {
             self.transition_to_queued_next();
             return true;
