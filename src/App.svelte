@@ -18,7 +18,13 @@
   import * as libraryApi from '$lib/api/library';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
-  import { handleNext, handlePrev, toggleShuffle, cycleRepeat } from '$lib/logic/playback-actions';
+  import {
+    handleNext,
+    handlePrev,
+    toggleShuffle,
+    cycleRepeat,
+    handleTrackRemoved,
+  } from '$lib/logic/playback-actions';
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
 
@@ -152,6 +158,23 @@
             library.allTracks = await libraryApi.getAllTracks();
           } catch (err) {
             warnNonCritical('Auto-refresh library', err);
+          }
+        });
+      } catch {}
+    })();
+    return () => {
+      unlisten?.();
+    };
+  });
+
+  // Handle tracks removed by watcher (file deleted from disk)
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        unlisten = await listen<number[]>('tracks-removed', async (event) => {
+          for (const trackId of event.payload) {
+            await handleTrackRemoved(trackId);
           }
         });
       } catch {}

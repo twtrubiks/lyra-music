@@ -326,6 +326,19 @@ pub fn remove_scan_folder(conn: &Connection, folder_path: &str) -> Result<(), Ap
     Ok(())
 }
 
+pub fn get_track_id_by_path(conn: &Connection, file_path: &str) -> Result<Option<i64>, AppError> {
+    let result = conn.query_row(
+        "SELECT id FROM tracks WHERE file_path = ?1",
+        params![file_path],
+        |row| row.get(0),
+    );
+    match result {
+        Ok(id) => Ok(Some(id)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub fn delete_track_by_path(
     conn: &Connection,
     file_path: &str,
