@@ -82,7 +82,7 @@
   $effect(() => {
     (async () => {
       try {
-        tracks = await libraryApi.getTracksByAlbum(albumName);
+        tracks = await libraryApi.getTracksByAlbum(albumName, artistName);
         if (tracks.length > 0) {
           coverArt = await libraryApi.getTrackCover(tracks[0].id);
         }

@@ -180,8 +180,8 @@ pub fn get_all_albums(conn: &Connection) -> Result<Vec<AlbumSummary>, AppError> 
     let mut stmt = conn.prepare(
         "SELECT album, artist, COUNT(*), cover_art_path
          FROM tracks
-         GROUP BY album
-         ORDER BY album",
+         GROUP BY album, artist
+         ORDER BY album, artist",
     )?;
 
     let albums = stmt
@@ -225,14 +225,18 @@ pub fn get_tracks_by_artist(conn: &Connection, artist: &str) -> Result<Vec<Track
     Ok(tracks)
 }
 
-pub fn get_tracks_by_album(conn: &Connection, album: &str) -> Result<Vec<Track>, AppError> {
+pub fn get_tracks_by_album(
+    conn: &Connection,
+    album: &str,
+    artist: &str,
+) -> Result<Vec<Track>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at
-         FROM tracks WHERE album = ?1 ORDER BY title",
+         FROM tracks WHERE album = ?1 AND artist = ?2 ORDER BY title",
     )?;
 
     let tracks = stmt
-        .query_map(params![album], |row| {
+        .query_map(params![album, artist], |row| {
             Ok(Track {
                 id: row.get(0)?,
                 file_path: row.get(1)?,

@@ -640,6 +640,123 @@ fn test_remove_from_playlist_track_not_in_playlist() {
 }
 
 // ============================================================
+// Album grouping tests (album + artist composite key)
+// ============================================================
+
+#[test]
+fn test_get_all_albums_groups_by_album_and_artist() {
+    let conn = common::create_test_db();
+
+    // Two tracks with the same album name but different artists
+    let mut t1 = common::create_test_track(1);
+    t1.album = "Greatest Hits".to_string();
+    t1.artist = "Artist A".to_string();
+
+    let mut t2 = common::create_test_track(2);
+    t2.album = "Greatest Hits".to_string();
+    t2.artist = "Artist B".to_string();
+
+    library_repo::insert_track(&conn, &t1).unwrap();
+    library_repo::insert_track(&conn, &t2).unwrap();
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(albums.len(), 2, "same album name with different artists should produce 2 entries");
+
+    let names: Vec<&str> = albums.iter().map(|a| a.name.as_str()).collect();
+    assert!(names.iter().all(|n| *n == "Greatest Hits"));
+
+    let artists: Vec<&str> = albums.iter().map(|a| a.artist.as_str()).collect();
+    assert!(artists.contains(&"Artist A"));
+    assert!(artists.contains(&"Artist B"));
+}
+
+#[test]
+fn test_get_all_albums_same_artist_same_album_merges() {
+    let conn = common::create_test_db();
+
+    for i in 1..=3 {
+        let mut t = common::create_test_track(i);
+        t.album = "The Album".to_string();
+        t.artist = "Same Artist".to_string();
+        library_repo::insert_track(&conn, &t).unwrap();
+    }
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].name, "The Album");
+    assert_eq!(albums[0].artist, "Same Artist");
+    assert_eq!(albums[0].track_count, 3);
+}
+
+#[test]
+fn test_get_tracks_by_album_filters_by_artist() {
+    let conn = common::create_test_db();
+
+    let mut t1 = common::create_test_track(1);
+    t1.album = "Greatest Hits".to_string();
+    t1.artist = "Artist A".to_string();
+
+    let mut t2 = common::create_test_track(2);
+    t2.album = "Greatest Hits".to_string();
+    t2.artist = "Artist B".to_string();
+
+    library_repo::insert_track(&conn, &t1).unwrap();
+    library_repo::insert_track(&conn, &t2).unwrap();
+
+    let tracks_a = library_repo::get_tracks_by_album(&conn, "Greatest Hits", "Artist A").unwrap();
+    assert_eq!(tracks_a.len(), 1);
+    assert_eq!(tracks_a[0].artist, "Artist A");
+
+    let tracks_b = library_repo::get_tracks_by_album(&conn, "Greatest Hits", "Artist B").unwrap();
+    assert_eq!(tracks_b.len(), 1);
+    assert_eq!(tracks_b[0].artist, "Artist B");
+}
+
+#[test]
+fn test_get_tracks_by_album_no_match() {
+    let conn = common::create_test_db();
+
+    let mut t = common::create_test_track(1);
+    t.album = "Real Album".to_string();
+    t.artist = "Real Artist".to_string();
+    library_repo::insert_track(&conn, &t).unwrap();
+
+    // Wrong artist
+    let result = library_repo::get_tracks_by_album(&conn, "Real Album", "Wrong Artist").unwrap();
+    assert!(result.is_empty());
+
+    // Wrong album
+    let result = library_repo::get_tracks_by_album(&conn, "Wrong Album", "Real Artist").unwrap();
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_get_all_albums_empty_library() {
+    let conn = common::create_test_db();
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert!(albums.is_empty());
+}
+
+#[test]
+fn test_get_tracks_by_album_multiple_tracks() {
+    let conn = common::create_test_db();
+
+    for i in 1..=5 {
+        let mut t = common::create_test_track(i);
+        t.album = "Big Album".to_string();
+        t.artist = "The Band".to_string();
+        library_repo::insert_track(&conn, &t).unwrap();
+    }
+
+    let tracks = library_repo::get_tracks_by_album(&conn, "Big Album", "The Band").unwrap();
+    assert_eq!(tracks.len(), 5);
+    for track in &tracks {
+        assert_eq!(track.album, "Big Album");
+        assert_eq!(track.artist, "The Band");
+    }
+}
+
+// ============================================================
 // Play count tests
 // ============================================================
 

@@ -44,6 +44,8 @@ pub fn create_test_db() -> Connection {
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             folder_path TEXT NOT NULL UNIQUE
         );
+
+        CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album, artist);
         ",
     )
     .expect("failed to create schema");

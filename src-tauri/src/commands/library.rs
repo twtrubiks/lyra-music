@@ -222,9 +222,13 @@ pub fn get_tracks_by_artist(artist: String, db: State<DbState>) -> Result<Vec<Tr
 }
 
 #[tauri::command]
-pub fn get_tracks_by_album(album: String, db: State<DbState>) -> Result<Vec<Track>, AppError> {
+pub fn get_tracks_by_album(
+    album: String,
+    artist: String,
+    db: State<DbState>,
+) -> Result<Vec<Track>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    library_repo::get_tracks_by_album(&conn, &album)
+    library_repo::get_tracks_by_album(&conn, &album, &artist)
 }
 
 #[tauri::command]

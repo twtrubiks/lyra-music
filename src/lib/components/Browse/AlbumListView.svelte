@@ -29,18 +29,23 @@
     };
   }
 
+  function albumKey(a: AlbumSummary) {
+    return `${a.name}::${a.artist}`;
+  }
+
   async function loadCover(album: AlbumSummary) {
-    if (album.name in coverCache) return;
+    const key = albumKey(album);
+    if (key in coverCache) return;
     try {
-      const tracks = await libraryApi.getTracksByAlbum(album.name);
+      const tracks = await libraryApi.getTracksByAlbum(album.name, album.artist);
       if (tracks.length > 0) {
         const cover = await libraryApi.getTrackCover(tracks[0].id);
-        coverCache = { ...coverCache, [album.name]: cover };
+        coverCache = { ...coverCache, [key]: cover };
       } else {
-        coverCache = { ...coverCache, [album.name]: null };
+        coverCache = { ...coverCache, [key]: null };
       }
     } catch {
-      coverCache = { ...coverCache, [album.name]: null };
+      coverCache = { ...coverCache, [key]: null };
     }
   }
 
@@ -59,7 +64,7 @@
   // Load covers for visible albums
   $effect(() => {
     for (const album of filteredAlbums) {
-      if (!(album.name in coverCache)) {
+      if (!(albumKey(album) in coverCache)) {
         loadCover(album);
       }
     }
@@ -89,8 +94,8 @@
         {#each filteredAlbums as album (album.name + '::' + album.artist)}
           <button class="album-card" onclick={() => goToAlbum(album)}>
             <div class="album-cover">
-              {#if coverCache[album.name]}
-                <img src={coverCache[album.name]} alt={album.name} />
+              {#if coverCache[albumKey(album)]}
+                <img src={coverCache[albumKey(album)]} alt={album.name} />
               {:else}
                 <div class="cover-placeholder">
                   <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">

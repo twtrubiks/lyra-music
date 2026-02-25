@@ -118,6 +118,15 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         )?;
     }
 
+    if current_version < 6 {
+        conn.execute_batch(
+            "
+            CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album, artist);
+            INSERT INTO schema_version (version) VALUES (6);
+        ",
+        )?;
+    }
+
     Ok(())
 }
 

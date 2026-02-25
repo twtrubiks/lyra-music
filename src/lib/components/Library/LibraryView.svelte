@@ -28,7 +28,7 @@
   let propertiesDetails = $state<TrackDetails | null>(null);
 
   async function handlePlay(track: Track) {
-    await startPlayingTrack(track, filteredTracks);
+    await startPlayingTrack(track, sortedTracks);
   }
 
   async function handleRemove(tracksToRemove: Track[]) {

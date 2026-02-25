@@ -54,8 +54,8 @@ export async function getTracksByArtist(artist: string): Promise<Track[]> {
   return invoke('get_tracks_by_artist', { artist });
 }
 
-export async function getTracksByAlbum(album: string): Promise<Track[]> {
-  return invoke('get_tracks_by_album', { album });
+export async function getTracksByAlbum(album: string, artist: string): Promise<Track[]> {
+  return invoke('get_tracks_by_album', { album, artist });
 }
 
 export async function getWatchedFolders(): Promise<string[]> {
