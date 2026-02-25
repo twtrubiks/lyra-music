@@ -36,18 +36,67 @@ fn test_insert_multiple_tracks() {
 }
 
 #[test]
-fn test_duplicate_file_path_no_error() {
+fn test_upsert_updates_metadata_on_duplicate() {
     let conn = common::create_test_db();
     let track = common::create_test_track(1);
 
     let id1 = library_repo::insert_track(&conn, &track).unwrap();
-    // Insert same track again -- should not error (INSERT OR IGNORE)
-    let id2 = library_repo::insert_track(&conn, &track).unwrap();
 
+    // Build a second track with the same file_path but different metadata
+    let mut updated = common::create_test_track(1);
+    updated.title = "Updated Title".to_string();
+    updated.artist = "Updated Artist".to_string();
+    updated.album = "Updated Album".to_string();
+    updated.duration_secs = 999.0;
+    updated.file_size_bytes = 9_999_999;
+
+    let id2 = library_repo::insert_track(&conn, &updated).unwrap();
+
+    // id should be unchanged, and still only one record
     assert_eq!(id1, id2);
-
     let tracks = library_repo::get_all_tracks(&conn).unwrap();
     assert_eq!(tracks.len(), 1);
+
+    // metadata should be updated
+    let found = library_repo::get_track_by_id(&conn, id1).unwrap().unwrap();
+    assert_eq!(found.title, "Updated Title");
+    assert_eq!(found.artist, "Updated Artist");
+    assert_eq!(found.album, "Updated Album");
+    assert_eq!(found.duration_secs, 999.0);
+    assert_eq!(found.file_size_bytes, 9_999_999);
+}
+
+#[test]
+fn test_upsert_preserves_play_count() {
+    let conn = common::create_test_db();
+    let track = common::create_test_track(1);
+    let id = library_repo::insert_track(&conn, &track).unwrap();
+
+    // Simulate some plays
+    library_repo::increment_play_count(&conn, id).unwrap();
+    library_repo::increment_play_count(&conn, id).unwrap();
+    library_repo::increment_play_count(&conn, id).unwrap();
+
+    let before = library_repo::get_track_by_id(&conn, id).unwrap().unwrap();
+    assert_eq!(before.play_count, 3);
+    let saved_last_played = before.last_played_at.clone();
+    assert!(saved_last_played.is_some());
+
+    // Re-insert with updated metadata
+    let mut updated = common::create_test_track(1);
+    updated.title = "Re-tagged Title".to_string();
+    updated.artist = "Re-tagged Artist".to_string();
+    let id2 = library_repo::insert_track(&conn, &updated).unwrap();
+    assert_eq!(id, id2);
+
+    // Metadata should be updated
+    let after = library_repo::get_track_by_id(&conn, id).unwrap().unwrap();
+    assert_eq!(after.title, "Re-tagged Title");
+    assert_eq!(after.artist, "Re-tagged Artist");
+
+    // play_count and last_played_at must be preserved
+    assert_eq!(after.play_count, 3);
+    assert_eq!(after.last_played_at, saved_last_played);
 }
 
 #[test]

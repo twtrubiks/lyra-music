@@ -6,8 +6,14 @@ use crate::models::track::Track;
 
 pub fn insert_track(conn: &Connection, track: &Track) -> Result<i64, AppError> {
     conn.execute(
-        "INSERT OR IGNORE INTO tracks (file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO tracks (file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(file_path) DO UPDATE SET
+             title = excluded.title,
+             artist = excluded.artist,
+             album = excluded.album,
+             duration_secs = excluded.duration_secs,
+             file_size_bytes = excluded.file_size_bytes",
         params![
             track.file_path,
             track.title,
