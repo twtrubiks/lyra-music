@@ -914,3 +914,30 @@ fn test_play_count_survives_in_all_queries() {
     assert_eq!(found.play_count, 2);
     assert!(found.last_played_at.is_some());
 }
+
+// ============================================================
+// Scan folder remove tests
+// ============================================================
+
+#[test]
+fn test_remove_scan_folder() {
+    let conn = common::create_test_db();
+    library_repo::add_scan_folder(&conn, "/music/folder1").unwrap();
+    library_repo::add_scan_folder(&conn, "/music/folder2").unwrap();
+
+    let folders = library_repo::get_all_scan_folders(&conn).unwrap();
+    assert_eq!(folders.len(), 2);
+
+    library_repo::remove_scan_folder(&conn, "/music/folder1").unwrap();
+
+    let folders = library_repo::get_all_scan_folders(&conn).unwrap();
+    assert_eq!(folders.len(), 1);
+    assert_eq!(folders[0], "/music/folder2");
+}
+
+#[test]
+fn test_remove_scan_folder_nonexistent_no_error() {
+    let conn = common::create_test_db();
+    let result = library_repo::remove_scan_folder(&conn, "/nonexistent/path");
+    assert!(result.is_ok());
+}

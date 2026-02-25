@@ -264,7 +264,15 @@ pub fn start_watching(
 }
 
 #[tauri::command]
-pub fn stop_watching(folder: String, watcher_state: State<WatcherState>) -> Result<(), AppError> {
+pub fn stop_watching(
+    folder: String,
+    db: State<DbState>,
+    watcher_state: State<WatcherState>,
+) -> Result<(), AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    library_repo::remove_scan_folder(&conn, &folder)?;
+    drop(conn);
+
     let w = watcher_state.0.lock().map_err(|_| AppError::LockPoisoned)?;
     if let Some(ref watcher) = *w {
         watcher.unwatch(&folder)?;

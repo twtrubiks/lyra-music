@@ -318,6 +318,14 @@ pub fn add_scan_folder(conn: &Connection, folder_path: &str) -> Result<(), AppEr
     Ok(())
 }
 
+pub fn remove_scan_folder(conn: &Connection, folder_path: &str) -> Result<(), AppError> {
+    conn.execute(
+        "DELETE FROM scan_folders WHERE folder_path = ?1",
+        params![folder_path],
+    )?;
+    Ok(())
+}
+
 pub fn delete_track_by_path(
     conn: &Connection,
     file_path: &str,
