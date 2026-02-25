@@ -595,6 +595,51 @@ fn test_reorder_with_duplicate_track_ids_returns_error() {
 }
 
 // ============================================================
+// Remove-from-playlist does NOT delete the track
+// ============================================================
+
+#[test]
+fn test_remove_from_playlist_does_not_delete_track() {
+    let conn = common::create_test_db();
+    let t1_id = library_repo::insert_track(&conn, &common::create_test_track(1)).unwrap();
+    let t2_id = library_repo::insert_track(&conn, &common::create_test_track(2)).unwrap();
+
+    let pl_id = playlist_repo::create_playlist(&conn, "Keep Track PL").unwrap();
+    playlist_repo::add_to_playlist(&conn, pl_id, t1_id).unwrap();
+    playlist_repo::add_to_playlist(&conn, pl_id, t2_id).unwrap();
+
+    // Remove t1 from playlist
+    playlist_repo::remove_from_playlist(&conn, pl_id, t1_id).unwrap();
+
+    // t1 should still exist in the tracks table
+    let all_tracks = library_repo::get_all_tracks(&conn).unwrap();
+    assert_eq!(all_tracks.len(), 2);
+    let ids: Vec<i64> = all_tracks.iter().map(|t| t.id).collect();
+    assert!(ids.contains(&t1_id));
+    assert!(ids.contains(&t2_id));
+
+    // But playlist should only have t2
+    let pl_tracks = playlist_repo::get_playlist_tracks(&conn, pl_id).unwrap();
+    assert_eq!(pl_tracks.len(), 1);
+    assert_eq!(pl_tracks[0].id, t2_id);
+}
+
+#[test]
+fn test_remove_from_playlist_track_not_in_playlist() {
+    let conn = common::create_test_db();
+    let t1_id = library_repo::insert_track(&conn, &common::create_test_track(1)).unwrap();
+
+    let pl_id = playlist_repo::create_playlist(&conn, "Empty PL").unwrap();
+    // t1 is NOT in the playlist — removing should not error
+    let result = playlist_repo::remove_from_playlist(&conn, pl_id, t1_id);
+    assert!(result.is_ok(), "removing a track not in playlist should not error");
+
+    // Track should still exist
+    let found = library_repo::get_track_by_id(&conn, t1_id).unwrap();
+    assert!(found.is_some());
+}
+
+// ============================================================
 // Play count tests
 // ============================================================
 

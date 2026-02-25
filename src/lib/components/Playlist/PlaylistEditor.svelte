@@ -5,6 +5,7 @@
   import StatusBar from '../Library/StatusBar.svelte';
   import { getPlayerState } from '$lib/state/playerState.svelte';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
+  import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
   import { startPlayingTrack, handleTrackRemoved } from '$lib/logic/playback-actions';
@@ -41,14 +42,18 @@
   async function handleRemove(tracksToRemove: Track[]) {
     try {
       for (const track of tracksToRemove) {
-        await libraryApi.removeTrack(track.id);
-        await handleTrackRemoved(track.id);
+        await playlistApi.removeFromPlaylist(playlistId, track.id);
       }
-      const ids = new Set(tracksToRemove.map((t) => t.id));
-      library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
+      const removedIds = new Set(tracksToRemove.map((t) => t.id));
+      const playlistState = getPlaylistState();
+      playlistState.playlists = playlistState.playlists.map((pl) =>
+        pl.id === playlistId
+          ? { ...pl, track_ids: pl.track_ids.filter((id) => !removedIds.has(id)) }
+          : pl,
+      );
       await loadTracks();
     } catch (err) {
-      notifyCritical('Remove tracks', err);
+      notifyCritical('Remove from playlist', err);
     }
   }
 
