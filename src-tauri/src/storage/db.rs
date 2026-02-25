@@ -23,6 +23,7 @@ pub fn init_db(app_handle: &AppHandle) -> Result<Connection, AppError> {
     Ok(conn)
 }
 
+#[allow(clippy::too_many_lines)]
 fn run_migrations(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (

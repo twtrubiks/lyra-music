@@ -10,11 +10,7 @@
 
 ## 下載
 
-| 格式 | 連結 |
-|------|------|
-| AppImage | [Lyra Music_0.1.0_amd64.AppImage](https://drive.google.com/file/d/1U32sZkVUT6uEaJyWsPfDxMC0px8eQ2cO/view?usp=sharing) |
-| deb | [Lyra-Music_0.1.0_amd64.deb](https://drive.google.com/file/d/1tLm5vR1LBZr5z1HZM74mbuOPHUCgFeAE/view?usp=sharing) |
-| rpm | [Lyra-Music-0.1.0-1.x86_64.rpm](https://drive.google.com/file/d/1oWb0S3B0-Kq9YfvKCUR9hHAl3ny8QlKm/view?usp=sharing) |
+前往 **[GitHub Releases](https://github.com/twtrubiks/lyra-music/releases/latest)** 下載最新版本（支援 AppImage、deb、rpm）。
 
 ## 技術架構
 

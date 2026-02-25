@@ -81,83 +81,8 @@ impl FolderWatcher {
                         let events = std::mem::take(&mut pending_events);
                         last_event_time = None;
 
-                        let mut changed = false;
-                        let mut removed_track_ids: Vec<i64> = Vec::new();
-
-                        for event in events {
-                            match event.kind {
-                                EventKind::Create(_) | EventKind::Modify(_) => {
-                                    for path in &event.paths {
-                                        if let Some(path_str) = path.to_str() {
-                                            if folder_scanner::is_supported_audio_file(path_str) {
-                                                if path.is_file() {
-                                                    if let Ok(conn) = db_clone.lock() {
-                                                        if process_new_file(
-                                                            &conn,
-                                                            &app_handle_clone,
-                                                            path_str,
-                                                        )
-                                                        .is_ok()
-                                                        {
-                                                            changed = true;
-                                                        }
-                                                    }
-                                                } else if !path.exists() {
-                                                    // File moved/trashed: Modify(Name) fires but
-                                                    // file no longer exists — treat as removal.
-                                                    if let Ok(conn) = db_clone.lock() {
-                                                        if let Ok(Some(track_id)) =
-                                                            library_repo::get_track_id_by_path(
-                                                                &conn, path_str,
-                                                            )
-                                                        {
-                                                            if let Ok(Some(cover_path)) =
-                                                                library_repo::delete_track_by_path(
-                                                                    &conn, path_str,
-                                                                )
-                                                            {
-                                                                let _ = std::fs::remove_file(
-                                                                    &cover_path,
-                                                                );
-                                                            }
-                                                            removed_track_ids.push(track_id);
-                                                        }
-                                                        changed = true;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                EventKind::Remove(_) => {
-                                    for path in &event.paths {
-                                        if let Some(path_str) = path.to_str() {
-                                            if folder_scanner::is_supported_audio_file(path_str) {
-                                                if let Ok(conn) = db_clone.lock() {
-                                                    if let Ok(Some(track_id)) =
-                                                        library_repo::get_track_id_by_path(
-                                                            &conn, path_str,
-                                                        )
-                                                    {
-                                                        if let Ok(Some(cover_path)) =
-                                                            library_repo::delete_track_by_path(
-                                                                &conn, path_str,
-                                                            )
-                                                        {
-                                                            let _ =
-                                                                std::fs::remove_file(&cover_path);
-                                                        }
-                                                        removed_track_ids.push(track_id);
-                                                    }
-                                                    changed = true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
+                        let (changed, removed_track_ids) =
+                            process_event_batch(&events, &db_clone, &app_handle_clone);
 
                         if changed {
                             let _ = app_handle_clone.emit("library-changed", ());
@@ -191,6 +116,66 @@ impl FolderWatcher {
 impl Drop for FolderWatcher {
     fn drop(&mut self) {
         let _ = self.cmd_tx.send(WatcherCommand::Shutdown);
+    }
+}
+
+fn process_event_batch(
+    events: &[notify::Event],
+    db: &Arc<Mutex<Connection>>,
+    app_handle: &AppHandle,
+) -> (bool, Vec<i64>) {
+    let mut changed = false;
+    let mut removed_track_ids: Vec<i64> = Vec::new();
+
+    for event in events {
+        match event.kind {
+            EventKind::Create(_) | EventKind::Modify(_) => {
+                for path in &event.paths {
+                    if let Some(path_str) = path.to_str() {
+                        if folder_scanner::is_supported_audio_file(path_str) {
+                            if path.is_file() {
+                                if let Ok(conn) = db.lock() {
+                                    if process_new_file(&conn, app_handle, path_str).is_ok() {
+                                        changed = true;
+                                    }
+                                }
+                            } else if !path.exists() {
+                                // File moved/trashed: Modify(Name) fires but
+                                // file no longer exists — treat as removal.
+                                if let Ok(conn) = db.lock() {
+                                    remove_track(&conn, path_str, &mut removed_track_ids);
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            EventKind::Remove(_) => {
+                for path in &event.paths {
+                    if let Some(path_str) = path.to_str() {
+                        if folder_scanner::is_supported_audio_file(path_str) {
+                            if let Ok(conn) = db.lock() {
+                                remove_track(&conn, path_str, &mut removed_track_ids);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    (changed, removed_track_ids)
+}
+
+fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i64>) {
+    if let Ok(Some(track_id)) = library_repo::get_track_id_by_path(conn, path_str) {
+        if let Ok(Some(cover_path)) = library_repo::delete_track_by_path(conn, path_str) {
+            let _ = std::fs::remove_file(&cover_path);
+        }
+        removed_track_ids.push(track_id);
     }
 }
 

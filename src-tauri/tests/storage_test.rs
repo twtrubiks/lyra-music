@@ -681,7 +681,10 @@ fn test_remove_from_playlist_track_not_in_playlist() {
     let pl_id = playlist_repo::create_playlist(&conn, "Empty PL").unwrap();
     // t1 is NOT in the playlist — removing should not error
     let result = playlist_repo::remove_from_playlist(&conn, pl_id, t1_id);
-    assert!(result.is_ok(), "removing a track not in playlist should not error");
+    assert!(
+        result.is_ok(),
+        "removing a track not in playlist should not error"
+    );
 
     // Track should still exist
     let found = library_repo::get_track_by_id(&conn, t1_id).unwrap();
@@ -709,7 +712,11 @@ fn test_get_all_albums_groups_by_album_and_artist() {
     library_repo::insert_track(&conn, &t2).unwrap();
 
     let albums = library_repo::get_all_albums(&conn).unwrap();
-    assert_eq!(albums.len(), 2, "same album name with different artists should produce 2 entries");
+    assert_eq!(
+        albums.len(),
+        2,
+        "same album name with different artists should produce 2 entries"
+    );
 
     let names: Vec<&str> = albums.iter().map(|a| a.name.as_str()).collect();
     assert!(names.iter().all(|n| *n == "Greatest Hits"));
