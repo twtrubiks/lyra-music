@@ -12,9 +12,9 @@
 
 | 格式 | 連結 |
 |------|------|
-| AppImage | [Lyra Music_0.1.0_amd64.AppImage](https://drive.google.com/file/d/1iStFKSt_bVaUgrESEUovTvERb0xkWkqK/view?usp=sharing) |
-| deb | [Lyra-Music_0.1.0_amd64.deb](https://drive.google.com/file/d/1P2uXky4SFWbY8TNagWHYE0VICZ9yFmDf/view?usp=sharing) |
-| rpm | [Lyra-Music-0.1.0-1.x86_64.rpm](https://drive.google.com/file/d/1BGisOgKw5CrIoIvJqqSFSK4QgAp5PNHp/view?usp=sharing) |
+| AppImage | [Lyra Music_0.1.0_amd64.AppImage](https://drive.google.com/file/d/1U32sZkVUT6uEaJyWsPfDxMC0px8eQ2cO/view?usp=sharing) |
+| deb | [Lyra-Music_0.1.0_amd64.deb](https://drive.google.com/file/d/1tLm5vR1LBZr5z1HZM74mbuOPHUCgFeAE/view?usp=sharing) |
+| rpm | [Lyra-Music-0.1.0-1.x86_64.rpm](https://drive.google.com/file/d/1oWb0S3B0-Kq9YfvKCUR9hHAl3ny8QlKm/view?usp=sharing) |
 
 ## 技術架構
 
