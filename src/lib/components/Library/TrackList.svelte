@@ -15,6 +15,7 @@
     getSelectedTracks,
     type SelectionState,
   } from '$lib/logic/selection';
+  import { moveByKeyboard } from '$lib/logic/reorder';
 
   let {
     tracks,
@@ -23,6 +24,7 @@
     onremove,
     ontrash,
     onproperties,
+    onreorder,
     sortConfig,
     onsort,
   }: {
@@ -32,6 +34,7 @@
     onremove?: (tracks: Track[]) => void;
     ontrash?: (tracks: Track[]) => void;
     onproperties?: (track: Track) => void;
+    onreorder?: (trackIds: number[]) => void;
     sortConfig?: SortConfig;
     onsort?: (column: SortColumn) => void;
   } = $props();
@@ -136,6 +139,12 @@
       e.preventDefault();
       selection = selectAll(tracks);
     }
+    if (onreorder && e.ctrlKey && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const direction = e.key === 'ArrowUp' ? 'up' : 'down';
+      const newOrder = moveByKeyboard(tracks, selection.selectedIds, direction);
+      if (newOrder) onreorder(newOrder);
+    }
   }
 
   // Context menu actions
@@ -182,8 +191,33 @@
     }
   }
 
+  // Reorder menu handlers
+  function handleMenuMoveUp() {
+    showMenu = false;
+    const newOrder = moveByKeyboard(tracks, selection.selectedIds, 'up');
+    if (newOrder) onreorder?.(newOrder);
+  }
+
+  function handleMenuMoveDown() {
+    showMenu = false;
+    const newOrder = moveByKeyboard(tracks, selection.selectedIds, 'down');
+    if (newOrder) onreorder?.(newOrder);
+  }
+
   let selectedCount = $derived(selection.selectedIds.size);
   let propertiesDisabled = $derived(selection.selectedIds.size !== 1);
+  let canMoveUp = $derived(
+    !!onreorder &&
+      selection.selectedIds.size > 0 &&
+      tracks.length > 0 &&
+      !selection.selectedIds.has(tracks[0].id),
+  );
+  let canMoveDown = $derived(
+    !!onreorder &&
+      selection.selectedIds.size > 0 &&
+      tracks.length > 0 &&
+      !selection.selectedIds.has(tracks[tracks.length - 1].id),
+  );
 
   const headers: { label: string; column: SortColumn }[] = [
     { label: 'Title', column: 'title' },
@@ -290,6 +324,31 @@
           {pl.name}
         </button>
       {/each}
+      <div class="menu-divider"></div>
+    {/if}
+    {#if onreorder}
+      <button
+        class="menu-item"
+        class:menu-item-disabled={!canMoveUp}
+        role="menuitem"
+        onclick={(e) => {
+          e.stopPropagation();
+          if (canMoveUp) handleMenuMoveUp();
+        }}
+      >
+        ▲ 上移 <span class="shortcut">Ctrl+Shift+↑</span>
+      </button>
+      <button
+        class="menu-item"
+        class:menu-item-disabled={!canMoveDown}
+        role="menuitem"
+        onclick={(e) => {
+          e.stopPropagation();
+          if (canMoveDown) handleMenuMoveDown();
+        }}
+      >
+        ▼ 下移 <span class="shortcut">Ctrl+Shift+↓</span>
+      </button>
       <div class="menu-divider"></div>
     {/if}
     <button
@@ -498,5 +557,11 @@
     height: 1px;
     background: #3a3a5a;
     margin: 4px 0;
+  }
+
+  .shortcut {
+    margin-left: auto;
+    color: #666;
+    font-size: 11px;
   }
 </style>

@@ -80,6 +80,23 @@
     }
   }
 
+  async function handleReorder(trackIds: number[]) {
+    // Optimistic update
+    const trackMap = new Map(tracks.map((t) => [t.id, t]));
+    tracks = trackIds.map((id) => trackMap.get(id)!).filter(Boolean);
+    // Update playlistState
+    const playlistState = getPlaylistState();
+    playlistState.playlists = playlistState.playlists.map((pl) =>
+      pl.id === playlistId ? { ...pl, track_ids: trackIds } : pl,
+    );
+    try {
+      await playlistApi.reorderPlaylist(playlistId, trackIds);
+    } catch (err) {
+      notifyCritical('Reorder playlist', err);
+      await loadTracks(); // fallback
+    }
+  }
+
   $effect(() => {
     void playlistId;
     loadTracks();
@@ -98,6 +115,7 @@
     onremove={handleRemove}
     ontrash={handleTrash}
     onproperties={handleProperties}
+    onreorder={handleReorder}
   />
 
   <StatusBar {tracks} />
