@@ -37,6 +37,9 @@ pub fn stop(player: State<SharedPlayer>) -> Result<(), AppError> {
 
 #[tauri::command]
 pub fn seek(position_secs: f64, player: State<SharedPlayer>) -> Result<(), AppError> {
+    if !position_secs.is_finite() || position_secs < 0.0 {
+        return Err(AppError::Audio("invalid seek position".to_string()));
+    }
     let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
     p.try_seek(position_secs)
 }
