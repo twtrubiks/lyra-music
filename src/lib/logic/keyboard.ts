@@ -11,6 +11,7 @@ export type KeyAction =
   | 'mini-toggle'
   | 'mini-exit'
   | 'focus-search'
+  | 'show-shortcuts'
   | null;
 
 /**
@@ -46,6 +47,8 @@ export function mapKeyToAction(e: { key: string; ctrlKey: boolean; metaKey: bool
       return 'mini-toggle';
     case 'Escape':
       return 'mini-exit';
+    case '?':
+      return 'show-shortcuts';
     default:
       return null;
   }

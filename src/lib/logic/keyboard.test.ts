@@ -56,6 +56,10 @@ describe('mapKeyToAction', () => {
     expect(mapKeyToAction({ key: 'f', ctrlKey: false, metaKey: true })).toBe('focus-search');
   });
 
+  it('? → show-shortcuts', () => {
+    expect(mapKeyToAction({ key: '?', ...base })).toBe('show-shortcuts');
+  });
+
   it('unknown key → null', () => {
     expect(mapKeyToAction({ key: 'x', ...base })).toBeNull();
     expect(mapKeyToAction({ key: 'Enter', ...base })).toBeNull();

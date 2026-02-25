@@ -6,6 +6,8 @@
   import { moveByKeyboard } from '$lib/logic/reorder';
   import { tick } from 'svelte';
 
+  let { onshowshortcuts }: { onshowshortcuts?: () => void } = $props();
+
   const playlistState = getPlaylistState();
 
   let newPlaylistName = $state('');
@@ -406,6 +408,16 @@
   {/if}
 
   <div class="bottom-actions">
+    {#if onshowshortcuts}
+      <button class="shortcuts-btn" onclick={onshowshortcuts}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path
+            d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"
+          />
+        </svg>
+        快捷鍵
+      </button>
+    {/if}
     <FolderPicker />
   </div>
 </aside>
@@ -603,8 +615,31 @@
   }
 
   .bottom-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding: 16px;
     margin-top: auto;
+  }
+
+  .shortcuts-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px dashed #2a2a4a;
+    border-radius: 6px;
+    color: #888;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .shortcuts-btn:hover {
+    border-color: #e94560;
+    color: #e94560;
   }
 
   .context-menu {

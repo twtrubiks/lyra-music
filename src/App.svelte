@@ -11,6 +11,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import { getPlayerState } from '$lib/state/playerState.svelte';
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
+  import KeyboardShortcutsDialog from '$lib/components/Help/KeyboardShortcutsDialog.svelte';
   import { mapKeyToAction } from '$lib/logic/keyboard';
   import { warnNonCritical, notifyCritical, notifyImportResult } from '$lib/logic/error-handler';
   import { pushError } from '$lib/state/errorState.svelte';
@@ -32,6 +33,7 @@
   const player = getPlayerState();
   const library = getLibraryState();
 
+  let showShortcutsDialog = $state(false);
   let isDragOver = $state(false);
   let draggedPathCount = $state(0);
   let tauriDragDropActive = $state(false);
@@ -227,9 +229,15 @@
     const action = mapKeyToAction(e);
     if (!action) return;
 
+    // Dialog 開啟時，只處理 show-shortcuts（toggle 關閉），其他快捷鍵不攔截
+    if (showShortcutsDialog && action !== 'show-shortcuts') return;
+
     e.preventDefault();
 
     switch (action) {
+      case 'show-shortcuts':
+        showShortcutsDialog = !showShortcutsDialog;
+        break;
       case 'play-pause':
         if (!player.currentTrack) return;
         if (player.isPlaying) {
@@ -314,7 +322,7 @@
   ondrop={handleHtml5Drop}
 >
   <div class="sidebar-area">
-    <Sidebar />
+    <Sidebar onshowshortcuts={() => (showShortcutsDialog = true)} />
   </div>
 
   <div class="main-area">
@@ -359,6 +367,10 @@
   {/if}
 
   <ErrorNotification />
+
+  {#if showShortcutsDialog}
+    <KeyboardShortcutsDialog onclose={() => (showShortcutsDialog = false)} />
+  {/if}
 </div>
 
 <style>
