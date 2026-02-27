@@ -58,7 +58,6 @@
       try {
         unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
           const { payload } = event;
-          console.log('[lyra] Tauri drag-drop event:', payload.type, payload);
           tauriDragDropActive = true;
           if (payload.type === 'enter') {
             isDragOver = true;
@@ -206,7 +205,6 @@
     isDragOver = false;
 
     const uriList = e.dataTransfer?.getData('text/uri-list') ?? '';
-    console.log('[lyra] HTML5 drop, text/uri-list:', uriList);
 
     const paths = uriList
       .split('\n')

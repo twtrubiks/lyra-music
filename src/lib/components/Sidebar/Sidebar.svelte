@@ -4,7 +4,7 @@
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
   import { moveByKeyboard } from '$lib/logic/reorder';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   let { onshowshortcuts }: { onshowshortcuts?: () => void } = $props();
 
@@ -233,14 +233,16 @@
 
   // Load playlists on mount
   $effect(() => {
-    (async () => {
-      try {
-        const lists = await playlistApi.getAllPlaylists();
-        playlistState.playlists = lists;
-      } catch (err) {
-        notifyCritical('Load playlists', err);
-      }
-    })();
+    untrack(() => {
+      (async () => {
+        try {
+          const lists = await playlistApi.getAllPlaylists();
+          playlistState.playlists = lists;
+        } catch (err) {
+          notifyCritical('Load playlists', err);
+        }
+      })();
+    });
   });
 </script>
 

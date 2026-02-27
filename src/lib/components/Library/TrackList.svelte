@@ -16,6 +16,7 @@
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { warnNonCritical } from '$lib/logic/error-handler';
 
   let {
     tracks,
@@ -158,8 +159,8 @@
     for (const t of selected) {
       try {
         await playlistApi.addToPlaylist(pl.id, t.id);
-      } catch {
-        // Already added or backend error
+      } catch (err) {
+        warnNonCritical('Add to playlist', err);
       }
     }
   }
