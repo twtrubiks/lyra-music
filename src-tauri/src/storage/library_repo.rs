@@ -7,7 +7,7 @@ use crate::models::track::Track;
 /// 標準 Track 查詢欄位
 const TRACK_COLUMNS: &str = "id, file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes, play_count, last_played_at";
 
-/// 從 SQL Row 映射為 Track（欄位順序需對應 TRACK_COLUMNS）
+/// 從 SQL Row 映射為 Track（欄位順序需對應 `TRACK_COLUMNS`）
 pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
     Ok(Track {
         id: row.get(0)?,
@@ -72,7 +72,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
     ))?;
 
     let tracks = stmt
-        .query_map([], |row| row_to_track(row))?
+        .query_map([], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -81,7 +81,7 @@ pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
 pub fn get_track_by_id(conn: &Connection, id: i64) -> Result<Option<Track>, AppError> {
     let mut stmt = conn.prepare(&format!("SELECT {TRACK_COLUMNS} FROM tracks WHERE id = ?1"))?;
 
-    let mut rows = stmt.query_map(params![id], |row| row_to_track(row))?;
+    let mut rows = stmt.query_map(params![id], row_to_track)?;
 
     match rows.next() {
         Some(Ok(track)) => Ok(Some(track)),
@@ -119,7 +119,7 @@ pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<Track>, AppEr
     ))?;
 
     let tracks = stmt
-        .query_map(params![pattern], |row| row_to_track(row))?
+        .query_map(params![pattern], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -183,7 +183,7 @@ pub fn get_tracks_by_artist(conn: &Connection, artist: &str) -> Result<Vec<Track
     ))?;
 
     let tracks = stmt
-        .query_map(params![artist], |row| row_to_track(row))?
+        .query_map(params![artist], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -199,7 +199,7 @@ pub fn get_tracks_by_album(
     ))?;
 
     let tracks = stmt
-        .query_map(params![album, artist], |row| row_to_track(row))?
+        .query_map(params![album, artist], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -222,7 +222,7 @@ pub fn get_most_played_tracks(conn: &Connection, limit: i64) -> Result<Vec<Track
     ))?;
 
     let tracks = stmt
-        .query_map(params![limit], |row| row_to_track(row))?
+        .query_map(params![limit], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)

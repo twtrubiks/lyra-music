@@ -89,7 +89,7 @@ pub fn get_playlist_tracks(conn: &Connection, playlist_id: i64) -> Result<Vec<Tr
     )?;
 
     let tracks = stmt
-        .query_map(params![playlist_id], |row| row_to_track(row))?
+        .query_map(params![playlist_id], row_to_track)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
