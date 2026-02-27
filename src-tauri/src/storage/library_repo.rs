@@ -4,6 +4,26 @@ use crate::error::AppError;
 use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::Track;
 
+/// 標準 Track 查詢欄位
+const TRACK_COLUMNS: &str = "id, file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes, play_count, last_played_at";
+
+/// 從 SQL Row 映射為 Track（欄位順序需對應 TRACK_COLUMNS）
+pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
+    Ok(Track {
+        id: row.get(0)?,
+        file_path: row.get(1)?,
+        title: row.get(2)?,
+        artist: row.get(3)?,
+        album: row.get(4)?,
+        duration_secs: row.get(5)?,
+        cover_art: None,
+        cover_art_path: row.get(6)?,
+        file_size_bytes: row.get(7)?,
+        play_count: row.get(8)?,
+        last_played_at: row.get(9)?,
+    })
+}
+
 pub fn insert_track(conn: &Connection, track: &Track) -> Result<i64, AppError> {
     conn.execute(
         "INSERT INTO tracks (file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes)
@@ -47,53 +67,21 @@ pub fn update_cover_art_path(
 }
 
 pub fn get_all_tracks(conn: &Connection) -> Result<Vec<Track>, AppError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at FROM tracks ORDER BY title",
-        )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {TRACK_COLUMNS} FROM tracks ORDER BY title"
+    ))?;
 
     let tracks = stmt
-        .query_map([], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map([], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
 }
 
 pub fn get_track_by_id(conn: &Connection, id: i64) -> Result<Option<Track>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes, play_count, last_played_at
-             FROM tracks WHERE id = ?1",
-    )?;
+    let mut stmt = conn.prepare(&format!("SELECT {TRACK_COLUMNS} FROM tracks WHERE id = ?1"))?;
 
-    let mut rows = stmt.query_map(params![id], |row| {
-        Ok(Track {
-            id: row.get(0)?,
-            file_path: row.get(1)?,
-            title: row.get(2)?,
-            artist: row.get(3)?,
-            album: row.get(4)?,
-            duration_secs: row.get(5)?,
-            cover_art: None,
-            cover_art_path: row.get(6)?,
-            file_size_bytes: row.get(7)?,
-            play_count: row.get(8)?,
-            last_played_at: row.get(9)?,
-        })
-    })?;
+    let mut rows = stmt.query_map(params![id], |row| row_to_track(row))?;
 
     match rows.next() {
         Some(Ok(track)) => Ok(Some(track)),
@@ -124,29 +112,14 @@ pub fn delete_track(conn: &Connection, id: i64) -> Result<(), AppError> {
 pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<Track>, AppError> {
     let pattern = format!("%{query}%");
 
-    let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at
-             FROM tracks
-             WHERE title LIKE ?1 OR artist LIKE ?1 OR album LIKE ?1
-             ORDER BY title",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {TRACK_COLUMNS} FROM tracks
+         WHERE title LIKE ?1 OR artist LIKE ?1 OR album LIKE ?1
+         ORDER BY title"
+    ))?;
 
     let tracks = stmt
-        .query_map(params![pattern], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map(params![pattern], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -205,27 +178,12 @@ pub fn get_all_albums(conn: &Connection) -> Result<Vec<AlbumSummary>, AppError> 
 }
 
 pub fn get_tracks_by_artist(conn: &Connection, artist: &str) -> Result<Vec<Track>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at
-         FROM tracks WHERE artist = ?1 ORDER BY album, title",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {TRACK_COLUMNS} FROM tracks WHERE artist = ?1 ORDER BY album, title"
+    ))?;
 
     let tracks = stmt
-        .query_map(params![artist], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map(params![artist], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -236,27 +194,12 @@ pub fn get_tracks_by_album(
     album: &str,
     artist: &str,
 ) -> Result<Vec<Track>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at
-         FROM tracks WHERE album = ?1 AND artist = ?2 ORDER BY title",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {TRACK_COLUMNS} FROM tracks WHERE album = ?1 AND artist = ?2 ORDER BY title"
+    ))?;
 
     let tracks = stmt
-        .query_map(params![album, artist], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map(params![album, artist], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
@@ -271,30 +214,15 @@ pub fn increment_play_count(conn: &Connection, track_id: i64) -> Result<(), AppE
 }
 
 pub fn get_most_played_tracks(conn: &Connection, limit: i64) -> Result<Vec<Track>, AppError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, file_path, title, artist, album, duration_secs, file_size_bytes, play_count, last_played_at
-         FROM tracks
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {TRACK_COLUMNS} FROM tracks
          WHERE play_count > 0
          ORDER BY play_count DESC, last_played_at DESC
-         LIMIT ?1",
-    )?;
+         LIMIT ?1"
+    ))?;
 
     let tracks = stmt
-        .query_map(params![limit], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map(params![limit], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)

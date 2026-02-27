@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 
+use super::library_repo::row_to_track;
 use crate::error::AppError;
 use crate::models::playlist::Playlist;
 use crate::models::track::Track;
@@ -80,7 +81,7 @@ fn get_playlist_track_ids(conn: &Connection, playlist_id: i64) -> Result<Vec<i64
 
 pub fn get_playlist_tracks(conn: &Connection, playlist_id: i64) -> Result<Vec<Track>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.file_path, t.title, t.artist, t.album, t.duration_secs, t.file_size_bytes, t.play_count, t.last_played_at
+        "SELECT t.id, t.file_path, t.title, t.artist, t.album, t.duration_secs, t.cover_art_path, t.file_size_bytes, t.play_count, t.last_played_at
              FROM tracks t
              INNER JOIN playlist_tracks pt ON t.id = pt.track_id
              WHERE pt.playlist_id = ?1
@@ -88,21 +89,7 @@ pub fn get_playlist_tracks(conn: &Connection, playlist_id: i64) -> Result<Vec<Tr
     )?;
 
     let tracks = stmt
-        .query_map(params![playlist_id], |row| {
-            Ok(Track {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                title: row.get(2)?,
-                artist: row.get(3)?,
-                album: row.get(4)?,
-                duration_secs: row.get(5)?,
-                cover_art: None,
-                cover_art_path: None,
-                file_size_bytes: row.get(6)?,
-                play_count: row.get(7)?,
-                last_played_at: row.get(8)?,
-            })
-        })?
+        .query_map(params![playlist_id], |row| row_to_track(row))?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(tracks)
