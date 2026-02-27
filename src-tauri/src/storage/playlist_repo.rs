@@ -37,18 +37,30 @@ pub fn get_all_playlists(conn: &Connection) -> Result<Vec<Playlist>, AppError> {
         })?
         .collect::<Result<Vec<(i64, String, Option<i64>, Option<f64>, i64)>, _>>()?;
 
-    let mut result = Vec::new();
-    for (id, name, last_track_id, last_pos, sort_order) in playlists {
-        let track_ids = get_playlist_track_ids(conn, id)?;
-        result.push(Playlist {
+    // Batch-load all playlist track IDs in a single query to avoid N+1
+    let mut all_tracks_stmt = conn.prepare(
+        "SELECT playlist_id, track_id FROM playlist_tracks ORDER BY playlist_id, sort_order",
+    )?;
+    let mut track_ids_map: std::collections::HashMap<i64, Vec<i64>> =
+        std::collections::HashMap::new();
+    let rows =
+        all_tracks_stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))?;
+    for row in rows {
+        let (playlist_id, track_id) = row?;
+        track_ids_map.entry(playlist_id).or_default().push(track_id);
+    }
+
+    let result = playlists
+        .into_iter()
+        .map(|(id, name, last_track_id, last_pos, sort_order)| Playlist {
             id,
             name,
-            track_ids,
+            track_ids: track_ids_map.remove(&id).unwrap_or_default(),
             last_position_track_id: last_track_id,
             last_position_secs: last_pos,
             sort_order,
-        });
-    }
+        })
+        .collect();
 
     Ok(result)
 }

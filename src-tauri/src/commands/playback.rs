@@ -46,6 +46,9 @@ pub fn seek(position_secs: f64, player: State<SharedPlayer>) -> Result<(), AppEr
 
 #[tauri::command]
 pub fn set_volume(volume: f32, player: State<SharedPlayer>) -> Result<(), AppError> {
+    if !volume.is_finite() {
+        return Err(AppError::Audio("invalid volume value".to_string()));
+    }
     let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
     p.set_volume(volume);
     Ok(())

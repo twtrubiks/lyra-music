@@ -127,6 +127,14 @@ fn process_event_batch(
     let mut changed = false;
     let mut removed_track_ids: Vec<i64> = Vec::new();
 
+    let conn = match db.lock() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to acquire database lock: {e}");
+            return (false, Vec::new());
+        }
+    };
+
     for event in events {
         match event.kind {
             EventKind::Create(_) | EventKind::Modify(_) => {
@@ -134,18 +142,14 @@ fn process_event_batch(
                     if let Some(path_str) = path.to_str() {
                         if folder_scanner::is_supported_audio_file(path_str) {
                             if path.is_file() {
-                                if let Ok(conn) = db.lock() {
-                                    if process_new_file(&conn, app_handle, path_str).is_ok() {
-                                        changed = true;
-                                    }
+                                if process_new_file(&conn, app_handle, path_str).is_ok() {
+                                    changed = true;
                                 }
                             } else if !path.exists() {
                                 // File moved/trashed: Modify(Name) fires but
                                 // file no longer exists — treat as removal.
-                                if let Ok(conn) = db.lock() {
-                                    remove_track(&conn, path_str, &mut removed_track_ids);
-                                    changed = true;
-                                }
+                                remove_track(&conn, path_str, &mut removed_track_ids);
+                                changed = true;
                             }
                         }
                     }
@@ -155,10 +159,8 @@ fn process_event_batch(
                 for path in &event.paths {
                     if let Some(path_str) = path.to_str() {
                         if folder_scanner::is_supported_audio_file(path_str) {
-                            if let Ok(conn) = db.lock() {
-                                remove_track(&conn, path_str, &mut removed_track_ids);
-                                changed = true;
-                            }
+                            remove_track(&conn, path_str, &mut removed_track_ids);
+                            changed = true;
                         }
                     }
                 }
