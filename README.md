@@ -1,5 +1,7 @@
 # Lyra Music
 
+[English](README.en.md) | 繁體中文
+
 基於 Tauri 2 + Svelte 5 + Rust 的桌面音樂播放器。純本地離線播放，不依賴任何網路服務。
 
 ## 畫面截圖
@@ -7,6 +9,16 @@
 ![主介面 - 音樂庫與播放器](docs/images/main-player-library.png)
 
 ![Mini Player 模式](docs/images/mini-player.png)
+
+## 為什麼是 Lyra Music？
+
+Lyra 的設計原則：
+
+**零依賴啟動** -- 音訊引擎使用 [rodio](https://github.com/RustAudio/rodio)（純 Rust），不需要 GStreamer、MPV、FFmpeg。下載二進位即可執行。
+
+**輕量、不是小功能** -- Tauri 2 不捆綁 Chromium，記憶體佔用遠低於 Electron 方案。但保留了多數使用者實際需要的功能：Gapless Playback、斷點續播、播放清單管理、元資料編輯、System Tray。
+
+**你的音樂留在你的機器** -- 無 telemetry（不會在背景收集或回傳任何使用資料）、無帳號、無網路請求。MIT 授權，程式碼完全透明。
 
 ## 下載
 
