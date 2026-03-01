@@ -29,10 +29,13 @@ fn process_audio_file(
             track.cover_art = None;
             Ok(Ok(track))
         }
-        Err(e) => Ok(Err(FailedFile {
-            file_path: file_path.to_string(),
-            error: e.to_string(),
-        })),
+        Err(e) => {
+            eprintln!("[lyra] Failed to read metadata for {file_path}: {e}");
+            Ok(Err(FailedFile {
+                file_path: file_path.to_string(),
+                error: e.to_string(),
+            }))
+        }
     }
 }
 

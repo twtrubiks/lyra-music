@@ -3,8 +3,10 @@ use std::path::Path;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use lofty::config::ParseOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::picture::PictureType;
+use lofty::probe::Probe;
 use lofty::tag::Accessor;
 
 use crate::error::AppError;
@@ -12,8 +14,6 @@ use crate::models::track::{Track, TrackDetails};
 
 pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
     let path = Path::new(file_path);
-
-    let tagged_file = lofty::read_from_path(path).map_err(|e| AppError::Metadata(e.to_string()))?;
 
     let fallback_title = path
         .file_stem()
@@ -24,44 +24,79 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
     #[allow(clippy::cast_possible_wrap)]
     let file_size_bytes = fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
 
-    let properties = tagged_file.properties();
-    let duration_secs = properties.duration().as_secs_f64();
+    match lofty::read_from_path(path) {
+        Ok(tagged_file) => {
+            let properties = tagged_file.properties();
+            let duration_secs = properties.duration().as_secs_f64();
 
-    let tag = tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag());
+            let tag = tagged_file
+                .primary_tag()
+                .or_else(|| tagged_file.first_tag());
 
-    let (title, artist, album) = match tag {
-        Some(t) => {
-            let title = t.title().map_or(fallback_title, |s| s.to_string());
-            let artist = t
-                .artist()
-                .map_or_else(|| "Unknown Artist".to_string(), |s| s.to_string());
-            let album = t
-                .album()
-                .map_or_else(|| "Unknown Album".to_string(), |s| s.to_string());
-            (title, artist, album)
+            let (title, artist, album) = match tag {
+                Some(t) => {
+                    let title = t.title().map_or(fallback_title, |s| s.to_string());
+                    let artist = t
+                        .artist()
+                        .map_or_else(|| "Unknown Artist".to_string(), |s| s.to_string());
+                    let album = t
+                        .album()
+                        .map_or_else(|| "Unknown Album".to_string(), |s| s.to_string());
+                    (title, artist, album)
+                }
+                None => (
+                    fallback_title,
+                    "Unknown Artist".to_string(),
+                    "Unknown Album".to_string(),
+                ),
+            };
+
+            Ok(Track {
+                id: 0,
+                file_path: file_path.to_string(),
+                title,
+                artist,
+                album,
+                duration_secs,
+                cover_art: None,
+                cover_art_path: None,
+                file_size_bytes,
+                play_count: 0,
+                last_played_at: None,
+            })
         }
-        None => (
-            fallback_title,
-            "Unknown Artist".to_string(),
-            "Unknown Album".to_string(),
-        ),
-    };
+        Err(e) => {
+            // Workaround for lofty 0.23 bug: timestamp parsing errors on non-digit
+            // characters (e.g. Japanese text in ID3v2 TDRC/TDRL frames) even in
+            // BestAttempt/Relaxed mode. See timestamp.rs line 245 in lofty source.
+            // Fallback: skip tag reading and use only audio properties + filename.
+            eprintln!(
+                "[lyra] Tag parsing failed for {file_path}: {e}; \
+                 retrying without tags (lofty bug workaround)"
+            );
 
-    Ok(Track {
-        id: 0,
-        file_path: file_path.to_string(),
-        title,
-        artist,
-        album,
-        duration_secs,
-        cover_art: None,
-        cover_art_path: None,
-        file_size_bytes,
-        play_count: 0,
-        last_played_at: None,
-    })
+            let options = ParseOptions::new().read_tags(false);
+            let tagged_file = Probe::open(path)
+                .and_then(|probe| probe.options(options).read())
+                .map_err(|e2| AppError::Metadata(e2.to_string()))?;
+
+            let duration_secs = tagged_file.properties().duration().as_secs_f64();
+
+            Ok(Track {
+                id: 0,
+                file_path: file_path.to_string(),
+                title: fallback_title,
+                artist: "Unknown Artist".to_string(),
+                album: "Unknown Album".to_string(),
+                duration_secs,
+                cover_art: None,
+                cover_art_path: None,
+                file_size_bytes,
+                play_count: 0,
+                last_played_at: None,
+            })
+        }
+    }
 }
 
 pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails, AppError> {
