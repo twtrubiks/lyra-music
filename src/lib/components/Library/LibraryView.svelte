@@ -8,6 +8,7 @@
   import * as libraryApi from '$lib/api/library';
   import { filterTracks } from '$lib/logic/format';
   import { startPlayingTrack, handleTrackRemoved } from '$lib/logic/playback-actions';
+  import { optimisticTrash } from '$lib/logic/trash-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { sortTracks, toggleSort, loadSortConfig, saveSortConfig } from '$lib/logic/sorting';
 
@@ -45,16 +46,7 @@
   }
 
   async function handleTrash(tracksToTrash: Track[]) {
-    try {
-      for (const track of tracksToTrash) {
-        await libraryApi.trashTrack(track.id);
-        await handleTrackRemoved(track.id);
-      }
-      const ids = new Set(tracksToTrash.map((t) => t.id));
-      library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
-    } catch (err) {
-      notifyCritical('Trash tracks', err);
-    }
+    await optimisticTrash(tracksToTrash);
   }
 
   async function handleProperties(track: Track) {

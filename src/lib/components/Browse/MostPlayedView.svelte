@@ -7,6 +7,7 @@
   import { getLibraryState } from '$lib/state/libraryState.svelte';
   import * as libraryApi from '$lib/api/library';
   import { startPlayingTrack, handleTrackRemoved } from '$lib/logic/playback-actions';
+  import { optimisticTrash } from '$lib/logic/trash-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
 
   const player = getPlayerState();
@@ -37,17 +38,12 @@
   }
 
   async function handleTrash(tracksToTrash: Track[]) {
-    try {
-      for (const track of tracksToTrash) {
-        await libraryApi.trashTrack(track.id);
-        await handleTrackRemoved(track.id);
-      }
-      const ids = new Set(tracksToTrash.map((t) => t.id));
-      tracks = tracks.filter((t) => !ids.has(t.id));
-      library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
-    } catch (err) {
-      notifyCritical('Trash tracks', err);
-    }
+    await optimisticTrash(tracksToTrash, {
+      getLocalTracks: () => tracks,
+      setLocalTracks: (v) => {
+        tracks = v;
+      },
+    });
   }
 
   async function handleProperties(track: Track) {

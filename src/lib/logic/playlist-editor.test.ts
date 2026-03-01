@@ -59,15 +59,8 @@ async function handleRemove(playlistId: number, tracksToRemove: typeof tracks) {
 }
 
 async function handleTrash(tracksToTrash: typeof tracks) {
-  const { trashTrack } = await import('$lib/api/library');
-  const { handleTrackRemoved } = await import('$lib/logic/playback-actions');
-  const library = getLibraryState();
-  for (const track of tracksToTrash) {
-    await trashTrack(track.id);
-    await handleTrackRemoved(track.id);
-  }
-  const ids = new Set(tracksToTrash.map((t) => t.id));
-  library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
+  const { optimisticTrash } = await import('$lib/logic/trash-actions');
+  await optimisticTrash(tracksToTrash);
 }
 
 let tracks = createMockTracks(3);

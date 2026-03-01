@@ -8,7 +8,8 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
-  import { startPlayingTrack, handleTrackRemoved } from '$lib/logic/playback-actions';
+  import { startPlayingTrack } from '$lib/logic/playback-actions';
+  import { optimisticTrash } from '$lib/logic/trash-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
 
   let {
@@ -58,17 +59,13 @@
   }
 
   async function handleTrash(tracksToTrash: Track[]) {
-    try {
-      for (const track of tracksToTrash) {
-        await libraryApi.trashTrack(track.id);
-        await handleTrackRemoved(track.id);
-      }
-      const ids = new Set(tracksToTrash.map((t) => t.id));
-      library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
-      await loadTracks();
-    } catch (err) {
-      notifyCritical('Trash tracks', err);
-    }
+    await optimisticTrash(tracksToTrash, {
+      getLocalTracks: () => tracks,
+      setLocalTracks: (v) => {
+        tracks = v;
+      },
+      onComplete: loadTracks,
+    });
   }
 
   async function handleProperties(track: Track) {
