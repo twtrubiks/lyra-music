@@ -5,7 +5,7 @@
  * keeping the track in the library. handleTrash should still call trash_track.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMockTrack, createMockTracks, createMockPlaylist } from '$lib/test-helpers';
+import { createMockTracks, createMockPlaylist } from '$lib/test-helpers';
 
 const mockInvoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({
@@ -45,21 +45,12 @@ function resetPlaylistState() {
  * This mirrors the actual implementation in PlaylistEditor.svelte.
  */
 async function handleRemove(playlistId: number, tracksToRemove: typeof tracks) {
-  const { removeFromPlaylist } = await import('$lib/api/playlist');
-  for (const track of tracksToRemove) {
-    await removeFromPlaylist(playlistId, track.id);
-  }
-  const removedIds = new Set(tracksToRemove.map((t) => t.id));
-  const playlistState = getPlaylistState();
-  playlistState.playlists = playlistState.playlists.map((pl) =>
-    pl.id === playlistId
-      ? { ...pl, track_ids: pl.track_ids.filter((id) => !removedIds.has(id)) }
-      : pl,
-  );
+  const { optimisticPlaylistRemove } = await import('$lib/logic/track-actions');
+  await optimisticPlaylistRemove(playlistId, tracksToRemove);
 }
 
 async function handleTrash(tracksToTrash: typeof tracks) {
-  const { optimisticTrash } = await import('$lib/logic/trash-actions');
+  const { optimisticTrash } = await import('$lib/logic/track-actions');
   await optimisticTrash(tracksToTrash);
 }
 

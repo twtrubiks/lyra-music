@@ -9,7 +9,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 import { getPlayerState } from '$lib/state/playerState.svelte';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
-import { optimisticTrash } from '$lib/logic/trash-actions';
+import {
+  optimisticTrash,
+  optimisticRemove,
+  optimisticPlaylistRemove,
+} from '$lib/logic/track-actions';
+import { createMockPlaylist } from '$lib/test-helpers';
 
 function resetPlayerState() {
   const player = getPlayerState();
@@ -277,6 +282,224 @@ describe('optimisticTrash', () => {
 
     await expect(optimisticTrash([])).resolves.not.toThrow();
     expect(library.allTracks).toHaveLength(2);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('optimisticRemove', () => {
+  const library = getLibraryState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetLibraryState();
+    resetPlaylistState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetLibraryState();
+    resetPlaylistState();
+  });
+
+  it('calls remove_track instead of trash_track', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+
+    await optimisticRemove([tracks[0]]);
+
+    expect(mockInvoke).toHaveBeenCalledWith('remove_track', { id: 1 });
+    expect(mockInvoke).not.toHaveBeenCalledWith('trash_track', expect.anything());
+  });
+
+  it('immediately removes tracks from allTracks (optimistic update)', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+
+    let backendCalled = false;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'remove_track') {
+        backendCalled = true;
+      }
+    });
+
+    const promise = optimisticRemove([tracks[1]]);
+
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(2);
+      expect(library.allTracks.map((t) => t.id)).toEqual([1, 3]);
+    });
+
+    await promise;
+    expect(backendCalled).toBe(true);
+  });
+
+  it('restores allTracks on backend failure', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'remove_track') {
+        throw new Error('disk error');
+      }
+    });
+
+    await optimisticRemove([tracks[1]]);
+
+    expect(library.allTracks).toHaveLength(3);
+    expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+
+  it('restores only failed tracks on partial backend failure', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+
+    mockInvoke.mockImplementation(async (cmd: string, args: { id: number }) => {
+      if (cmd === 'remove_track' && args.id === 2) {
+        throw new Error('disk error');
+      }
+    });
+
+    await optimisticRemove([tracks[0], tracks[1], tracks[2]]);
+
+    expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+  });
+
+  it('does not throw on empty array input', async () => {
+    library.allTracks = createMockTracks(2);
+
+    await expect(optimisticRemove([])).resolves.not.toThrow();
+    expect(library.allTracks).toHaveLength(2);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('optimisticPlaylistRemove', () => {
+  const library = getLibraryState();
+  const playlistState = getPlaylistState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetLibraryState();
+    resetPlaylistState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetLibraryState();
+    resetPlaylistState();
+  });
+
+  it('immediately removes track_ids from playlistState', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
+    ];
+
+    await optimisticPlaylistRemove(10, [tracks[1]]);
+
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 3]);
+  });
+
+  it('calls remove_from_playlist with correct playlistId', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
+
+    await optimisticPlaylistRemove(10, [tracks[0]]);
+
+    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
+      playlistId: 10,
+      trackId: 1,
+    });
+  });
+
+  it('does not modify library.allTracks', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
+    ];
+
+    await optimisticPlaylistRemove(10, [tracks[1]]);
+
+    expect(library.allTracks).toHaveLength(3);
+    expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+
+  it('does not call handleTrackRemoved (no stop)', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
+
+    await optimisticPlaylistRemove(10, [tracks[0]]);
+
+    expect(mockInvoke).not.toHaveBeenCalledWith('stop', expect.anything());
+  });
+
+  it('restores playlist track_ids on backend failure', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
+    ];
+
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'remove_from_playlist') {
+        throw new Error('db error');
+      }
+    });
+
+    await optimisticPlaylistRemove(10, [tracks[1]]);
+
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 2, 3]);
+  });
+
+  it('restores only failed track_ids on partial backend failure', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
+    ];
+
+    // track 1 succeeds, track 2 fails
+    mockInvoke.mockImplementation(
+      async (cmd: string, args: { playlistId: number; trackId: number }) => {
+        if (cmd === 'remove_from_playlist' && args.trackId === 2) {
+          throw new Error('db error');
+        }
+      },
+    );
+
+    await optimisticPlaylistRemove(10, [tracks[0], tracks[1]]);
+
+    // track 1 was successfully removed, track 2 should be restored
+    expect(playlistState.playlists[0].track_ids).toEqual([2, 3]);
+  });
+
+  it('does not affect other playlists', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, name: 'PL A', track_ids: [1, 2, 3] }),
+      createMockPlaylist({ id: 20, name: 'PL B', track_ids: [2, 3] }),
+    ];
+
+    await optimisticPlaylistRemove(10, [tracks[1]]);
+
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 3]);
+    expect(playlistState.playlists[1].track_ids).toEqual([2, 3]);
+  });
+
+  it('does not throw on empty array input', async () => {
+    playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
+
+    await expect(optimisticPlaylistRemove(10, [])).resolves.not.toThrow();
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 2]);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,8 @@
   import { getPlayerState } from '$lib/state/playerState.svelte';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
   import * as libraryApi from '$lib/api/library';
-  import { startPlayingTrack, handleTrackRemoved } from '$lib/logic/playback-actions';
+  import { startPlayingTrack } from '$lib/logic/playback-actions';
+  import { optimisticRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
 
   let { artistName }: { artistName: string } = $props();
@@ -31,17 +32,12 @@
   }
 
   async function handleRemove(tracksToRemove: Track[]) {
-    try {
-      for (const track of tracksToRemove) {
-        await libraryApi.removeTrack(track.id);
-        await handleTrackRemoved(track.id);
-      }
-      const ids = new Set(tracksToRemove.map((t) => t.id));
-      tracks = tracks.filter((t) => !ids.has(t.id));
-      library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
-    } catch (err) {
-      notifyCritical('Remove tracks', err);
-    }
+    await optimisticRemove(tracksToRemove, {
+      getLocalTracks: () => tracks,
+      setLocalTracks: (v) => {
+        tracks = v;
+      },
+    });
   }
 
   async function handleProperties(track: Track) {

@@ -9,7 +9,7 @@
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
   import { startPlayingTrack } from '$lib/logic/playback-actions';
-  import { optimisticTrash } from '$lib/logic/trash-actions';
+  import { optimisticTrash, optimisticPlaylistRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
 
   let {
@@ -41,21 +41,9 @@
   }
 
   async function handleRemove(tracksToRemove: Track[]) {
-    try {
-      for (const track of tracksToRemove) {
-        await playlistApi.removeFromPlaylist(playlistId, track.id);
-      }
-      const removedIds = new Set(tracksToRemove.map((t) => t.id));
-      const playlistState = getPlaylistState();
-      playlistState.playlists = playlistState.playlists.map((pl) =>
-        pl.id === playlistId
-          ? { ...pl, track_ids: pl.track_ids.filter((id) => !removedIds.has(id)) }
-          : pl,
-      );
-      await loadTracks();
-    } catch (err) {
-      notifyCritical('Remove from playlist', err);
-    }
+    await optimisticPlaylistRemove(playlistId, tracksToRemove, {
+      onComplete: loadTracks,
+    });
   }
 
   async function handleTrash(tracksToTrash: Track[]) {
