@@ -24,31 +24,28 @@ async function _optimisticLibraryAction(
   const library = getLibraryState();
   const ids = new Set(tracks.map((t) => t.id));
 
-  // 1. Snapshot for rollback
-  const snapshotAllTracks = library.allTracks;
-  const snapshotLocalTracks = options?.getLocalTracks?.();
-
-  // 2. Optimistic UI update — immediate removal
+  // 1. Optimistic UI update — immediate removal
   library.allTracks = library.allTracks.filter((t) => !ids.has(t.id));
-  if (snapshotLocalTracks && options?.setLocalTracks) {
-    options.setLocalTracks(snapshotLocalTracks.filter((t) => !ids.has(t.id)));
+  if (options?.getLocalTracks && options?.setLocalTracks) {
+    options.setLocalTracks(options.getLocalTracks().filter((t) => !ids.has(t.id)));
   }
 
-  // 3. Batch playback state cleanup — one pass instead of N sequential calls
+  // 2. Batch playback state cleanup — one pass instead of N sequential calls
   await handleTracksRemovedBatch(ids);
 
-  // 4. Fire-and-forget backend call — UI already updated optimistically, so we
+  // 3. Fire-and-forget backend call — UI already updated optimistically, so we
   //    intentionally do NOT await the backend response. This avoids blocking the
   //    main thread on slow file I/O (e.g. USB trash). Errors are still handled:
   //    .then() rolls back partially-failed tracks, .catch() rolls back everything.
   backendAction(tracks.map((t) => t.id))
     .then((result) => {
       const successIds = new Set(result.succeeded_ids);
-      // Partial failure → restore only failed tracks (preserve original order)
+      // Partial failure → additive rollback: add back only the failed tracks
       if (result.failed.length > 0) {
-        library.allTracks = snapshotAllTracks.filter((t) => !successIds.has(t.id));
-        if (snapshotLocalTracks && options?.setLocalTracks) {
-          options.setLocalTracks(snapshotLocalTracks.filter((t) => !successIds.has(t.id)));
+        const failedTracks = tracks.filter((t) => !successIds.has(t.id));
+        library.allTracks = [...library.allTracks, ...failedTracks];
+        if (options?.setLocalTracks && options?.getLocalTracks) {
+          options.setLocalTracks([...options.getLocalTracks(), ...failedTracks]);
         }
         notifyCritical(errorLabel, new Error(result.failed[0].error));
       }
@@ -58,10 +55,10 @@ async function _optimisticLibraryAction(
       }
     })
     .catch((err) => {
-      // Total failure — restore all tracks
-      library.allTracks = snapshotAllTracks;
-      if (snapshotLocalTracks && options?.setLocalTracks) {
-        options.setLocalTracks(snapshotLocalTracks);
+      // Total failure — additive rollback: add back all deleted tracks
+      library.allTracks = [...library.allTracks, ...tracks];
+      if (options?.setLocalTracks && options?.getLocalTracks) {
+        options.setLocalTracks([...options.getLocalTracks(), ...tracks]);
       }
       notifyCritical(errorLabel, err);
     });

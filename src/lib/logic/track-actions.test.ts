@@ -144,10 +144,10 @@ describe('optimisticTrash', () => {
 
     await optimisticTrash([tracks[1]]);
 
-    // Rollback happens in background .catch()
+    // Additive rollback: failed track appended to current state
     await vi.waitFor(() => {
       expect(library.allTracks).toHaveLength(3);
-      expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+      expect(library.allTracks.map((t) => t.id)).toEqual(expect.arrayContaining([1, 2, 3]));
     });
   });
 
@@ -169,9 +169,10 @@ describe('optimisticTrash', () => {
       },
     });
 
+    // Additive rollback: failed track appended to current state
     await vi.waitFor(() => {
       expect(localTracks).toHaveLength(3);
-      expect(localTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+      expect(localTracks.map((t) => t.id)).toEqual(expect.arrayContaining([1, 2, 3]));
     });
   });
 
@@ -334,6 +335,47 @@ describe('optimisticTrash', () => {
     expect(library.allTracks).toHaveLength(2);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
+
+  it('concurrent fire-and-forget: first rollback does not overwrite second optimistic update', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+
+    let firstCallResolve: (value: unknown) => void;
+    const firstCallPromise = new Promise((resolve) => {
+      firstCallResolve = resolve;
+    });
+    let callCount = 0;
+
+    mockInvoke.mockImplementation(async (cmd: string, args?: { ids?: number[] }) => {
+      if (cmd === 'trash_tracks') {
+        callCount++;
+        if (callCount === 1) {
+          // First call: wait, then fail
+          await firstCallPromise;
+          throw new Error('disk error');
+        }
+        // Second call: succeed immediately
+        return { succeeded_ids: args?.ids ?? [], failed: [] };
+      }
+    });
+
+    // 1st trash: delete track 1 — optimistic: [2, 3]
+    await optimisticTrash([tracks[0]]);
+    expect(library.allTracks.map((t) => t.id)).toEqual([2, 3]);
+
+    // 2nd trash: delete track 3 — optimistic: [2]
+    await optimisticTrash([tracks[2]]);
+    expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+
+    // Now let the first backend call fail → additive rollback adds track 1 back
+    firstCallResolve!(undefined);
+
+    await vi.waitFor(() => {
+      // Track 1 should be added back, track 3 should remain deleted
+      expect(library.allTracks).toHaveLength(2);
+      expect(library.allTracks.map((t) => t.id)).toEqual(expect.arrayContaining([1, 2]));
+    });
+  });
 });
 
 describe('optimisticRemove', () => {
@@ -401,9 +443,10 @@ describe('optimisticRemove', () => {
 
     await optimisticRemove([tracks[1]]);
 
+    // Additive rollback: failed track appended to current state
     await vi.waitFor(() => {
       expect(library.allTracks).toHaveLength(3);
-      expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+      expect(library.allTracks.map((t) => t.id)).toEqual(expect.arrayContaining([1, 2, 3]));
     });
   });
 
