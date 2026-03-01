@@ -161,7 +161,9 @@
             warnNonCritical('Auto-refresh library', err);
           }
         });
-      } catch {}
+      } catch (err) {
+        warnNonCritical('Listen library-changed', err);
+      }
     })();
     return () => {
       unlisten?.();
@@ -176,7 +178,9 @@
         unlisten = await listen<number[]>('tracks-removed', async (event) => {
           await handleTracksRemovedBatch(new Set(event.payload));
         });
-      } catch {}
+      } catch (err) {
+        warnNonCritical('Listen tracks-removed', err);
+      }
     })();
     return () => {
       unlisten?.();

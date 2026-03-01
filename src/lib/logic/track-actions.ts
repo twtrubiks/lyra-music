@@ -37,7 +37,10 @@ async function _optimisticLibraryAction(
   // 3. Batch playback state cleanup — one pass instead of N sequential calls
   await handleTracksRemovedBatch(ids);
 
-  // 4. Fire-and-forget backend call — UI already updated, don't block on file I/O
+  // 4. Fire-and-forget backend call — UI already updated optimistically, so we
+  //    intentionally do NOT await the backend response. This avoids blocking the
+  //    main thread on slow file I/O (e.g. USB trash). Errors are still handled:
+  //    .then() rolls back partially-failed tracks, .catch() rolls back everything.
   backendAction(tracks.map((t) => t.id))
     .then((result) => {
       const successIds = new Set(result.succeeded_ids);
