@@ -38,7 +38,7 @@ Lyra 的設計原則：
 | 元資料解析 | lofty 0.23 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
 | 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
 | 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
-| 測試 | Vitest + cargo test | 前端 10 個測試檔、後端 10 個整合測試 |
+| 測試 | Vitest + cargo test | 前端 17 個測試檔、後端 10 個整合測試 |
 
 ## 主要功能
 
@@ -86,7 +86,7 @@ npm run tauri build   # 正式建置
 ## 測試
 
 ```bash
-npm run test                    # 前端單元測試 (Vitest, 10 個測試檔)
+npm run test                    # 前端單元測試 (Vitest, 17 個測試檔)
 npm run check                   # 類型檢查
 cd src-tauri && cargo test      # 後端整合測試 (10 個測試檔，音訊測試預設跳過)
 cd src-tauri && cargo test --features audio-tests  # 含音訊測試 (需音訊裝置)
