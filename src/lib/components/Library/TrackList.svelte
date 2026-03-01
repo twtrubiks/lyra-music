@@ -13,6 +13,10 @@
     resolveContextClick,
     removeFromSelection,
     getSelectedTracks,
+    moveFocusDown,
+    moveFocusUp,
+    extendSelectionDown,
+    extendSelectionUp,
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
@@ -135,6 +139,12 @@
     showMenu = true;
   }
 
+  function scrollFocusedIntoView() {
+    if (selection.focusedIndex === null || !tableEl) return;
+    const row = tableEl.querySelector(`tbody tr:nth-child(${selection.focusedIndex + 1})`);
+    row?.scrollIntoView({ block: 'nearest' });
+  }
+
   function handleTableKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
       e.preventDefault();
@@ -145,6 +155,43 @@
       const direction = e.key === 'ArrowUp' ? 'up' : 'down';
       const newOrder = moveByKeyboard(tracks, selection.selectedIds, direction);
       if (newOrder) onreorder(newOrder);
+      return;
+    }
+    // Arrow/Enter/Home/End: stopPropagation prevents global volume handler from firing
+    if (e.key === 'ArrowDown' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      selection = e.shiftKey
+        ? extendSelectionDown(selection, tracks)
+        : moveFocusDown(selection, tracks);
+      scrollFocusedIntoView();
+    } else if (e.key === 'ArrowUp' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      selection = e.shiftKey
+        ? extendSelectionUp(selection, tracks)
+        : moveFocusUp(selection, tracks);
+      scrollFocusedIntoView();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (selection.focusedIndex !== null && tracks[selection.focusedIndex]) {
+        onplay(tracks[selection.focusedIndex]);
+      }
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (tracks.length > 0) {
+        selection = selectSingle(tracks, 0);
+        scrollFocusedIntoView();
+      }
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (tracks.length > 0) {
+        selection = selectSingle(tracks, tracks.length - 1);
+        scrollFocusedIntoView();
+      }
     }
   }
 
@@ -294,6 +341,7 @@
             {track}
             isActive={track.id === currentTrackId}
             isSelected={selection.selectedIds.has(track.id)}
+            isFocused={selection.focusedIndex === i}
             ondblclick={onplay}
             onclick={(e) => handleRowClick(i, e)}
             oncontextmenu={(e) => handleRowContextMenu(i, e)}
@@ -413,12 +461,11 @@
   }
 
   .track-table:focus {
-    outline: 1px solid rgb(233 69 96 / 30%);
-    outline-offset: -1px;
+    outline: none;
   }
 
   .track-table:focus-visible {
-    outline: 1px solid rgb(233 69 96 / 50%);
+    outline: none;
   }
 
   thead {

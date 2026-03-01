@@ -3,10 +3,12 @@ export interface SelectionState {
   selectedIds: Set<number>;
   /** Index in the current tracks array where the anchor was last set (for Shift+Click) */
   anchorIndex: number | null;
+  /** Index of the keyboard cursor (moves on every Arrow press) */
+  focusedIndex: number | null;
 }
 
 export function createEmptySelection(): SelectionState {
-  return { selectedIds: new Set(), anchorIndex: null };
+  return { selectedIds: new Set(), anchorIndex: null, focusedIndex: null };
 }
 
 /**
@@ -16,6 +18,7 @@ export function selectSingle(tracks: { id: number }[], clickedIndex: number): Se
   return {
     selectedIds: new Set([tracks[clickedIndex].id]),
     anchorIndex: clickedIndex,
+    focusedIndex: clickedIndex,
   };
 }
 
@@ -34,7 +37,7 @@ export function toggleSingle(
   } else {
     next.add(id);
   }
-  return { selectedIds: next, anchorIndex: clickedIndex };
+  return { selectedIds: next, anchorIndex: clickedIndex, focusedIndex: clickedIndex };
 }
 
 /**
@@ -57,7 +60,7 @@ export function selectRange(
     next.add(tracks[i].id);
   }
   // anchor does NOT move on shift+click (standard behavior)
-  return { selectedIds: next, anchorIndex: prev.anchorIndex };
+  return { selectedIds: next, anchorIndex: prev.anchorIndex, focusedIndex: clickedIndex };
 }
 
 /**
@@ -67,6 +70,7 @@ export function selectAll(tracks: { id: number }[]): SelectionState {
   return {
     selectedIds: new Set(tracks.map((t) => t.id)),
     anchorIndex: null,
+    focusedIndex: null,
   };
 }
 
@@ -94,7 +98,76 @@ export function removeFromSelection(prev: SelectionState, deletedIds: Set<number
   for (const id of prev.selectedIds) {
     if (!deletedIds.has(id)) next.add(id);
   }
-  return { selectedIds: next, anchorIndex: null };
+  return { selectedIds: next, anchorIndex: null, focusedIndex: null };
+}
+
+/**
+ * Arrow↓: move focus down, select only that row.
+ */
+export function moveFocusDown(prev: SelectionState, tracks: { id: number }[]): SelectionState {
+  if (tracks.length === 0) return prev;
+  const clamped =
+    prev.focusedIndex === null ? null : Math.min(prev.focusedIndex, tracks.length - 1);
+  const next = clamped === null ? 0 : Math.min(clamped + 1, tracks.length - 1);
+  return {
+    selectedIds: new Set([tracks[next].id]),
+    anchorIndex: next,
+    focusedIndex: next,
+  };
+}
+
+/**
+ * Arrow↑: move focus up, select only that row.
+ */
+export function moveFocusUp(prev: SelectionState, tracks: { id: number }[]): SelectionState {
+  if (tracks.length === 0) return prev;
+  const clamped =
+    prev.focusedIndex === null ? null : Math.min(prev.focusedIndex, tracks.length - 1);
+  const next = clamped === null ? tracks.length - 1 : Math.max(clamped - 1, 0);
+  return {
+    selectedIds: new Set([tracks[next].id]),
+    anchorIndex: next,
+    focusedIndex: next,
+  };
+}
+
+/**
+ * Shift+Arrow↓: anchor stays, focus moves down, range select.
+ */
+export function extendSelectionDown(
+  prev: SelectionState,
+  tracks: { id: number }[],
+): SelectionState {
+  if (tracks.length === 0) return prev;
+  const anchor = Math.min(prev.anchorIndex ?? 0, tracks.length - 1);
+  const clampedFocus =
+    prev.focusedIndex === null ? null : Math.min(prev.focusedIndex, tracks.length - 1);
+  const focus = clampedFocus === null ? 0 : Math.min(clampedFocus + 1, tracks.length - 1);
+  const start = Math.min(anchor, focus);
+  const end = Math.max(anchor, focus);
+  const ids = new Set<number>();
+  for (let i = start; i <= end; i++) {
+    ids.add(tracks[i].id);
+  }
+  return { selectedIds: ids, anchorIndex: anchor, focusedIndex: focus };
+}
+
+/**
+ * Shift+Arrow↑: anchor stays, focus moves up, range select.
+ */
+export function extendSelectionUp(prev: SelectionState, tracks: { id: number }[]): SelectionState {
+  if (tracks.length === 0) return prev;
+  const anchor = Math.min(prev.anchorIndex ?? tracks.length - 1, tracks.length - 1);
+  const clampedFocus =
+    prev.focusedIndex === null ? null : Math.min(prev.focusedIndex, tracks.length - 1);
+  const focus = clampedFocus === null ? tracks.length - 1 : Math.max(clampedFocus - 1, 0);
+  const start = Math.min(anchor, focus);
+  const end = Math.max(anchor, focus);
+  const ids = new Set<number>();
+  for (let i = start; i <= end; i++) {
+    ids.add(tracks[i].id);
+  }
+  return { selectedIds: ids, anchorIndex: anchor, focusedIndex: focus };
 }
 
 /**

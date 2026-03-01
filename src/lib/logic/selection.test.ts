@@ -8,6 +8,10 @@ import {
   resolveContextClick,
   removeFromSelection,
   getSelectedTracks,
+  moveFocusDown,
+  moveFocusUp,
+  extendSelectionDown,
+  extendSelectionUp,
 } from './selection';
 import { createMockTracks } from '$lib/test-helpers';
 
@@ -19,10 +23,11 @@ const tracks = createMockTracks(5);
 // ============================================================
 
 describe('createEmptySelection', () => {
-  it('returns empty set and null anchor', () => {
+  it('returns empty set and null anchor and null focusedIndex', () => {
     const s = createEmptySelection();
     expect(s.selectedIds.size).toBe(0);
     expect(s.anchorIndex).toBeNull();
+    expect(s.focusedIndex).toBeNull();
   });
 });
 
@@ -31,11 +36,12 @@ describe('createEmptySelection', () => {
 // ============================================================
 
 describe('selectSingle', () => {
-  it('selects exactly one track and sets anchor', () => {
+  it('selects exactly one track and sets anchor and focusedIndex', () => {
     const s = selectSingle(tracks, 2);
     expect(s.selectedIds.size).toBe(1);
     expect(s.selectedIds.has(tracks[2].id)).toBe(true);
     expect(s.anchorIndex).toBe(2);
+    expect(s.focusedIndex).toBe(2);
   });
 
   it('selects the first track', () => {
@@ -86,10 +92,11 @@ describe('toggleSingle', () => {
     expect(s.selectedIds.has(tracks[2].id)).toBe(true);
   });
 
-  it('sets anchor to clicked index', () => {
+  it('sets anchor and focusedIndex to clicked index', () => {
     const prev = selectSingle(tracks, 0);
     const s = toggleSingle(prev, tracks, 3);
     expect(s.anchorIndex).toBe(3);
+    expect(s.focusedIndex).toBe(3);
   });
 
   it('toggling from empty selection adds the track', () => {
@@ -131,10 +138,11 @@ describe('selectRange', () => {
     expect(s.selectedIds.has(tracks[3].id)).toBe(true);
   });
 
-  it('anchor does not move on shift+click', () => {
+  it('anchor does not move on shift+click, focusedIndex moves', () => {
     const prev = selectSingle(tracks, 1);
     const s = selectRange(prev, tracks, 3);
     expect(s.anchorIndex).toBe(1); // stays at original anchor
+    expect(s.focusedIndex).toBe(3); // moves to clicked index
   });
 
   it('shift+click on same row as anchor selects just that row', () => {
@@ -189,9 +197,10 @@ describe('selectAll', () => {
     }
   });
 
-  it('sets anchor to null', () => {
+  it('sets anchor and focusedIndex to null', () => {
     const s = selectAll(tracks);
     expect(s.anchorIndex).toBeNull();
+    expect(s.focusedIndex).toBeNull();
   });
 
   it('handles empty track list', () => {
@@ -259,10 +268,11 @@ describe('removeFromSelection', () => {
     expect(s.selectedIds.has(tracks[4].id)).toBe(true);
   });
 
-  it('resets anchor to null', () => {
-    const prev = { selectedIds: new Set([1, 2, 3]), anchorIndex: 1 };
+  it('resets anchor and focusedIndex to null', () => {
+    const prev = { selectedIds: new Set([1, 2, 3]), anchorIndex: 1, focusedIndex: 1 };
     const s = removeFromSelection(prev, new Set([2]));
     expect(s.anchorIndex).toBeNull();
+    expect(s.focusedIndex).toBeNull();
   });
 
   it('handles deleting all selected tracks', () => {
@@ -292,7 +302,11 @@ describe('removeFromSelection', () => {
 
 describe('getSelectedTracks', () => {
   it('returns selected tracks in display order', () => {
-    const selection = { selectedIds: new Set([tracks[3].id, tracks[1].id]), anchorIndex: null };
+    const selection = {
+      selectedIds: new Set([tracks[3].id, tracks[1].id]),
+      anchorIndex: null,
+      focusedIndex: null,
+    };
     const result = getSelectedTracks(tracks, selection);
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe(tracks[1].id); // index 1 comes before index 3
@@ -312,7 +326,11 @@ describe('getSelectedTracks', () => {
   });
 
   it('ignores stale IDs not in tracks array', () => {
-    const selection = { selectedIds: new Set([tracks[0].id, 999]), anchorIndex: null };
+    const selection = {
+      selectedIds: new Set([tracks[0].id, 999]),
+      anchorIndex: null,
+      focusedIndex: null,
+    };
     const result = getSelectedTracks(tracks, selection);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe(tracks[0].id);
@@ -323,5 +341,199 @@ describe('getSelectedTracks', () => {
     const result = getSelectedTracks(tracks, selection);
     expect(result[0].title).toBe(tracks[0].title);
     expect(result[0].artist).toBe(tracks[0].artist);
+  });
+});
+
+// ============================================================
+// moveFocusDown — Arrow↓
+// ============================================================
+
+describe('moveFocusDown', () => {
+  it('moves focus from null to first row', () => {
+    const prev = createEmptySelection();
+    const s = moveFocusDown(prev, tracks);
+    expect(s.focusedIndex).toBe(0);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[0].id)).toBe(true);
+    expect(s.anchorIndex).toBe(0);
+  });
+
+  it('moves focus down by one', () => {
+    const prev = selectSingle(tracks, 1);
+    const s = moveFocusDown(prev, tracks);
+    expect(s.focusedIndex).toBe(2);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+
+  it('clamps at last row', () => {
+    const prev = selectSingle(tracks, 4);
+    const s = moveFocusDown(prev, tracks);
+    expect(s.focusedIndex).toBe(4);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[4].id)).toBe(true);
+  });
+
+  it('returns prev for empty tracks', () => {
+    const prev = createEmptySelection();
+    const s = moveFocusDown(prev, []);
+    expect(s).toBe(prev);
+  });
+
+  it('clamps stale focusedIndex when tracks array shrinks', () => {
+    const prev = { selectedIds: new Set([tracks[4].id]), anchorIndex: 4, focusedIndex: 4 };
+    const shorter = createMockTracks(3);
+    const s = moveFocusDown(prev, shorter);
+    expect(s.focusedIndex).toBe(2); // clamped to last
+    expect(s.selectedIds.has(shorter[2].id)).toBe(true);
+  });
+});
+
+// ============================================================
+// moveFocusUp — Arrow↑
+// ============================================================
+
+describe('moveFocusUp', () => {
+  it('moves focus from null to last row', () => {
+    const prev = createEmptySelection();
+    const s = moveFocusUp(prev, tracks);
+    expect(s.focusedIndex).toBe(4);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[4].id)).toBe(true);
+    expect(s.anchorIndex).toBe(4);
+  });
+
+  it('moves focus up by one', () => {
+    const prev = selectSingle(tracks, 3);
+    const s = moveFocusUp(prev, tracks);
+    expect(s.focusedIndex).toBe(2);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+
+  it('clamps at first row', () => {
+    const prev = selectSingle(tracks, 0);
+    const s = moveFocusUp(prev, tracks);
+    expect(s.focusedIndex).toBe(0);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[0].id)).toBe(true);
+  });
+
+  it('returns prev for empty tracks', () => {
+    const prev = createEmptySelection();
+    const s = moveFocusUp(prev, []);
+    expect(s).toBe(prev);
+  });
+
+  it('clamps stale focusedIndex when tracks array shrinks', () => {
+    const prev = { selectedIds: new Set([tracks[4].id]), anchorIndex: 4, focusedIndex: 4 };
+    const shorter = createMockTracks(3);
+    const s = moveFocusUp(prev, shorter);
+    expect(s.focusedIndex).toBe(1); // clamped to 2, then -1 = 1
+    expect(s.selectedIds.has(shorter[1].id)).toBe(true);
+  });
+});
+
+// ============================================================
+// extendSelectionDown — Shift+Arrow↓
+// ============================================================
+
+describe('extendSelectionDown', () => {
+  it('extends from null focus: anchor=0, focus=0', () => {
+    const prev = createEmptySelection();
+    const s = extendSelectionDown(prev, tracks);
+    expect(s.anchorIndex).toBe(0);
+    expect(s.focusedIndex).toBe(0);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[0].id)).toBe(true);
+  });
+
+  it('extends range downward', () => {
+    const prev = selectSingle(tracks, 1); // anchor=1, focus=1
+    const s = extendSelectionDown(prev, tracks);
+    expect(s.anchorIndex).toBe(1);
+    expect(s.focusedIndex).toBe(2);
+    expect(s.selectedIds.size).toBe(2);
+    expect(s.selectedIds.has(tracks[1].id)).toBe(true);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+
+  it('clamps focus at last row', () => {
+    const prev = selectSingle(tracks, 4);
+    const s = extendSelectionDown(prev, tracks);
+    expect(s.focusedIndex).toBe(4);
+  });
+
+  it('returns prev for empty tracks', () => {
+    const prev = createEmptySelection();
+    const s = extendSelectionDown(prev, []);
+    expect(s).toBe(prev);
+  });
+
+  it('shrinks range when extending back toward anchor', () => {
+    // anchor=2, focus=0 (extended up), now extend down
+    const prev = {
+      selectedIds: new Set([tracks[0].id, tracks[1].id, tracks[2].id]),
+      anchorIndex: 2,
+      focusedIndex: 0,
+    };
+    const s = extendSelectionDown(prev, tracks);
+    expect(s.anchorIndex).toBe(2);
+    expect(s.focusedIndex).toBe(1);
+    expect(s.selectedIds.size).toBe(2);
+    expect(s.selectedIds.has(tracks[1].id)).toBe(true);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+});
+
+// ============================================================
+// extendSelectionUp — Shift+Arrow↑
+// ============================================================
+
+describe('extendSelectionUp', () => {
+  it('extends from null focus: anchor=last, focus=last', () => {
+    const prev = createEmptySelection();
+    const s = extendSelectionUp(prev, tracks);
+    expect(s.anchorIndex).toBe(4);
+    expect(s.focusedIndex).toBe(4);
+    expect(s.selectedIds.size).toBe(1);
+    expect(s.selectedIds.has(tracks[4].id)).toBe(true);
+  });
+
+  it('extends range upward', () => {
+    const prev = selectSingle(tracks, 3); // anchor=3, focus=3
+    const s = extendSelectionUp(prev, tracks);
+    expect(s.anchorIndex).toBe(3);
+    expect(s.focusedIndex).toBe(2);
+    expect(s.selectedIds.size).toBe(2);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+    expect(s.selectedIds.has(tracks[3].id)).toBe(true);
+  });
+
+  it('clamps focus at first row', () => {
+    const prev = selectSingle(tracks, 0);
+    const s = extendSelectionUp(prev, tracks);
+    expect(s.focusedIndex).toBe(0);
+  });
+
+  it('returns prev for empty tracks', () => {
+    const prev = createEmptySelection();
+    const s = extendSelectionUp(prev, []);
+    expect(s).toBe(prev);
+  });
+
+  it('shrinks range when extending back toward anchor', () => {
+    // anchor=1, focus=3 (extended down), now extend up
+    const prev = {
+      selectedIds: new Set([tracks[1].id, tracks[2].id, tracks[3].id]),
+      anchorIndex: 1,
+      focusedIndex: 3,
+    };
+    const s = extendSelectionUp(prev, tracks);
+    expect(s.anchorIndex).toBe(1);
+    expect(s.focusedIndex).toBe(2);
+    expect(s.selectedIds.size).toBe(2);
+    expect(s.selectedIds.has(tracks[1].id)).toBe(true);
+    expect(s.selectedIds.has(tracks[2].id)).toBe(true);
   });
 });

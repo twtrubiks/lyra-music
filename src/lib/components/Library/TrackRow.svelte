@@ -6,6 +6,7 @@
     track,
     isActive = false,
     isSelected = false,
+    isFocused = false,
     ondblclick,
     onclick,
     oncontextmenu,
@@ -13,6 +14,7 @@
     track: Track;
     isActive?: boolean;
     isSelected?: boolean;
+    isFocused?: boolean;
     ondblclick: (track: Track) => void;
     onclick?: (e: MouseEvent) => void;
     oncontextmenu?: (e: MouseEvent) => void;
@@ -31,6 +33,7 @@
   class="track-row"
   class:active={isActive}
   class:selected={isSelected}
+  class:focused={isFocused}
   ondblclick={() => ondblclick(track)}
   {onclick}
   {oncontextmenu}

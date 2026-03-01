@@ -101,13 +101,22 @@ All shortcuts are disabled when an input field is focused.
 |-----|--------|
 | `Space` | Play / Pause |
 | `ArrowLeft` / `ArrowRight` | Rewind / Fast-forward 5 seconds |
-| `ArrowUp` / `ArrowDown` | Increase / Decrease volume by 5% |
+| `ArrowUp` / `ArrowDown` | Increase / Decrease volume by 5% (when track list is not focused) |
 | `n` / `p` | Next / Previous track |
 | `s` | Toggle shuffle |
 | `r` | Toggle repeat mode (off / repeat-all / repeat-one) |
 | `m` / `Escape` | Toggle / Exit Mini Player |
 | `Ctrl+F` / `Cmd+F` | Focus search box |
 | `Ctrl+A` / `Cmd+A` | Select all tracks |
+
+**When track list is focused:**
+
+| Key | Action |
+|-----|--------|
+| `ArrowUp` / `ArrowDown` | Previous / Next track |
+| `Shift+ArrowUp` / `Shift+ArrowDown` | Extend selection up / down |
+| `Enter` | Play focused track |
+| `Home` / `End` | Jump to first / last track |
 
 ## Project Structure
 

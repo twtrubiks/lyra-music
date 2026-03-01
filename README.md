@@ -101,13 +101,22 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 |------|------|
 | `Space` | 播放 / 暫停 |
 | `ArrowLeft` / `ArrowRight` | 快退 / 快進 5 秒 |
-| `ArrowUp` / `ArrowDown` | 音量增加 / 降低 5% |
+| `ArrowUp` / `ArrowDown` | 音量增加 / 降低 5%（曲目列表未聚焦時） |
 | `n` / `p` | 下一首 / 上一首 |
 | `s` | 切換隨機播放 |
 | `r` | 切換循環模式（off / repeat-all / repeat-one） |
 | `m` / `Escape` | 切換 / 退出 Mini Player |
 | `Ctrl+F` / `Cmd+F` | 聚焦搜尋框 |
 | `Ctrl+A` / `Cmd+A` | 全選曲目 |
+
+**曲目列表聚焦時：**
+
+| 按鍵 | 動作 |
+|------|------|
+| `ArrowUp` / `ArrowDown` | 上一首 / 下一首曲目 |
+| `Shift+ArrowUp` / `Shift+ArrowDown` | 向上 / 向下擴展選取 |
+| `Enter` | 播放聚焦曲目 |
+| `Home` / `End` | 跳到第一首 / 最後一首 |
 
 ## 專案結構
 
