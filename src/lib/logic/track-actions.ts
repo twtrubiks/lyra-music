@@ -1,9 +1,10 @@
 import type { Track } from '$lib/types';
+import type { BatchTrashResult } from '$lib/api/library';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
-import { removeTrack, trashTrack } from '$lib/api/library';
+import { trashTracks, removeTracks } from '$lib/api/library';
 import { removeFromPlaylist } from '$lib/api/playlist';
-import { handleTrackRemoved } from '$lib/logic/playback-actions';
+import { handleTracksRemovedBatch } from '$lib/logic/playback-actions';
 import { notifyCritical } from '$lib/logic/error-handler';
 
 export interface OptimisticTrackOptions {
@@ -14,7 +15,7 @@ export interface OptimisticTrackOptions {
 
 async function _optimisticLibraryAction(
   tracks: Track[],
-  backendAction: (id: number) => Promise<void>,
+  backendAction: (ids: number[]) => Promise<BatchTrashResult>,
   errorLabel: string,
   options?: OptimisticTrackOptions,
 ): Promise<void> {
@@ -33,32 +34,32 @@ async function _optimisticLibraryAction(
     options.setLocalTracks(snapshotLocalTracks.filter((t) => !ids.has(t.id)));
   }
 
-  // 3. Playback state cleanup — must be sequential due to _removeInProgress guard
-  for (const track of tracks) {
-    await handleTrackRemoved(track.id);
+  // 3. Batch playback state cleanup — one pass instead of N sequential calls
+  await handleTracksRemovedBatch(ids);
+
+  // 4. Single batch backend call instead of N individual calls
+  let result: BatchTrashResult;
+  try {
+    result = await backendAction(tracks.map((t) => t.id));
+  } catch (err) {
+    // Total failure — restore all tracks
+    library.allTracks = snapshotAllTracks;
+    if (snapshotLocalTracks && options?.setLocalTracks) {
+      options.setLocalTracks(snapshotLocalTracks);
+    }
+    notifyCritical(errorLabel, err);
+    return;
   }
 
-  // 4. Background backend call — parallel deletion
-  const results = await Promise.allSettled(tracks.map((t) => backendAction(t.id)));
+  const successIds = new Set(result.succeeded_ids);
 
-  const successIds = new Set<number>();
-  let firstError: unknown = null;
-
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      successIds.add(tracks[i].id);
-    } else if (!firstError) {
-      firstError = result.reason;
-    }
-  });
-
-  // 4a. Partial/full failure → restore only failed tracks (preserve original order)
-  if (firstError) {
+  // 4a. Partial failure → restore only failed tracks (preserve original order)
+  if (result.failed.length > 0) {
     library.allTracks = snapshotAllTracks.filter((t) => !successIds.has(t.id));
     if (snapshotLocalTracks && options?.setLocalTracks) {
       options.setLocalTracks(snapshotLocalTracks.filter((t) => !successIds.has(t.id)));
     }
-    notifyCritical(errorLabel, firstError);
+    notifyCritical(errorLabel, new Error(result.failed[0].error));
   }
 
   // 4b. Call onComplete if any track was successfully deleted
@@ -71,14 +72,14 @@ export async function optimisticTrash(
   tracksToTrash: Track[],
   options?: OptimisticTrackOptions,
 ): Promise<void> {
-  await _optimisticLibraryAction(tracksToTrash, trashTrack, 'Trash tracks', options);
+  await _optimisticLibraryAction(tracksToTrash, trashTracks, 'Trash tracks', options);
 }
 
 export async function optimisticRemove(
   tracksToRemove: Track[],
   options?: OptimisticTrackOptions,
 ): Promise<void> {
-  await _optimisticLibraryAction(tracksToRemove, removeTrack, 'Remove tracks', options);
+  await _optimisticLibraryAction(tracksToRemove, removeTracks, 'Remove tracks', options);
 }
 
 export interface OptimisticPlaylistRemoveOptions {

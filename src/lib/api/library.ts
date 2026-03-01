@@ -25,6 +25,19 @@ export async function trashTrack(id: number): Promise<void> {
   return invoke('trash_track', { id });
 }
 
+export interface BatchTrashResult {
+  succeeded_ids: number[];
+  failed: { id: number; error: string }[];
+}
+
+export async function trashTracks(ids: number[]): Promise<BatchTrashResult> {
+  return invoke('trash_tracks', { ids });
+}
+
+export async function removeTracks(ids: number[]): Promise<BatchTrashResult> {
+  return invoke('remove_tracks', { ids });
+}
+
 export async function getTrackDetails(id: number): Promise<TrackDetails> {
   return invoke('get_track_details', { id });
 }

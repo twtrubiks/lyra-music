@@ -267,6 +267,136 @@ async function _handleTrackRemovedInner(trackId: number): Promise<void> {
   }
 }
 
+/**
+ * Batch clean up player and playlist state after multiple tracks are removed/trashed.
+ * Processes all removals in one pass to minimize re-renders (~3 instead of ~N*3).
+ */
+export async function handleTracksRemovedBatch(trackIds: Set<number>): Promise<void> {
+  if (_removeInProgress) return;
+  _removeInProgress = true;
+  try {
+    await _handleTracksRemovedBatchInner(trackIds);
+  } finally {
+    _removeInProgress = false;
+  }
+}
+
+async function _handleTracksRemovedBatchInner(trackIds: Set<number>): Promise<void> {
+  const playlistState = getPlaylistState();
+
+  // Snapshot current state
+  const snapshotQueue = [...player.playQueue];
+  const snapshotIndex = player.currentIndex;
+  const wasPlaying = player.currentTrack !== null && trackIds.has(player.currentTrack.id);
+
+  // Find all queue indices being removed
+  const removedQueueIndices = new Set<number>();
+  for (let i = 0; i < snapshotQueue.length; i++) {
+    if (trackIds.has(snapshotQueue[i].id)) {
+      removedQueueIndices.add(i);
+    }
+  }
+
+  // If no tracks in queue are affected, just clean up playlists
+  if (removedQueueIndices.size === 0) {
+    playlistState.playlists = playlistState.playlists.map((pl) => ({
+      ...pl,
+      track_ids: pl.track_ids.filter((id) => !trackIds.has(id)),
+    }));
+    return;
+  }
+
+  // If currently playing track is being removed, find the next surviving track
+  let nextIdx: number | null = null;
+  if (wasPlaying) {
+    // Walk forward from current position, skipping all removed tracks
+    let candidate = getNextIndex(
+      snapshotIndex,
+      snapshotQueue.length,
+      player.repeatMode === 'repeat-one' ? 'repeat-all' : player.repeatMode,
+      player.shuffleEnabled,
+      player.shuffledIndices,
+    );
+
+    // Keep walking if the candidate is also being removed
+    const visited = new Set<number>();
+    while (candidate !== null && removedQueueIndices.has(candidate) && !visited.has(candidate)) {
+      visited.add(candidate);
+      candidate = getNextIndex(
+        candidate,
+        snapshotQueue.length,
+        player.repeatMode === 'repeat-one' ? 'repeat-all' : player.repeatMode,
+        player.shuffleEnabled,
+        player.shuffledIndices,
+      );
+    }
+
+    // If we looped back to a removed track or null, no surviving track
+    if (candidate !== null && !removedQueueIndices.has(candidate)) {
+      nextIdx = candidate;
+    }
+
+    playbackApi.stop().catch((err) => warnNonCritical('Stop playback', err));
+  }
+
+  // 1. Filter playQueue in one pass (1 re-render)
+  player.playQueue = snapshotQueue.filter((t) => !trackIds.has(t.id));
+
+  // 2. Remap nextIdx from old index space to new index space
+  if (nextIdx !== null) {
+    // Count how many removed indices are before nextIdx
+    let offset = 0;
+    for (const ri of removedQueueIndices) {
+      if (ri < nextIdx) offset++;
+    }
+    nextIdx = nextIdx - offset;
+    if (nextIdx >= player.playQueue.length) {
+      nextIdx = player.playQueue.length > 0 ? 0 : null;
+    }
+  }
+
+  // 3. Adjust currentIndex for non-playing case
+  if (!wasPlaying) {
+    let offset = 0;
+    for (const ri of removedQueueIndices) {
+      if (ri < snapshotIndex) offset++;
+    }
+    player.currentIndex = snapshotIndex - offset;
+  }
+
+  // 4. Update shuffledIndices — filter + remap (1 re-render)
+  if (player.shuffleEnabled && player.shuffledIndices.length > 0) {
+    player.shuffledIndices = player.shuffledIndices
+      .filter((idx) => !removedQueueIndices.has(idx))
+      .map((idx) => {
+        let offset = 0;
+        for (const ri of removedQueueIndices) {
+          if (ri < idx) offset++;
+        }
+        return idx - offset;
+      });
+  }
+
+  // 5. Clean up playlists (1 re-render)
+  playlistState.playlists = playlistState.playlists.map((pl) => ({
+    ...pl,
+    track_ids: pl.track_ids.filter((id) => !trackIds.has(id)),
+  }));
+
+  // 6. Auto-advance or stop
+  if (wasPlaying) {
+    if (nextIdx !== null && nextIdx >= 0 && nextIdx < player.playQueue.length) {
+      await playTrackAtIndex(nextIdx);
+    } else {
+      player.isPlaying = false;
+      player.currentTrack = null;
+      player.positionSecs = 0;
+      player.durationSecs = 0;
+      player.currentIndex = -1;
+    }
+  }
+}
+
 /** Toggle shuffle mode on/off. */
 export function toggleShuffle(): void {
   player.shuffleEnabled = !player.shuffleEnabled;

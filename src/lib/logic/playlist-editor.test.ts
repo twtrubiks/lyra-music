@@ -153,7 +153,11 @@ describe('PlaylistEditor — handleTrash', () => {
 
   beforeEach(() => {
     mockInvoke.mockReset();
-    mockInvoke.mockResolvedValue(undefined);
+    mockInvoke.mockImplementation(async (cmd: string, args?: { ids?: number[] }) => {
+      if (cmd === 'trash_tracks') {
+        return { succeeded_ids: args?.ids ?? [], failed: [] };
+      }
+    });
     resetPlayerState();
     resetLibraryState();
     resetPlaylistState();
@@ -167,10 +171,10 @@ describe('PlaylistEditor — handleTrash', () => {
     resetPlaylistState();
   });
 
-  it('calls trash_track to delete from database', async () => {
+  it('calls trash_tracks (batch) to delete from database', async () => {
     await handleTrash([tracks[0]]);
 
-    expect(mockInvoke).toHaveBeenCalledWith('trash_track', { id: 1 });
+    expect(mockInvoke).toHaveBeenCalledWith('trash_tracks', { ids: [1] });
     expect(mockInvoke).not.toHaveBeenCalledWith('remove_from_playlist', expect.anything());
   });
 

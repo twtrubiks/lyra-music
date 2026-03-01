@@ -1,3 +1,4 @@
+use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::error::AppError;
@@ -8,6 +9,18 @@ use crate::scanner::folder_scanner;
 use crate::storage::library_repo;
 use crate::DbState;
 use crate::WatcherState;
+
+#[derive(Serialize)]
+pub struct BatchTrashResult {
+    pub succeeded_ids: Vec<i64>,
+    pub failed: Vec<BatchTrashFailure>,
+}
+
+#[derive(Serialize)]
+pub struct BatchTrashFailure {
+    pub id: i64,
+    pub error: String,
+}
 
 fn process_audio_file(
     conn: &rusqlite::Connection,
@@ -165,6 +178,90 @@ pub fn trash_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     trash::delete(&track.file_path)
         .map_err(|e| AppError::Generic(format!("Failed to trash file: {e}")))?;
     library_repo::delete_track(&conn, id)
+}
+
+#[tauri::command]
+pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
+
+    let mut succeeded_ids = Vec::new();
+    let mut failed = Vec::new();
+
+    for track in &tracks {
+        match trash::delete(&track.file_path) {
+            Ok(()) => {
+                if let Some(ref cover_path) = track.cover_art_path {
+                    let _ = std::fs::remove_file(cover_path);
+                }
+                succeeded_ids.push(track.id);
+            }
+            Err(e) => {
+                failed.push(BatchTrashFailure {
+                    id: track.id,
+                    error: format!("Failed to trash file: {e}"),
+                });
+            }
+        }
+    }
+
+    // Mark any IDs not found in DB as failed
+    let found_ids: std::collections::HashSet<i64> = tracks.iter().map(|t| t.id).collect();
+    for &id in &ids {
+        if !found_ids.contains(&id) {
+            failed.push(BatchTrashFailure {
+                id,
+                error: format!("Track {id} not found"),
+            });
+        }
+    }
+
+    if !succeeded_ids.is_empty() {
+        library_repo::delete_tracks(&conn, &succeeded_ids)?;
+    }
+
+    Ok(BatchTrashResult {
+        succeeded_ids,
+        failed,
+    })
+}
+
+#[tauri::command]
+pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
+
+    let found_ids: std::collections::HashSet<i64> = tracks.iter().map(|t| t.id).collect();
+
+    let mut succeeded_ids = Vec::new();
+    let mut failed = Vec::new();
+
+    for &id in &ids {
+        if found_ids.contains(&id) {
+            succeeded_ids.push(id);
+        } else {
+            failed.push(BatchTrashFailure {
+                id,
+                error: format!("Track {id} not found"),
+            });
+        }
+    }
+
+    // Batch clean up cover art files
+    for track in &tracks {
+        if let Some(ref cover_path) = track.cover_art_path {
+            let _ = std::fs::remove_file(cover_path);
+        }
+    }
+
+    if !succeeded_ids.is_empty() {
+        library_repo::delete_tracks(&conn, &succeeded_ids)?;
+    }
+
+    Ok(BatchTrashResult {
+        succeeded_ids,
+        failed,
+    })
 }
 
 #[tauri::command]

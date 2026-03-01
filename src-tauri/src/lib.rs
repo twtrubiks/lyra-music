@@ -122,6 +122,8 @@ pub fn run() {
             commands::library::search_tracks,
             commands::library::remove_track,
             commands::library::trash_track,
+            commands::library::trash_tracks,
+            commands::library::remove_tracks,
             commands::library::get_track_details,
             commands::library::import_paths,
             commands::library::update_track_metadata,
