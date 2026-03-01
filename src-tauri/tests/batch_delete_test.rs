@@ -175,7 +175,11 @@ fn test_delete_tracks_exceeds_chunk_size() {
     library_repo::delete_tracks(&conn, &ids).unwrap();
 
     let remaining = library_repo::get_all_tracks(&conn).unwrap();
-    assert!(remaining.is_empty(), "expected 0 tracks, got {}", remaining.len());
+    assert!(
+        remaining.is_empty(),
+        "expected 0 tracks, got {}",
+        remaining.len()
+    );
 }
 
 #[test]
@@ -188,7 +192,12 @@ fn test_get_tracks_by_ids_exceeds_chunk_size() {
     }
 
     let tracks = library_repo::get_tracks_by_ids(&conn, &ids).unwrap();
-    assert_eq!(tracks.len(), 502, "expected 502 tracks, got {}", tracks.len());
+    assert_eq!(
+        tracks.len(),
+        502,
+        "expected 502 tracks, got {}",
+        tracks.len()
+    );
 }
 
 #[test]
