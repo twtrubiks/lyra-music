@@ -179,105 +179,34 @@ export async function startPlayingTrack(track: Track, trackList: Track[]): Promi
  * Uses a guard flag to prevent concurrent calls from corrupting state.
  */
 let _removeInProgress = false;
+let _pendingRemoveIds: Set<number> | null = null;
 
 export async function handleTrackRemoved(trackId: number): Promise<void> {
-  if (_removeInProgress) return;
-  _removeInProgress = true;
-  try {
-    await _handleTrackRemovedInner(trackId);
-  } finally {
-    _removeInProgress = false;
-  }
-}
-
-async function _handleTrackRemovedInner(trackId: number): Promise<void> {
-  const playlistState = getPlaylistState();
-
-  // Snapshot current state at entry to avoid stale reads
-  const snapshotIndex = player.currentIndex;
-  const snapshotQueue = [...player.playQueue];
-  const wasPlaying = player.currentTrack?.id === trackId;
-
-  // Verify track exists in queue
-  const queueIdx = snapshotQueue.findIndex((t) => t.id === trackId);
-  if (queueIdx === -1) {
-    // Track not in queue; still clean up playlists
-    playlistState.playlists = playlistState.playlists.map((pl) => ({
-      ...pl,
-      track_ids: pl.track_ids.filter((id) => id !== trackId),
-    }));
-    return;
-  }
-
-  // Compute next index BEFORE removing from queue (removal shifts indices)
-  let nextIdx: number | null = null;
-  if (wasPlaying) {
-    nextIdx = getNextIndex(
-      snapshotIndex,
-      snapshotQueue.length,
-      player.repeatMode === 'repeat-one' ? 'repeat-all' : player.repeatMode,
-      player.shuffleEnabled,
-      player.shuffledIndices,
-    );
-    if (nextIdx === snapshotIndex && snapshotQueue.length <= 1) {
-      nextIdx = null;
-    }
-    playbackApi.stop().catch((err) => warnNonCritical('Stop playback', err));
-  }
-
-  // Remove from play queue and adjust indices
-  player.playQueue = snapshotQueue.filter((t) => t.id !== trackId);
-
-  if (nextIdx !== null && queueIdx < nextIdx) {
-    nextIdx = nextIdx - 1;
-  }
-  if (nextIdx !== null && nextIdx >= player.playQueue.length) {
-    nextIdx = player.playQueue.length > 0 ? 0 : null;
-  }
-
-  if (!wasPlaying) {
-    if (queueIdx < snapshotIndex) {
-      player.currentIndex = snapshotIndex - 1;
-    }
-  }
-
-  if (player.shuffleEnabled && player.shuffledIndices.length > 0) {
-    player.shuffledIndices = player.shuffledIndices
-      .filter((idx) => idx !== queueIdx)
-      .map((idx) => (idx > queueIdx ? idx - 1 : idx));
-  }
-
-  // Remove from all playlists' track_ids
-  playlistState.playlists = playlistState.playlists.map((pl) => ({
-    ...pl,
-    track_ids: pl.track_ids.filter((id) => id !== trackId),
-  }));
-
-  // Auto-advance or stop
-  if (wasPlaying) {
-    if (nextIdx !== null && nextIdx >= 0 && nextIdx < player.playQueue.length) {
-      await playTrackAtIndex(nextIdx);
-    } else {
-      player.isPlaying = false;
-      player.currentTrack = null;
-      player.positionSecs = 0;
-      player.durationSecs = 0;
-      player.currentIndex = -1;
-    }
-  }
+  await handleTracksRemovedBatch(new Set([trackId]));
 }
 
 /**
  * Batch clean up player and playlist state after multiple tracks are removed/trashed.
  * Processes all removals in one pass to minimize re-renders (~3 instead of ~N*3).
+ * Concurrent calls are queued and processed after the current batch completes.
  */
 export async function handleTracksRemovedBatch(trackIds: Set<number>): Promise<void> {
-  if (_removeInProgress) return;
+  if (_removeInProgress) {
+    if (!_pendingRemoveIds) _pendingRemoveIds = new Set();
+    for (const id of trackIds) _pendingRemoveIds.add(id);
+    return;
+  }
   _removeInProgress = true;
   try {
     await _handleTracksRemovedBatchInner(trackIds);
+    while (_pendingRemoveIds !== null && _pendingRemoveIds.size > 0) {
+      const pending = _pendingRemoveIds;
+      _pendingRemoveIds = null;
+      await _handleTracksRemovedBatchInner(pending);
+    }
   } finally {
     _removeInProgress = false;
+    _pendingRemoveIds = null;
   }
 }
 

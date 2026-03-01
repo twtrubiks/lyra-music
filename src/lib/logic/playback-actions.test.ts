@@ -367,3 +367,61 @@ describe('handleTracksRemovedBatch', () => {
     expect(mockInvoke).not.toHaveBeenCalledWith('stop');
   });
 });
+
+describe('handleTracksRemovedBatch — concurrent queue', () => {
+  const player = getPlayerState();
+  const playlistState = getPlaylistState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  it('queues concurrent call and processes both', async () => {
+    const tracks = createMockTracks(4);
+    player.playQueue = [...tracks];
+    player.currentIndex = 0;
+    player.currentTrack = tracks[0];
+    player.isPlaying = false;
+
+    playlistState.playlists = [createMockPlaylist({ id: 1, name: 'PL1', track_ids: [1, 2, 3, 4] })];
+
+    // Fire two concurrent batch calls — second should be queued
+    const p1 = handleTracksRemovedBatch(new Set([2]));
+    const p2 = handleTracksRemovedBatch(new Set([3]));
+    await Promise.all([p1, p2]);
+
+    // Both track 2 and 3 should be removed
+    expect(player.playQueue.map((t) => t.id)).toEqual([1, 4]);
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 4]);
+  });
+
+  it('merges multiple queued calls', async () => {
+    const tracks = createMockTracks(5);
+    player.playQueue = [...tracks];
+    player.currentIndex = 0;
+    player.currentTrack = tracks[0];
+    player.isPlaying = false;
+
+    playlistState.playlists = [
+      createMockPlaylist({ id: 1, name: 'PL1', track_ids: [1, 2, 3, 4, 5] }),
+    ];
+
+    // Fire three concurrent batch calls — second and third should be merged
+    const p1 = handleTracksRemovedBatch(new Set([2]));
+    const p2 = handleTracksRemovedBatch(new Set([3]));
+    const p3 = handleTracksRemovedBatch(new Set([4]));
+    await Promise.all([p1, p2, p3]);
+
+    // Only track 1 and 5 should remain
+    expect(player.playQueue.map((t) => t.id)).toEqual([1, 5]);
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 5]);
+  });
+});
