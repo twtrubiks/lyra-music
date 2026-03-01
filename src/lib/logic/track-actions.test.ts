@@ -86,15 +86,16 @@ describe('optimisticTrash', () => {
       }
     });
 
-    const promise = optimisticTrash([tracks[1]]);
+    await optimisticTrash([tracks[1]]);
 
+    // Optimistic update is synchronous — already applied before return
+    expect(library.allTracks).toHaveLength(2);
+    expect(library.allTracks.map((t) => t.id)).toEqual([1, 3]);
+
+    // Backend fires in background
     await vi.waitFor(() => {
-      expect(library.allTracks).toHaveLength(2);
-      expect(library.allTracks.map((t) => t.id)).toEqual([1, 3]);
+      expect(backendCalled).toBe(true);
     });
-
-    await promise;
-    expect(backendCalled).toBe(true);
   });
 
   it('updates local tracks when getLocalTracks/setLocalTracks provided', async () => {
@@ -119,10 +120,12 @@ describe('optimisticTrash', () => {
 
     await optimisticTrash([tracks[0], tracks[1]]);
 
-    // Should be exactly 1 trash_tracks call, not 2 trash_track calls
-    const trashCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'trash_tracks');
-    expect(trashCalls).toHaveLength(1);
-    expect(trashCalls[0][1]).toEqual({ ids: [1, 2] });
+    await vi.waitFor(() => {
+      // Should be exactly 1 trash_tracks call, not 2 trash_track calls
+      const trashCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'trash_tracks');
+      expect(trashCalls).toHaveLength(1);
+      expect(trashCalls[0][1]).toEqual({ ids: [1, 2] });
+    });
 
     // No individual trash_track calls
     const singleTrashCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'trash_track');
@@ -141,9 +144,11 @@ describe('optimisticTrash', () => {
 
     await optimisticTrash([tracks[1]]);
 
-    // Should be restored to original
-    expect(library.allTracks).toHaveLength(3);
-    expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    // Rollback happens in background .catch()
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(3);
+      expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    });
   });
 
   it('restores local tracks on total backend failure', async () => {
@@ -164,8 +169,10 @@ describe('optimisticTrash', () => {
       },
     });
 
-    expect(localTracks).toHaveLength(3);
-    expect(localTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    await vi.waitFor(() => {
+      expect(localTracks).toHaveLength(3);
+      expect(localTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    });
   });
 
   it('shows error notification on backend failure', async () => {
@@ -183,7 +190,9 @@ describe('optimisticTrash', () => {
     await optimisticTrash([tracks[0]]);
 
     const errorState = getErrorState();
-    expect(errorState.errors.length).toBeGreaterThan(0);
+    await vi.waitFor(() => {
+      expect(errorState.errors.length).toBeGreaterThan(0);
+    });
   });
 
   it('does not call onComplete on total backend failure', async () => {
@@ -199,6 +208,10 @@ describe('optimisticTrash', () => {
     const onComplete = vi.fn();
     await optimisticTrash([tracks[0]], { onComplete });
 
+    // Wait for background .catch() to settle, then verify onComplete was NOT called
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(2); // rollback happened
+    });
     expect(onComplete).not.toHaveBeenCalled();
   });
 
@@ -209,7 +222,9 @@ describe('optimisticTrash', () => {
     const onComplete = vi.fn().mockResolvedValue(undefined);
     await optimisticTrash([tracks[0]], { onComplete });
 
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('handles batch deletion of multiple tracks', async () => {
@@ -218,11 +233,15 @@ describe('optimisticTrash', () => {
 
     await optimisticTrash([tracks[0], tracks[2], tracks[4]]);
 
+    // Optimistic update is synchronous
     expect(library.allTracks).toHaveLength(2);
     expect(library.allTracks.map((t) => t.id)).toEqual([2, 4]);
-    // Only 1 trash_tracks call
-    const trashCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'trash_tracks');
-    expect(trashCalls).toHaveLength(1);
+
+    // Backend fires in background
+    await vi.waitFor(() => {
+      const trashCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'trash_tracks');
+      expect(trashCalls).toHaveLength(1);
+    });
   });
 
   it('handles currently playing track by auto-advancing', async () => {
@@ -255,8 +274,10 @@ describe('optimisticTrash', () => {
 
     await optimisticTrash([tracks[0], tracks[1], tracks[2]]);
 
-    // Only track 2 (failed) should be restored
-    expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+    // Partial rollback happens in background .then()
+    await vi.waitFor(() => {
+      expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+    });
   });
 
   it('restores only failed local tracks on partial failure', async () => {
@@ -280,7 +301,9 @@ describe('optimisticTrash', () => {
       },
     });
 
-    expect(localTracks.map((t) => t.id)).toEqual([2]);
+    await vi.waitFor(() => {
+      expect(localTracks.map((t) => t.id)).toEqual([2]);
+    });
   });
 
   it('calls onComplete on partial failure when some tracks succeed', async () => {
@@ -299,7 +322,9 @@ describe('optimisticTrash', () => {
     const onComplete = vi.fn().mockResolvedValue(undefined);
     await optimisticTrash([tracks[0], tracks[1]], { onComplete });
 
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not throw on empty array input', async () => {
@@ -334,7 +359,9 @@ describe('optimisticRemove', () => {
 
     await optimisticRemove([tracks[0]]);
 
-    expect(mockInvoke).toHaveBeenCalledWith('remove_tracks', { ids: [1] });
+    await vi.waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('remove_tracks', { ids: [1] });
+    });
     expect(mockInvoke).not.toHaveBeenCalledWith('trash_tracks', expect.anything());
   });
 
@@ -350,15 +377,16 @@ describe('optimisticRemove', () => {
       }
     });
 
-    const promise = optimisticRemove([tracks[1]]);
+    await optimisticRemove([tracks[1]]);
 
+    // Optimistic update is synchronous — already applied before return
+    expect(library.allTracks).toHaveLength(2);
+    expect(library.allTracks.map((t) => t.id)).toEqual([1, 3]);
+
+    // Backend fires in background
     await vi.waitFor(() => {
-      expect(library.allTracks).toHaveLength(2);
-      expect(library.allTracks.map((t) => t.id)).toEqual([1, 3]);
+      expect(backendCalled).toBe(true);
     });
-
-    await promise;
-    expect(backendCalled).toBe(true);
   });
 
   it('restores allTracks on backend failure', async () => {
@@ -373,8 +401,10 @@ describe('optimisticRemove', () => {
 
     await optimisticRemove([tracks[1]]);
 
-    expect(library.allTracks).toHaveLength(3);
-    expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(3);
+      expect(library.allTracks.map((t) => t.id)).toEqual([1, 2, 3]);
+    });
   });
 
   it('restores only failed tracks on partial backend failure', async () => {
@@ -392,7 +422,9 @@ describe('optimisticRemove', () => {
 
     await optimisticRemove([tracks[0], tracks[1], tracks[2]]);
 
-    expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+    await vi.waitFor(() => {
+      expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+    });
   });
 
   it('does not throw on empty array input', async () => {

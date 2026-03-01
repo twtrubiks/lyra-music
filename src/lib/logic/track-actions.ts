@@ -37,35 +37,31 @@ async function _optimisticLibraryAction(
   // 3. Batch playback state cleanup — one pass instead of N sequential calls
   await handleTracksRemovedBatch(ids);
 
-  // 4. Single batch backend call instead of N individual calls
-  let result: BatchTrashResult;
-  try {
-    result = await backendAction(tracks.map((t) => t.id));
-  } catch (err) {
-    // Total failure — restore all tracks
-    library.allTracks = snapshotAllTracks;
-    if (snapshotLocalTracks && options?.setLocalTracks) {
-      options.setLocalTracks(snapshotLocalTracks);
-    }
-    notifyCritical(errorLabel, err);
-    return;
-  }
-
-  const successIds = new Set(result.succeeded_ids);
-
-  // 4a. Partial failure → restore only failed tracks (preserve original order)
-  if (result.failed.length > 0) {
-    library.allTracks = snapshotAllTracks.filter((t) => !successIds.has(t.id));
-    if (snapshotLocalTracks && options?.setLocalTracks) {
-      options.setLocalTracks(snapshotLocalTracks.filter((t) => !successIds.has(t.id)));
-    }
-    notifyCritical(errorLabel, new Error(result.failed[0].error));
-  }
-
-  // 4b. Call onComplete if any track was successfully deleted
-  if (successIds.size > 0 && options?.onComplete) {
-    await options.onComplete();
-  }
+  // 4. Fire-and-forget backend call — UI already updated, don't block on file I/O
+  backendAction(tracks.map((t) => t.id))
+    .then((result) => {
+      const successIds = new Set(result.succeeded_ids);
+      // Partial failure → restore only failed tracks (preserve original order)
+      if (result.failed.length > 0) {
+        library.allTracks = snapshotAllTracks.filter((t) => !successIds.has(t.id));
+        if (snapshotLocalTracks && options?.setLocalTracks) {
+          options.setLocalTracks(snapshotLocalTracks.filter((t) => !successIds.has(t.id)));
+        }
+        notifyCritical(errorLabel, new Error(result.failed[0].error));
+      }
+      // Call onComplete if any track was successfully deleted
+      if (successIds.size > 0) {
+        options?.onComplete?.();
+      }
+    })
+    .catch((err) => {
+      // Total failure — restore all tracks
+      library.allTracks = snapshotAllTracks;
+      if (snapshotLocalTracks && options?.setLocalTracks) {
+        options.setLocalTracks(snapshotLocalTracks);
+      }
+      notifyCritical(errorLabel, err);
+    });
 }
 
 export async function optimisticTrash(
