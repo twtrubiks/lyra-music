@@ -3,7 +3,7 @@ import type { BatchTrashResult } from '$lib/api/library';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
 import { trashTracks, removeTracks } from '$lib/api/library';
-import { removeFromPlaylist } from '$lib/api/playlist';
+import { batchRemoveFromPlaylist } from '$lib/api/playlist';
 import { handleTracksRemovedBatch } from '$lib/logic/playback-actions';
 import { notifyCritical } from '$lib/logic/error-handler';
 
@@ -106,36 +106,21 @@ export async function optimisticPlaylistRemove(
       : pl,
   );
 
-  // 3. Background backend call — parallel deletion
-  const results = await Promise.allSettled(
-    tracksToRemove.map((t) => removeFromPlaylist(playlistId, t.id)),
-  );
-
-  const successIds = new Set<number>();
-  let firstError: unknown = null;
-
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      successIds.add(tracksToRemove[i].id);
-    } else if (!firstError) {
-      firstError = result.reason;
-    }
-  });
-
-  // 3a. Partial/full failure → restore only failed tracks
-  if (firstError) {
-    const originalPlaylist = snapshotPlaylists.find((pl) => pl.id === playlistId);
-    if (originalPlaylist) {
-      const restoredTrackIds = originalPlaylist.track_ids.filter((id) => !successIds.has(id));
-      playlistState.playlists = playlistState.playlists.map((pl) =>
-        pl.id === playlistId ? { ...pl, track_ids: restoredTrackIds } : pl,
-      );
-    }
-    notifyCritical('Remove from playlist', firstError);
+  // 3. Single batch backend call (atomic SQL DELETE)
+  try {
+    await batchRemoveFromPlaylist(
+      playlistId,
+      tracksToRemove.map((t) => t.id),
+    );
+  } catch (err) {
+    // Total failure — restore all tracks (SQL DELETE is atomic, no partial failure)
+    playlistState.playlists = snapshotPlaylists;
+    notifyCritical('Remove from playlist', err);
+    return;
   }
 
-  // 3b. Call onComplete if any track was successfully removed
-  if (successIds.size > 0 && options?.onComplete) {
+  // 3a. Call onComplete on success
+  if (options?.onComplete) {
     await options.onComplete();
   }
 }

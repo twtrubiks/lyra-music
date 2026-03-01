@@ -21,6 +21,17 @@ export async function removeFromPlaylist(playlistId: number, trackId: number): P
   return invoke('remove_from_playlist', { playlistId, trackId });
 }
 
+export async function batchAddToPlaylist(playlistId: number, trackIds: number[]): Promise<void> {
+  return invoke('batch_add_to_playlist', { playlistId, trackIds });
+}
+
+export async function batchRemoveFromPlaylist(
+  playlistId: number,
+  trackIds: number[],
+): Promise<void> {
+  return invoke('batch_remove_from_playlist', { playlistId, trackIds });
+}
+
 export async function reorderPlaylist(playlistId: number, trackIds: number[]): Promise<void> {
   return invoke('reorder_playlist', { playlistId, trackIds });
 }

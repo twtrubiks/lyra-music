@@ -24,7 +24,7 @@
     handlePrev,
     toggleShuffle,
     cycleRepeat,
-    handleTrackRemoved,
+    handleTracksRemovedBatch,
   } from '$lib/logic/playback-actions';
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
@@ -174,9 +174,7 @@
     (async () => {
       try {
         unlisten = await listen<number[]>('tracks-removed', async (event) => {
-          for (const trackId of event.payload) {
-            await handleTrackRemoved(trackId);
-          }
+          await handleTracksRemovedBatch(new Set(event.payload));
         });
       } catch {}
     })();

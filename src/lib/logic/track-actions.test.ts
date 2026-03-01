@@ -434,16 +434,16 @@ describe('optimisticPlaylistRemove', () => {
     expect(playlistState.playlists[0].track_ids).toEqual([1, 3]);
   });
 
-  it('calls remove_from_playlist with correct playlistId', async () => {
+  it('calls batch_remove_from_playlist with correct playlistId and trackIds', async () => {
     const tracks = createMockTracks(2);
     library.allTracks = [...tracks];
     playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
 
     await optimisticPlaylistRemove(10, [tracks[0]]);
 
-    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
+    expect(mockInvoke).toHaveBeenCalledWith('batch_remove_from_playlist', {
       playlistId: 10,
-      trackId: 1,
+      trackIds: [1],
     });
   });
 
@@ -470,7 +470,7 @@ describe('optimisticPlaylistRemove', () => {
     expect(mockInvoke).not.toHaveBeenCalledWith('stop', expect.anything());
   });
 
-  it('restores playlist track_ids on backend failure', async () => {
+  it('restores all playlist track_ids on backend failure (atomic batch)', async () => {
     const tracks = createMockTracks(3);
     library.allTracks = [...tracks];
     playlistState.playlists = [
@@ -478,36 +478,15 @@ describe('optimisticPlaylistRemove', () => {
     ];
 
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'remove_from_playlist') {
+      if (cmd === 'batch_remove_from_playlist') {
         throw new Error('db error');
       }
     });
 
-    await optimisticPlaylistRemove(10, [tracks[1]]);
-
-    expect(playlistState.playlists[0].track_ids).toEqual([1, 2, 3]);
-  });
-
-  it('restores only failed track_ids on partial backend failure', async () => {
-    const tracks = createMockTracks(3);
-    library.allTracks = [...tracks];
-    playlistState.playlists = [
-      createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
-    ];
-
-    // track 1 succeeds, track 2 fails
-    mockInvoke.mockImplementation(
-      async (cmd: string, args: { playlistId: number; trackId: number }) => {
-        if (cmd === 'remove_from_playlist' && args.trackId === 2) {
-          throw new Error('db error');
-        }
-      },
-    );
-
     await optimisticPlaylistRemove(10, [tracks[0], tracks[1]]);
 
-    // track 1 was successfully removed, track 2 should be restored
-    expect(playlistState.playlists[0].track_ids).toEqual([2, 3]);
+    // All tracks restored because batch operation is atomic
+    expect(playlistState.playlists[0].track_ids).toEqual([1, 2, 3]);
   });
 
   it('does not affect other playlists', async () => {

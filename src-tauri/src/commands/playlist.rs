@@ -51,6 +51,26 @@ pub fn remove_from_playlist(
 }
 
 #[tauri::command]
+pub fn batch_add_to_playlist(
+    playlist_id: i64,
+    track_ids: Vec<i64>,
+    db: State<DbState>,
+) -> Result<(), AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    playlist_repo::batch_add_to_playlist(&conn, playlist_id, &track_ids)
+}
+
+#[tauri::command]
+pub fn batch_remove_from_playlist(
+    playlist_id: i64,
+    track_ids: Vec<i64>,
+    db: State<DbState>,
+) -> Result<(), AppError> {
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+    playlist_repo::batch_remove_from_playlist(&conn, playlist_id, &track_ids)
+}
+
+#[tauri::command]
 pub fn reorder_playlist(
     playlist_id: i64,
     track_ids: Vec<i64>,

@@ -4,6 +4,7 @@
   import { loadColumnWidths, saveColumnWidths, MIN_WIDTHS } from '$lib/logic/column-resize';
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
+  import { calculateVisibleRange, scrollTopForIndex, ROW_HEIGHT } from '$lib/logic/virtual-scroll';
   import {
     createEmptySelection,
     selectSingle,
@@ -45,6 +46,36 @@
   } = $props();
 
   const playlistState = getPlaylistState();
+
+  // Virtual scroll state
+  let wrapperEl: HTMLDivElement | undefined = $state(undefined);
+  let scrollTop = $state(0);
+  let containerHeight = $state(0);
+  let theadHeight = $state(0);
+
+  function handleScroll() {
+    if (wrapperEl) {
+      scrollTop = wrapperEl.scrollTop;
+    }
+  }
+
+  $effect(() => {
+    if (!wrapperEl) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerHeight = entry.contentRect.height;
+      }
+      const thead = wrapperEl?.querySelector('thead');
+      if (thead) {
+        theadHeight = thead.offsetHeight;
+      }
+    });
+    ro.observe(wrapperEl);
+    return () => ro.disconnect();
+  });
+
+  let visibleRange = $derived(calculateVisibleRange(scrollTop, containerHeight, tracks.length));
+  let visibleTracks = $derived(tracks.slice(visibleRange.startIndex, visibleRange.endIndex));
 
   // Selection state
   let selection = $state<SelectionState>(createEmptySelection());
@@ -140,9 +171,17 @@
   }
 
   function scrollFocusedIntoView() {
-    if (selection.focusedIndex === null || !tableEl) return;
-    const row = tableEl.querySelector(`tbody tr:nth-child(${selection.focusedIndex + 1})`);
-    row?.scrollIntoView({ block: 'nearest' });
+    if (selection.focusedIndex === null || !wrapperEl) return;
+    const newTop = scrollTopForIndex(
+      selection.focusedIndex,
+      scrollTop,
+      containerHeight,
+      ROW_HEIGHT,
+      theadHeight,
+    );
+    if (newTop !== null) {
+      wrapperEl.scrollTop = newTop;
+    }
   }
 
   function handleTableKeydown(e: KeyboardEvent) {
@@ -203,12 +242,14 @@
   async function handleMenuAddToPlaylist(pl: Playlist) {
     showMenu = false;
     const selected = getSelectedTracks(tracks, selection);
-    for (const t of selected) {
-      try {
-        await playlistApi.addToPlaylist(pl.id, t.id);
-      } catch (err) {
-        warnNonCritical('Add to playlist', err);
-      }
+    if (selected.length === 0) return;
+    try {
+      await playlistApi.batchAddToPlaylist(
+        pl.id,
+        selected.map((t) => t.id),
+      );
+    } catch (err) {
+      warnNonCritical('Add to playlist', err);
     }
   }
 
@@ -283,7 +324,7 @@
 
 <svelte:window onclick={handleWindowClick} />
 
-<div class="track-list-wrapper">
+<div class="track-list-wrapper" bind:this={wrapperEl} onscroll={handleScroll}>
   {#if tracks.length === 0}
     <div class="empty">
       <p>No tracks yet.</p>
@@ -336,17 +377,28 @@
         </tr>
       </thead>
       <tbody>
-        {#each tracks as track, i (track.id)}
+        {#if visibleRange.topPadding > 0}
+          <tr class="virtual-spacer" aria-hidden="true"
+            ><td colspan="5" style="height:{visibleRange.topPadding}px"></td></tr
+          >
+        {/if}
+        {#each visibleTracks as track, localIndex (track.id)}
+          {@const globalIndex = visibleRange.startIndex + localIndex}
           <TrackRow
             {track}
             isActive={track.id === currentTrackId}
             isSelected={selection.selectedIds.has(track.id)}
-            isFocused={selection.focusedIndex === i}
+            isFocused={selection.focusedIndex === globalIndex}
             ondblclick={onplay}
-            onclick={(e) => handleRowClick(i, e)}
-            oncontextmenu={(e) => handleRowContextMenu(i, e)}
+            onclick={(e) => handleRowClick(globalIndex, e)}
+            oncontextmenu={(e) => handleRowContextMenu(globalIndex, e)}
           />
         {/each}
+        {#if visibleRange.bottomPadding > 0}
+          <tr class="virtual-spacer" aria-hidden="true"
+            ><td colspan="5" style="height:{visibleRange.bottomPadding}px"></td></tr
+          >
+        {/if}
       </tbody>
     </table>
   {/if}

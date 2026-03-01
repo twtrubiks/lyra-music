@@ -124,6 +124,81 @@ pub fn remove_from_playlist(
     Ok(())
 }
 
+pub fn batch_add_to_playlist(
+    conn: &Connection,
+    playlist_id: i64,
+    track_ids: &[i64],
+) -> Result<(), AppError> {
+    if track_ids.is_empty() {
+        return Ok(());
+    }
+
+    let max_order: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(sort_order), -1) FROM playlist_tracks WHERE playlist_id = ?1",
+        params![playlist_id],
+        |row| row.get(0),
+    )?;
+
+    let tx = conn.unchecked_transaction()?;
+
+    for (i, track_id) in track_ids.iter().enumerate() {
+        #[allow(clippy::cast_possible_wrap)]
+        let sort_order = max_order + 1 + (i as i64);
+        tx.execute(
+            "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order)
+             VALUES (?1, ?2, ?3)",
+            params![playlist_id, track_id, sort_order],
+        )?;
+    }
+
+    tx.commit()?;
+
+    Ok(())
+}
+
+pub fn batch_remove_from_playlist(
+    conn: &Connection,
+    playlist_id: i64,
+    track_ids: &[i64],
+) -> Result<(), AppError> {
+    if track_ids.is_empty() {
+        return Ok(());
+    }
+
+    const CHUNK_SIZE: usize = 500;
+
+    let tx = conn.unchecked_transaction()?;
+
+    for chunk in track_ids.chunks(CHUNK_SIZE) {
+        let placeholders: Vec<String> = chunk
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 2))
+            .collect();
+        let sql = format!(
+            "DELETE FROM playlist_tracks WHERE playlist_id = ?1 AND track_id IN ({})",
+            placeholders.join(", ")
+        );
+
+        let mut stmt = tx.prepare(&sql)?;
+
+        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
+            Vec::with_capacity(chunk.len() + 1);
+        param_values.push(Box::new(playlist_id));
+        for id in chunk {
+            param_values.push(Box::new(*id));
+        }
+
+        let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
+        stmt.execute(params_ref.as_slice())?;
+    }
+
+    tx.commit()?;
+
+    Ok(())
+}
+
 pub fn reorder_playlist(
     conn: &Connection,
     playlist_id: i64,

@@ -76,16 +76,16 @@ describe('PlaylistEditor — handleRemove', () => {
     resetPlaylistState();
   });
 
-  it('calls remove_from_playlist, not remove_track', async () => {
+  it('calls batch_remove_from_playlist, not remove_track', async () => {
     playlistState.playlists = [
       createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
     ];
 
     await handleRemove(10, [tracks[1]]); // remove track id=2
 
-    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
+    expect(mockInvoke).toHaveBeenCalledWith('batch_remove_from_playlist', {
       playlistId: 10,
-      trackId: 2,
+      trackIds: [2],
     });
     expect(mockInvoke).not.toHaveBeenCalledWith('remove_track', expect.anything());
   });
@@ -112,25 +112,18 @@ describe('PlaylistEditor — handleRemove', () => {
     expect(playlistState.playlists[0].track_ids).toEqual([1, 3]);
   });
 
-  it('handles batch removal of multiple tracks', async () => {
+  it('handles batch removal with single IPC call', async () => {
     playlistState.playlists = [
       createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2, 3] }),
     ];
 
     await handleRemove(10, [tracks[0], tracks[1], tracks[2]]);
 
-    expect(mockInvoke).toHaveBeenCalledTimes(3);
-    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
+    // Should be exactly 1 batch call, not 3 individual calls
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith('batch_remove_from_playlist', {
       playlistId: 10,
-      trackId: 1,
-    });
-    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
-      playlistId: 10,
-      trackId: 2,
-    });
-    expect(mockInvoke).toHaveBeenCalledWith('remove_from_playlist', {
-      playlistId: 10,
-      trackId: 3,
+      trackIds: [1, 2, 3],
     });
     expect(playlistState.playlists[0].track_ids).toEqual([]);
   });
