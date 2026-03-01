@@ -161,11 +161,11 @@ pub fn batch_remove_from_playlist(
     playlist_id: i64,
     track_ids: &[i64],
 ) -> Result<(), AppError> {
+    const CHUNK_SIZE: usize = 500;
+
     if track_ids.is_empty() {
         return Ok(());
     }
-
-    const CHUNK_SIZE: usize = 500;
 
     let tx = conn.unchecked_transaction()?;
 
@@ -190,7 +190,7 @@ pub fn batch_remove_from_playlist(
         }
 
         let params_ref: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|p| p.as_ref()).collect();
+            param_values.iter().map(AsRef::as_ref).collect();
         stmt.execute(params_ref.as_slice())?;
     }
 

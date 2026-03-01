@@ -110,10 +110,10 @@ pub fn delete_track(conn: &Connection, id: i64) -> Result<(), AppError> {
 }
 
 pub fn delete_tracks(conn: &Connection, ids: &[i64]) -> Result<(), AppError> {
+    const CHUNK_SIZE: usize = 500;
     if ids.is_empty() {
         return Ok(());
     }
-    const CHUNK_SIZE: usize = 500;
     let tx = conn.unchecked_transaction()?;
     for chunk in ids.chunks(CHUNK_SIZE) {
         let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
@@ -130,10 +130,10 @@ pub fn delete_tracks(conn: &Connection, ids: &[i64]) -> Result<(), AppError> {
 }
 
 pub fn get_tracks_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<Track>, AppError> {
+    const CHUNK_SIZE: usize = 500;
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    const CHUNK_SIZE: usize = 500;
     let mut all_tracks: Vec<Track> = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(CHUNK_SIZE) {
         let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
