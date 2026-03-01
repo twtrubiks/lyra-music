@@ -113,14 +113,19 @@ pub fn delete_tracks(conn: &Connection, ids: &[i64]) -> Result<(), AppError> {
     if ids.is_empty() {
         return Ok(());
     }
-    let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{i}")).collect();
-    let sql = format!(
-        "DELETE FROM tracks WHERE id IN ({})",
-        placeholders.join(", ")
-    );
-    let params: Vec<&dyn rusqlite::ToSql> =
-        ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-    conn.execute(&sql, params.as_slice())?;
+    const CHUNK_SIZE: usize = 500;
+    let tx = conn.unchecked_transaction()?;
+    for chunk in ids.chunks(CHUNK_SIZE) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "DELETE FROM tracks WHERE id IN ({})",
+            placeholders.join(", ")
+        );
+        let params: Vec<&dyn rusqlite::ToSql> =
+            chunk.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        tx.execute(&sql, params.as_slice())?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -128,18 +133,23 @@ pub fn get_tracks_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<Track>, A
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("?{i}")).collect();
-    let sql = format!(
-        "SELECT {TRACK_COLUMNS} FROM tracks WHERE id IN ({})",
-        placeholders.join(", ")
-    );
-    let params: Vec<&dyn rusqlite::ToSql> =
-        ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
-    let mut stmt = conn.prepare(&sql)?;
-    let tracks = stmt
-        .query_map(params.as_slice(), row_to_track)?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(tracks)
+    const CHUNK_SIZE: usize = 500;
+    let mut all_tracks: Vec<Track> = Vec::with_capacity(ids.len());
+    for chunk in ids.chunks(CHUNK_SIZE) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT {TRACK_COLUMNS} FROM tracks WHERE id IN ({})",
+            placeholders.join(", ")
+        );
+        let params: Vec<&dyn rusqlite::ToSql> =
+            chunk.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let chunk_tracks = stmt
+            .query_map(params.as_slice(), row_to_track)?
+            .collect::<Result<Vec<_>, _>>()?;
+        all_tracks.extend(chunk_tracks);
+    }
+    Ok(all_tracks)
 }
 
 pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<Track>, AppError> {

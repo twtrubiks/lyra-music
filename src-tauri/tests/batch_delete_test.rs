@@ -158,6 +158,39 @@ fn test_delete_tracks_cascade_multiple_playlists() {
     assert_eq!(pl2_tracks[0].id, id2);
 }
 
+// ============================================================
+// Chunk boundary tests (>500 items cross CHUNK_SIZE)
+// ============================================================
+
+#[test]
+fn test_delete_tracks_exceeds_chunk_size() {
+    let conn = common::create_test_db();
+    let mut ids = Vec::with_capacity(502);
+    for i in 1..=502u32 {
+        let id = library_repo::insert_track(&conn, &common::create_test_track(i)).unwrap();
+        ids.push(id);
+    }
+    assert_eq!(library_repo::get_all_tracks(&conn).unwrap().len(), 502);
+
+    library_repo::delete_tracks(&conn, &ids).unwrap();
+
+    let remaining = library_repo::get_all_tracks(&conn).unwrap();
+    assert!(remaining.is_empty(), "expected 0 tracks, got {}", remaining.len());
+}
+
+#[test]
+fn test_get_tracks_by_ids_exceeds_chunk_size() {
+    let conn = common::create_test_db();
+    let mut ids = Vec::with_capacity(502);
+    for i in 1..=502u32 {
+        let id = library_repo::insert_track(&conn, &common::create_test_track(i)).unwrap();
+        ids.push(id);
+    }
+
+    let tracks = library_repo::get_tracks_by_ids(&conn, &ids).unwrap();
+    assert_eq!(tracks.len(), 502, "expected 502 tracks, got {}", tracks.len());
+}
+
 #[test]
 fn test_delete_tracks_single_id() {
     let conn = common::create_test_db();
