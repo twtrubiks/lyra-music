@@ -31,14 +31,14 @@ Lyra 的設計原則：
 | 層級 | 技術 | 說明 |
 |------|------|------|
 | 前端 | Svelte 5 + TypeScript | 使用 Svelte 5 runes 做響應式狀態管理 |
-| 建置工具 | Vite 7 | 開發伺服器與前端打包 |
+| 建置工具 | Vite 8 | 開發伺服器與前端打包 |
 | 桌面框架 | Tauri 2 | 原生視窗、系統匣、IPC 通訊 |
 | 後端 | Rust | 音訊處理、檔案掃描、資料庫操作 |
-| 音訊引擎 | rodio 0.21 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
-| 元資料解析 | lofty 0.23 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
+| 音訊引擎 | rodio 0.22 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
+| 元資料解析 | lofty 0.24 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
 | 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
 | 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
-| 測試 | Vitest + cargo test | 前端 17 個測試檔、後端 10 個整合測試 |
+| 測試 | Vitest + cargo test | 前端 17 個測試檔、後端 12 個整合測試 |
 
 ## 主要功能
 
@@ -63,7 +63,7 @@ Lyra 的設計原則：
 ## 前置需求
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Rust toolchain](https://rustup.rs/) (rustup)
+- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.87+)
 - Tauri 2 系統依賴：參考 [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)（macOS/Windows 通常不需要額外安裝）
 
 Linux（Debian/Ubuntu）額外需要：
@@ -88,7 +88,7 @@ npm run tauri build   # 正式建置
 ```bash
 npm run test                    # 前端單元測試 (Vitest, 17 個測試檔)
 npm run check                   # 類型檢查
-cd src-tauri && cargo test      # 後端整合測試 (10 個測試檔，音訊測試預設跳過)
+cd src-tauri && cargo test      # 後端整合測試 (12 個測試檔，音訊測試預設跳過)
 cd src-tauri && cargo test --features audio-tests  # 含音訊測試 (需音訊裝置)
 npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -136,5 +136,5 @@ src-tauri/                        # 後端 (Rust)
     storage/                      # SQLite 資料庫 (schema v5, WAL mode)
     commands/                     # Tauri command handlers (35 個 IPC 介面)
     models/                       # 資料結構定義 (track, playlist, player_state)
-  tests/                          # 10 個整合測試
+  tests/                          # 12 個整合測試
 ```

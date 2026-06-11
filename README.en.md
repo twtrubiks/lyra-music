@@ -31,14 +31,14 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | Layer | Technology | Description |
 |-------|------------|-------------|
 | Frontend | Svelte 5 + TypeScript | Reactive state management using Svelte 5 runes |
-| Build Tool | Vite 7 | Dev server and frontend bundling |
+| Build Tool | Vite 8 | Dev server and frontend bundling |
 | Desktop Framework | Tauri 2 | Native windows, system tray, IPC communication |
 | Backend | Rust | Audio processing, file scanning, database operations |
-| Audio Engine | rodio 0.21 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
-| Metadata Parsing | lofty 0.23 | Read/write ID3/Vorbis/MP4 tags and cover art |
+| Audio Engine | rodio 0.22 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
+| Metadata Parsing | lofty 0.24 | Read/write ID3/Vorbis/MP4 tags and cover art |
 | File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
 | Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
-| Testing | Vitest + cargo test | 10 frontend test files, 10 backend integration tests |
+| Testing | Vitest + cargo test | 17 frontend test files, 12 backend integration tests |
 
 ## Key Features
 
@@ -63,7 +63,7 @@ Other features:
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Rust toolchain](https://rustup.rs/) (rustup)
+- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.87+)
 - Tauri 2 system dependencies: see [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/) (macOS/Windows usually require no additional installation)
 
 Linux (Debian/Ubuntu) additionally requires:
@@ -86,9 +86,9 @@ Build artifacts are located in `src-tauri/target/release/bundle/`, supporting de
 ## Testing
 
 ```bash
-npm run test                    # Frontend unit tests (Vitest, 10 test files)
+npm run test                    # Frontend unit tests (Vitest, 17 test files)
 npm run check                   # Type checking
-cd src-tauri && cargo test      # Backend integration tests (10 test files, audio tests skipped by default)
+cd src-tauri && cargo test      # Backend integration tests (12 test files, audio tests skipped by default)
 cd src-tauri && cargo test --features audio-tests  # With audio tests (requires audio device)
 npm run quality                 # Code quality checks (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -136,5 +136,5 @@ src-tauri/                        # Backend (Rust)
     storage/                      # SQLite database (schema v5, WAL mode)
     commands/                     # Tauri command handlers (35 IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
-  tests/                          # 10 integration tests
+  tests/                          # 12 integration tests
 ```
