@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use super::library_repo::row_to_track;
 use crate::error::AppError;

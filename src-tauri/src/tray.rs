@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::audio::SharedPlayer;
 use tauri::{
+    Emitter, Manager,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
 };
 
 pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -34,7 +34,7 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         p.play();
                     }
-                };
+                }
             }
             "tray_prev" => {
                 if let Some(window) = app.get_webview_window("main") {

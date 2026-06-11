@@ -240,15 +240,21 @@ fn test_delete_track_in_multiple_playlists() {
 
     library_repo::delete_track(&conn, t_id).unwrap();
 
-    assert!(playlist_repo::get_playlist_tracks(&conn, pl1)
-        .unwrap()
-        .is_empty());
-    assert!(playlist_repo::get_playlist_tracks(&conn, pl2)
-        .unwrap()
-        .is_empty());
-    assert!(playlist_repo::get_playlist_tracks(&conn, pl3)
-        .unwrap()
-        .is_empty());
+    assert!(
+        playlist_repo::get_playlist_tracks(&conn, pl1)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        playlist_repo::get_playlist_tracks(&conn, pl2)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        playlist_repo::get_playlist_tracks(&conn, pl3)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

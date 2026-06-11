@@ -5,8 +5,8 @@ description = "Lyra Music - A lightweight Linux desktop music player"
 authors = ["you"]
 license = ""
 repository = ""
-edition = "2021"
-rust-version = "1.77.2"
+edition = "2024"
+rust-version = "1.87"
 
 [lib]
 name = "lyra_music_lib"
@@ -18,9 +18,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
-rodio = "0.21"
-lofty = "0.23"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rodio = "0.22"
+lofty = "0.24"
+rusqlite = { version = "0.39", features = ["bundled"] }
 walkdir = "2.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

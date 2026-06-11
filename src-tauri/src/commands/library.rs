@@ -1,14 +1,14 @@
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
+use crate::DbState;
+use crate::WatcherState;
 use crate::error::AppError;
 use crate::metadata::{reader, writer};
 use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::{FailedFile, ImportResult, Track, TrackDetails};
 use crate::scanner::folder_scanner;
 use crate::storage::library_repo;
-use crate::DbState;
-use crate::WatcherState;
 
 #[derive(Serialize)]
 pub struct BatchTrashResult {

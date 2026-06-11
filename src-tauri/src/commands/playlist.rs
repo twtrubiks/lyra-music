@@ -1,10 +1,10 @@
 use tauri::State;
 
+use crate::DbState;
 use crate::error::AppError;
 use crate::models::playlist::Playlist;
 use crate::models::track::Track;
 use crate::storage::playlist_repo;
-use crate::DbState;
 
 #[tauri::command]
 pub fn create_playlist(name: String, db: State<DbState>) -> Result<i64, AppError> {

@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::error::AppError;
 use crate::models::browse::{AlbumSummary, ArtistSummary};

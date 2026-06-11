@@ -2,15 +2,15 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 
-use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 
 use crate::error::AppError;
 
 pub type SharedPlayer = Arc<Mutex<AudioPlayer>>;
 
 pub struct AudioPlayer {
-    stream: OutputStream,
-    sink: Option<Sink>,
+    stream: MixerDeviceSink,
+    sink: Option<Player>,
     current_file_path: Option<String>,
     volume: f32,
     duration_secs: f64,
@@ -25,11 +25,11 @@ pub struct AudioPlayer {
 
 impl AudioPlayer {
     pub fn new() -> Result<Self, AppError> {
-        let builder = OutputStreamBuilder::from_default_device()
+        let builder = DeviceSinkBuilder::from_default_device()
             .map_err(|e| AppError::Audio(e.to_string()))?
             .with_buffer_size(rodio::cpal::BufferSize::Fixed(4096));
         let stream = builder
-            .open_stream_or_fallback()
+            .open_sink_or_fallback()
             .map_err(|e| AppError::Audio(e.to_string()))?;
         Ok(Self {
             stream,
@@ -68,7 +68,7 @@ impl AudioPlayer {
             .total_duration()
             .map_or(fallback_duration, |d: std::time::Duration| d.as_secs_f64());
 
-        let sink = Sink::connect_new(self.stream.mixer());
+        let sink = Player::connect_new(self.stream.mixer());
         sink.set_volume(self.volume * self.volume);
         sink.append(decoder);
 
@@ -131,7 +131,7 @@ impl AudioPlayer {
             sink.stop();
         }
 
-        let sink = Sink::connect_new(self.stream.mixer());
+        let sink = Player::connect_new(self.stream.mixer());
         let file = File::open(&path)?;
         let reader = BufReader::new(file);
         let decoder = Decoder::new(reader).map_err(|e| AppError::Audio(e.to_string()))?;
@@ -183,7 +183,7 @@ impl AudioPlayer {
         if !self.track_loaded || self.gapless_queued {
             return false;
         }
-        let empty = self.sink.as_ref().is_some_and(Sink::empty);
+        let empty = self.sink.as_ref().is_some_and(Player::empty);
         if !empty {
             return false;
         }
@@ -243,7 +243,7 @@ impl AudioPlayer {
         if !self.gapless_queued {
             return false;
         }
-        let len = self.sink.as_ref().map_or(0, rodio::Sink::len);
+        let len = self.sink.as_ref().map_or(0, rodio::Player::len);
         if len <= 1 {
             self.transition_to_queued_next();
             return true;

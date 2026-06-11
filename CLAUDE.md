@@ -82,7 +82,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - **Clippy pedantic** 強制啟用（`-D warnings`），`unsafe_code` 禁用
 - `unwrap_used` = warn、`clone_on_ref_ptr` = warn
 - rustfmt：`max_width = 100`、`use_field_init_shorthand = true`
-- MSRV：1.77.2
+- MSRV：1.87（edition 2024）
 
 ### Pre-commit Hook
 
