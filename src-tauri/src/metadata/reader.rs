@@ -1,16 +1,24 @@
 use std::fs;
 use std::path::Path;
 
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use lofty::config::ParseOptions;
-use lofty::file::{AudioFile, TaggedFileExt};
+use base64::engine::general_purpose::STANDARD;
+use lofty::config::{ParseOptions, ParsingMode};
+use lofty::file::{AudioFile, TaggedFile, TaggedFileExt};
 use lofty::picture::PictureType;
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
 
 use crate::error::AppError;
 use crate::models::track::{Track, TrackDetails};
+
+/// Read a tagged file in Relaxed mode: invalid tag items (e.g. `ID3v2` timestamp
+/// frames with non-digit characters, common in Japanese rips) are skipped
+/// instead of failing the whole read like the default `BestAttempt` mode does.
+fn read_tagged_file(path: &Path) -> lofty::error::Result<TaggedFile> {
+    let options = ParseOptions::new().parsing_mode(ParsingMode::Relaxed);
+    Probe::open(path)?.options(options).read()
+}
 
 pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
     let path = Path::new(file_path);
@@ -24,7 +32,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
     #[allow(clippy::cast_possible_wrap)]
     let file_size_bytes = fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
 
-    match lofty::read_from_path(path) {
+    match read_tagged_file(path) {
         Ok(tagged_file) => {
             let properties = tagged_file.properties();
             let duration_secs = properties.duration().as_secs_f64();
@@ -66,13 +74,11 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
             })
         }
         Err(e) => {
-            // Workaround for lofty 0.23 bug: timestamp parsing errors on non-digit
-            // characters (e.g. Japanese text in ID3v2 TDRC/TDRL frames) even in
-            // BestAttempt/Relaxed mode. See timestamp.rs line 245 in lofty source.
-            // Fallback: skip tag reading and use only audio properties + filename.
+            // Last-resort fallback for tags even Relaxed mode cannot parse:
+            // skip tag reading and use only audio properties + filename.
             eprintln!(
                 "[lyra] Tag parsing failed for {file_path}: {e}; \
-                 retrying without tags (lofty bug workaround)"
+                 retrying without tags"
             );
 
             let options = ParseOptions::new().read_tags(false);
@@ -102,7 +108,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
 pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails, AppError> {
     let path = Path::new(file_path);
 
-    let tagged_file = lofty::read_from_path(path).map_err(|e| AppError::Metadata(e.to_string()))?;
+    let tagged_file = read_tagged_file(path).map_err(|e| AppError::Metadata(e.to_string()))?;
 
     let properties = tagged_file.properties();
 
@@ -140,7 +146,7 @@ pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails
 
 /// Extract raw cover art bytes and MIME type from an audio file.
 pub fn extract_cover_art_bytes(file_path: &str) -> Option<(Vec<u8>, String)> {
-    let tagged_file = lofty::read_from_path(file_path).ok()?;
+    let tagged_file = read_tagged_file(Path::new(file_path)).ok()?;
     let tag = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag())?;

@@ -25,6 +25,28 @@ fn test_read_metadata_wav_file() {
 }
 
 #[test]
+fn test_read_metadata_invalid_timestamp_preserves_tags() {
+    // Regression for the lofty timestamp bug: an ASCII TDRC frame with
+    // non-digit characters (e.g. the Japanese era date "H17.10.26") errors in
+    // BestAttempt mode and would fail the whole file read. It must not break
+    // the import, and the remaining tags (title/artist) should still be read
+    // instead of falling back to the filename. Fully non-ASCII timestamps are
+    // already skipped gracefully by lofty itself.
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = common::create_test_wav_with_id3(
+        dir.path(),
+        "japanese_date.wav",
+        "日本語タイトル",
+        "テストアーティスト",
+        "H17.10.26",
+    );
+
+    let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
+    assert_eq!(track.title, "日本語タイトル");
+    assert_eq!(track.artist, "テストアーティスト");
+}
+
+#[test]
 fn test_read_metadata_nonexistent_file() {
     let result = reader::read_metadata("/nonexistent/file.mp3");
     assert!(result.is_err());

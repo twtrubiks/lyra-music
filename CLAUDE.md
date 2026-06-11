@@ -121,4 +121,4 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 
 ## 已知問題
 
-- **lofty 0.23**：非數字字元的 timestamp 即使在 `BestAttempt` 解析模式下仍會報錯。
+- **lofty**：含非數字 ASCII 字元的 timestamp（如 `H17.10.26`）在預設的 `BestAttempt` 解析模式下會讓整個檔案讀取失敗。`metadata/reader.rs` 因此統一使用 `ParsingMode::Relaxed`（壞的 timestamp frame 會被跳過，其餘標籤保留）。

@@ -115,3 +115,57 @@ pub fn create_test_wav(dir: &std::path::Path, name: &str) -> std::path::PathBuf 
     std::fs::write(&path, &buf).expect("failed to write test wav");
     path
 }
+
+/// Create a test WAV with an embedded ID3v2.4 chunk containing TIT2/TPE1/TDRC text frames.
+/// `tdrc` may contain non-digit characters to reproduce the lofty timestamp parsing bug.
+pub fn create_test_wav_with_id3(
+    dir: &std::path::Path,
+    name: &str,
+    title: &str,
+    artist: &str,
+    tdrc: &str,
+) -> std::path::PathBuf {
+    fn syncsafe(n: u32) -> [u8; 4] {
+        [
+            ((n >> 21) & 0x7F) as u8,
+            ((n >> 14) & 0x7F) as u8,
+            ((n >> 7) & 0x7F) as u8,
+            (n & 0x7F) as u8,
+        ]
+    }
+
+    fn text_frame(id: &[u8; 4], text: &str) -> Vec<u8> {
+        let mut body = vec![3u8]; // text encoding: UTF-8
+        body.extend_from_slice(text.as_bytes());
+        let mut frame = Vec::with_capacity(10 + body.len());
+        frame.extend_from_slice(id);
+        frame.extend_from_slice(&syncsafe(body.len() as u32));
+        frame.extend_from_slice(&[0, 0]); // frame flags
+        frame.extend_from_slice(&body);
+        frame
+    }
+
+    let path = create_test_wav(dir, name);
+
+    let mut frames = Vec::new();
+    frames.extend(text_frame(b"TIT2", title));
+    frames.extend(text_frame(b"TPE1", artist));
+    frames.extend(text_frame(b"TDRC", tdrc));
+
+    let mut tag = Vec::with_capacity(10 + frames.len());
+    tag.extend_from_slice(b"ID3\x04\x00\x00"); // ID3v2.4 header, no flags
+    tag.extend_from_slice(&syncsafe(frames.len() as u32));
+    tag.extend_from_slice(&frames);
+
+    let mut buf = std::fs::read(&path).expect("failed to read test wav");
+    buf.extend_from_slice(b"ID3 ");
+    buf.extend_from_slice(&(tag.len() as u32).to_le_bytes());
+    buf.extend_from_slice(&tag);
+    if tag.len() % 2 == 1 {
+        buf.push(0); // RIFF chunks are word-aligned
+    }
+    let riff_size = (buf.len() - 8) as u32;
+    buf[4..8].copy_from_slice(&riff_size.to_le_bytes());
+    std::fs::write(&path, &buf).expect("failed to write test wav with id3");
+    path
+}
