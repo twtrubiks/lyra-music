@@ -57,6 +57,6 @@
     "src/**/*.{ts,js}": ["prettier --write", "eslint --fix"],
     "src/**/*.svelte": ["prettier --write", "eslint --fix", "stylelint --fix"],
     "src/**/*.css": ["prettier --write", "stylelint --fix"],
-    "src-tauri/src/**/*.rs": ["rustfmt", "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"]
+    "src-tauri/src/**/*.rs": ["rustfmt", "bash -c 'cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings'"]
   }
 }
