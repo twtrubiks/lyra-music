@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -119,6 +119,52 @@ impl Drop for FolderWatcher {
     }
 }
 
+/// DB action for a single path in a watcher event.
+#[derive(Debug, PartialEq, Eq)]
+enum PathAction {
+    Import,
+    Remove,
+    Ignore,
+}
+
+/// Decide what to do with one event path. Events are debounced for two
+/// seconds, so the filesystem may have changed since the event fired —
+/// always re-check the path's current state instead of trusting the event
+/// kind alone (e.g. atomic saves emit Remove for a path that still exists).
+fn classify_path_event(kind: EventKind, path: &Path) -> PathAction {
+    let Some(path_str) = path.to_str() else {
+        return PathAction::Ignore;
+    };
+    if !folder_scanner::is_supported_audio_file(path_str) {
+        return PathAction::Ignore;
+    }
+    match kind {
+        EventKind::Create(_) | EventKind::Modify(_) => {
+            if path.is_file() {
+                PathAction::Import
+            } else if path.exists() {
+                PathAction::Ignore
+            } else {
+                // File moved/trashed: Modify(Name) fires but
+                // file no longer exists — treat as removal.
+                PathAction::Remove
+            }
+        }
+        EventKind::Remove(_) => {
+            if path.exists() {
+                // Deleted and recreated (or atomically replaced) within the
+                // debounce window — the matching Create/Modify event handles
+                // the re-import; deleting here would drop play counts and
+                // playlist membership.
+                PathAction::Ignore
+            } else {
+                PathAction::Remove
+            }
+        }
+        _ => PathAction::Ignore,
+    }
+}
+
 fn process_event_batch(
     events: &[notify::Event],
     db: &Arc<Mutex<Connection>>,
@@ -136,39 +182,21 @@ fn process_event_batch(
     };
 
     for event in events {
-        match event.kind {
-            EventKind::Create(_) | EventKind::Modify(_) => {
-                for path in &event.paths {
-                    if let Some(path_str) = path.to_str() {
-                        if folder_scanner::is_supported_audio_file(path_str) {
-                            if path.is_file() {
-                                match process_new_file(&conn, app_handle, path_str) {
-                                    Ok(()) => changed = true,
-                                    Err(e) => eprintln!(
-                                        "[lyra] watcher: failed to import {path_str}: {e}"
-                                    ),
-                                }
-                            } else if !path.exists() {
-                                // File moved/trashed: Modify(Name) fires but
-                                // file no longer exists — treat as removal.
-                                remove_track(&conn, path_str, &mut removed_track_ids);
-                                changed = true;
-                            }
-                        }
-                    }
+        for path in &event.paths {
+            let Some(path_str) = path.to_str() else {
+                continue;
+            };
+            match classify_path_event(event.kind, path) {
+                PathAction::Import => match process_new_file(&conn, app_handle, path_str) {
+                    Ok(()) => changed = true,
+                    Err(e) => eprintln!("[lyra] watcher: failed to import {path_str}: {e}"),
+                },
+                PathAction::Remove => {
+                    remove_track(&conn, path_str, &mut removed_track_ids);
+                    changed = true;
                 }
+                PathAction::Ignore => {}
             }
-            EventKind::Remove(_) => {
-                for path in &event.paths {
-                    if let Some(path_str) = path.to_str() {
-                        if folder_scanner::is_supported_audio_file(path_str) {
-                            remove_track(&conn, path_str, &mut removed_track_ids);
-                            changed = true;
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
     }
 
@@ -181,6 +209,92 @@ fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i
             reader::remove_cover_art_file(&cover_path);
         }
         removed_track_ids.push(track_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind, RenameMode};
+
+    /// Regression: an atomic save (or delete-then-recreate within the
+    /// debounce window) emits Remove for a path that exists again by the
+    /// time the batch is processed. Deleting the DB row here would reset
+    /// play_count and playlist membership.
+    #[test]
+    fn remove_event_for_existing_file_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.mp3");
+        std::fs::write(&path, b"x").unwrap();
+        assert_eq!(
+            classify_path_event(EventKind::Remove(RemoveKind::File), &path),
+            PathAction::Ignore
+        );
+    }
+
+    #[test]
+    fn remove_event_for_missing_file_removes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.mp3");
+        assert_eq!(
+            classify_path_event(EventKind::Remove(RemoveKind::File), &path),
+            PathAction::Remove
+        );
+    }
+
+    #[test]
+    fn create_event_for_existing_file_imports() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.flac");
+        std::fs::write(&path, b"x").unwrap();
+        assert_eq!(
+            classify_path_event(EventKind::Create(CreateKind::File), &path),
+            PathAction::Import
+        );
+    }
+
+    #[test]
+    fn modify_rename_event_for_missing_file_removes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.ogg");
+        assert_eq!(
+            classify_path_event(EventKind::Modify(ModifyKind::Name(RenameMode::From)), &path),
+            PathAction::Remove
+        );
+    }
+
+    #[test]
+    fn modify_event_for_existing_file_imports() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.wav");
+        std::fs::write(&path, b"x").unwrap();
+        assert_eq!(
+            classify_path_event(EventKind::Modify(ModifyKind::Any), &path),
+            PathAction::Import
+        );
+    }
+
+    #[test]
+    fn non_audio_file_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        assert_eq!(
+            classify_path_event(EventKind::Remove(RemoveKind::File), &path),
+            PathAction::Ignore
+        );
+    }
+
+    #[test]
+    fn access_event_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.mp3");
+        std::fs::write(&path, b"x").unwrap();
+        assert_eq!(
+            classify_path_event(EventKind::Access(AccessKind::Read), &path),
+            PathAction::Ignore
+        );
     }
 }
 
