@@ -145,9 +145,7 @@ impl AudioPlayer {
         }
 
         let sink = Player::connect_new(self.stream.mixer());
-        let file = File::open(&path)?;
-        let reader = BufReader::new(file);
-        let decoder = Decoder::new(reader).map_err(|e| AppError::Audio(e.to_string()))?;
+        let decoder = Self::open_decoder(&path)?;
 
         sink.set_volume(self.volume * self.volume);
         sink.append(decoder);
@@ -225,9 +223,7 @@ impl AudioPlayer {
             .ok_or(AppError::Audio("no active sink".to_string()))?;
 
         // Open file once, read duration, then append the same decoder for gapless
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let decoder = Decoder::new(reader).map_err(|e| AppError::Audio(e.to_string()))?;
+        let decoder = Self::open_decoder(path)?;
         let next_dur = decoder
             .total_duration()
             .map_or(fallback_duration, |d| d.as_secs_f64());

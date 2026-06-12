@@ -489,3 +489,24 @@ fn test_failed_load_error_includes_path() {
         "error should name the file, got: {err}"
     );
 }
+
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_queue_next_missing_file_error_includes_path() {
+    let mut player = AudioPlayer::new().expect("need audio device");
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wav = common::create_test_wav(dir.path(), "current.wav");
+    player
+        .load_and_play(wav.to_str().unwrap(), 1.0)
+        .expect("load_and_play failed");
+
+    let err = player
+        .queue_next("/nonexistent/missing.mp3", 2, 1.0)
+        .expect_err("queueing a missing file must fail");
+    assert!(
+        err.to_string().contains("/nonexistent/missing.mp3"),
+        "error should name the missing file: {err}"
+    );
+    // A failed preload must not leave the player half-queued
+    assert!(!player.is_gapless_queued());
+}
