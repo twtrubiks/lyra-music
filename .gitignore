@@ -48,3 +48,6 @@ coverage
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas
+
+# Claude Code 個人工作流設定（不納入版控）
+.claude/
