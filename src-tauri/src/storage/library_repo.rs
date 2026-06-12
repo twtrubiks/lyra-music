@@ -336,13 +336,16 @@ pub fn delete_track_by_path(
     conn: &Connection,
     file_path: &str,
 ) -> Result<Option<String>, AppError> {
-    let cover_art_path: Option<String> = conn
-        .query_row(
-            "SELECT cover_art_path FROM tracks WHERE file_path = ?1",
-            params![file_path],
-            |row| row.get(0),
-        )
-        .unwrap_or(None);
+    let result = conn.query_row(
+        "SELECT cover_art_path FROM tracks WHERE file_path = ?1",
+        params![file_path],
+        |row| row.get(0),
+    );
+    let cover_art_path: Option<String> = match result {
+        Ok(path) => path,
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(e) => return Err(e.into()),
+    };
 
     conn.execute(
         "DELETE FROM tracks WHERE file_path = ?1",

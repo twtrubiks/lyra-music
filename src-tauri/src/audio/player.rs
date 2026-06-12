@@ -156,15 +156,18 @@ impl AudioPlayer {
 
         sink.set_volume(self.volume * self.volume);
         sink.append(decoder);
-        // Seek forward to target position after reload
-        let _ = sink.try_seek(target);
+        // Seek forward to target position after reload. The new sink and the
+        // cleared gapless state must be installed even when this seek fails —
+        // bailing out earlier would leave a stopped sink with gapless_queued
+        // still set, arming a phantom transition on the next poll.
+        let seek_result = sink.try_seek(target);
 
         self.sink = Some(sink);
         self.gapless_queued = false;
         self.next_file_path = None;
         self.next_track_id = None;
         self.next_duration_secs = 0.0;
-        Ok(())
+        seek_result.map_err(|e| AppError::Audio(format!("{path}: seek after reload failed: {e}")))
     }
 
     pub fn get_pos(&self) -> f64 {

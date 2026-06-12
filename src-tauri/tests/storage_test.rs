@@ -265,6 +265,21 @@ fn test_delete_nonexistent_track_no_error() {
 }
 
 #[test]
+fn test_delete_track_by_path_propagates_select_errors() {
+    let conn = common::create_test_db();
+    // Break only the cover lookup: the DELETE itself still works, so a
+    // swallowed SELECT error would silently return Ok(None).
+    conn.execute("ALTER TABLE tracks DROP COLUMN cover_art_path", [])
+        .unwrap();
+
+    let result = library_repo::delete_track_by_path(&conn, "/music/nope.mp3");
+    assert!(
+        result.is_err(),
+        "a failing cover lookup must surface, not be treated as 'no cover'"
+    );
+}
+
+#[test]
 fn test_delete_track_other_tracks_unaffected() {
     let conn = common::create_test_db();
     let id1 = library_repo::insert_track(&conn, &common::create_test_track(1)).unwrap();
