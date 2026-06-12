@@ -17,6 +17,9 @@ pub fn init_db(app_handle: &AppHandle) -> Result<Connection, AppError> {
 
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    // Single-connection today, but if a second connection is ever added
+    // (e.g. moving scans off the shared one), SQLITE_BUSY must wait, not fail.
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
 
     run_migrations(&conn)?;
 

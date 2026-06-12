@@ -1,3 +1,6 @@
+use std::sync::{Arc, Mutex};
+
+use rusqlite::Connection;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -22,33 +25,108 @@ pub struct BatchTrashFailure {
     pub error: String,
 }
 
-fn process_audio_file(
-    conn: &rusqlite::Connection,
-    app_data_dir: &std::path::Path,
-    file_path: &str,
-) -> Result<Result<Track, FailedFile>, AppError> {
+/// Files per import chunk. Bounds both how long the DB lock is held per
+/// chunk and how many extracted cover images sit in memory at once.
+const IMPORT_CHUNK_SIZE: usize = 32;
+
+struct PreparedFile {
+    track: Track,
+    cover: Option<(Vec<u8>, String)>,
+}
+
+/// Read metadata and cover art for one file. Pure file I/O — must be called
+/// without the DB lock held.
+fn read_audio_file(file_path: &str) -> Result<PreparedFile, FailedFile> {
     match reader::read_metadata(file_path) {
-        Ok(mut track) => {
-            let id = library_repo::insert_track(conn, &track)?;
-            track.id = id;
-
-            if let Some((data, mime)) = reader::extract_cover_art_bytes(file_path) {
-                if let Ok(cover_path) = reader::save_cover_art(app_data_dir, id, &data, &mime) {
-                    library_repo::update_cover_art_path(conn, id, &cover_path)?;
-                    track.cover_art_path = Some(cover_path);
-                }
-            }
-
-            track.cover_art = None;
-            Ok(Ok(track))
-        }
+        Ok(track) => Ok(PreparedFile {
+            cover: reader::extract_cover_art_bytes(file_path),
+            track,
+        }),
         Err(e) => {
             eprintln!("[lyra] Failed to read metadata for {file_path}: {e}");
-            Ok(Err(FailedFile {
+            Err(FailedFile {
                 file_path: file_path.to_string(),
                 error: e.to_string(),
-            }))
+            })
         }
+    }
+}
+
+/// Insert one prepared chunk under a single short-lived DB lock/transaction.
+fn insert_chunk(
+    db: &Arc<Mutex<Connection>>,
+    app_data_dir: &std::path::Path,
+    prepared: &[PreparedFile],
+) -> Result<Vec<Track>, AppError> {
+    let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
+    let tx = conn.unchecked_transaction()?;
+    let mut inserted = Vec::with_capacity(prepared.len());
+    for p in prepared {
+        let mut track = p.track.clone();
+        let id = library_repo::insert_track(&tx, &track)?;
+        track.id = id;
+
+        if let Some((data, mime)) = &p.cover {
+            if let Ok(cover_path) = reader::save_cover_art(app_data_dir, id, data, mime) {
+                library_repo::update_cover_art_path(&tx, id, &cover_path)?;
+                track.cover_art_path = Some(cover_path);
+            }
+        }
+
+        track.cover_art = None;
+        inserted.push(track);
+    }
+    tx.commit()?;
+    Ok(inserted)
+}
+
+/// Import audio files into the library in chunks: the expensive file I/O
+/// (metadata parsing, cover extraction) runs without the DB lock so playback
+/// commands and the watcher stay responsive during large scans; the lock is
+/// taken only briefly per chunk to insert. Each chunk commits its own
+/// transaction — `insert_track` upserts on `file_path`, so an aborted import
+/// can simply be re-run. A chunk whose transaction fails is reported through
+/// `failed_files` instead of aborting: earlier chunks are already committed,
+/// and returning an error would tell the frontend the whole import failed
+/// while the library has in fact grown.
+pub fn import_audio_files(
+    db: &Arc<Mutex<Connection>>,
+    app_data_dir: &std::path::Path,
+    file_paths: &[String],
+) -> ImportResult {
+    let mut tracks = Vec::new();
+    let mut failed_files = Vec::new();
+
+    for chunk in file_paths.chunks(IMPORT_CHUNK_SIZE) {
+        let mut prepared = Vec::with_capacity(chunk.len());
+        for path in chunk {
+            match read_audio_file(path) {
+                Ok(p) => prepared.push(p),
+                Err(failed) => failed_files.push(failed),
+            }
+        }
+        if prepared.is_empty() {
+            continue;
+        }
+
+        match insert_chunk(db, app_data_dir, &prepared) {
+            Ok(inserted) => tracks.extend(inserted),
+            Err(e) => {
+                eprintln!(
+                    "[lyra] Import chunk failed, {} files skipped: {e}",
+                    prepared.len()
+                );
+                failed_files.extend(prepared.into_iter().map(|p| FailedFile {
+                    file_path: p.track.file_path,
+                    error: format!("database error: {e}"),
+                }));
+            }
+        }
+    }
+
+    ImportResult {
+        tracks,
+        failed_files,
     }
 }
 
@@ -60,27 +138,18 @@ pub fn scan_folder(
     app_handle: AppHandle,
 ) -> Result<ImportResult, AppError> {
     let file_paths = folder_scanner::scan_folder(&folder_path)?;
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-
-    library_repo::add_scan_folder(&conn, &folder_path)?;
 
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| AppError::Generic(format!("failed to get app data dir: {e}")))?;
 
-    let tx = conn.unchecked_transaction()?;
-
-    let mut tracks = Vec::new();
-    let mut failed_files = Vec::new();
-    for path in file_paths {
-        match process_audio_file(&tx, &app_data_dir, &path)? {
-            Ok(track) => tracks.push(track),
-            Err(failed) => failed_files.push(failed),
-        }
+    {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::add_scan_folder(&conn, &folder_path)?;
     }
 
-    tx.commit()?;
+    let result = import_audio_files(&db.0, &app_data_dir, &file_paths);
 
     if let Ok(w) = watcher_state.0.lock() {
         if let Some(ref watcher) = *w {
@@ -88,10 +157,7 @@ pub fn scan_folder(
         }
     }
 
-    Ok(ImportResult {
-        tracks,
-        failed_files,
-    })
+    Ok(result)
 }
 
 #[tauri::command]
@@ -100,7 +166,6 @@ pub fn import_paths(
     db: State<DbState>,
     app_handle: AppHandle,
 ) -> Result<ImportResult, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
@@ -118,21 +183,7 @@ pub fn import_paths(
         }
     }
 
-    let tx = conn.unchecked_transaction()?;
-    let mut tracks = Vec::new();
-    let mut failed_files = Vec::new();
-    for file_path in audio_files {
-        match process_audio_file(&tx, &app_data_dir, &file_path)? {
-            Ok(track) => tracks.push(track),
-            Err(failed) => failed_files.push(failed),
-        }
-    }
-    tx.commit()?;
-
-    Ok(ImportResult {
-        tracks,
-        failed_files,
-    })
+    Ok(import_audio_files(&db.0, &app_data_dir, &audio_files))
 }
 
 #[tauri::command]
