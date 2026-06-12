@@ -346,7 +346,16 @@ pub fn update_track_metadata(
         Some(&new_album),
     )?;
 
-    library_repo::update_track_metadata(&conn, id, &new_title, &new_artist, &new_album)?;
+    // The file tags above are already written; a DB failure here leaves the
+    // two stores inconsistent, so the error must say what actually happened.
+    library_repo::update_track_metadata(&conn, id, &new_title, &new_artist, &new_album).map_err(
+        |e| {
+            AppError::Generic(format!(
+                "File tags were updated, but syncing the library database failed \
+                 (rescan the folder to recover): {e}"
+            ))
+        },
+    )?;
 
     let updated = library_repo::get_track_by_id(&conn, id)?
         .ok_or_else(|| AppError::Generic(format!("Track {id} not found after update")))?;
