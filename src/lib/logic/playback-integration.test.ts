@@ -31,10 +31,11 @@ describe('playTrack integration pattern', () => {
   it('playTrack should always be called with durationSecs from track metadata', async () => {
     const track = createMockTrack({ id: 1, duration_secs: 240, file_path: '/music/test.mp3' });
 
-    await playbackApi.playTrack(track.file_path, track.duration_secs);
+    await playbackApi.playTrack(track.file_path, track.id, track.duration_secs);
 
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: '/music/test.mp3',
+      trackId: 1,
       durationSecs: 240,
     });
 

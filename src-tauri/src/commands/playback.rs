@@ -8,10 +8,16 @@ use crate::models::player_state::PlayerState;
 pub fn play_track(
     path: String,
     duration_secs: f64,
+    track_id: i64,
     player: State<SharedPlayer>,
 ) -> Result<(), AppError> {
     let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
-    p.load_and_play(&path, duration_secs)
+    p.load_and_play(&path, duration_secs)?;
+    // Keep current_track_id in sync on every play path (gapless transitions
+    // set it in transition_to_queued_next; failure paths clear it via stop).
+    // The frontend relies on it to validate track_ended events.
+    p.set_current_track_id(Some(track_id));
+    Ok(())
 }
 
 #[tauri::command]

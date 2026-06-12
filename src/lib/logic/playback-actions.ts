@@ -27,7 +27,7 @@ async function playTrackAtIndex(index: number): Promise<void> {
   player.durationSecs = track.duration_secs;
   _currentTrackStarted = false;
   try {
-    await playbackApi.playTrack(track.file_path, track.duration_secs);
+    await playbackApi.playTrack(track.file_path, track.id, track.duration_secs);
     player.isPlaying = true;
     _currentTrackStarted = true;
     tryQueueNext();

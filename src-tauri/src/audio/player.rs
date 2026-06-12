@@ -111,6 +111,13 @@ impl AudioPlayer {
         self.current_file_path = None;
         self.current_track_id = None;
         self.track_loaded = false;
+        // Clear pending gapless state: with the sink gone, a stale
+        // gapless_queued would make check_gapless_transition() fire a
+        // phantom transition to the old next track.
+        self.gapless_queued = false;
+        self.next_file_path = None;
+        self.next_track_id = None;
+        self.next_duration_secs = 0.0;
     }
 
     pub fn set_volume(&mut self, vol: f32) {

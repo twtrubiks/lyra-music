@@ -288,6 +288,31 @@ fn test_stop_resets_state() {
     assert!(player.get_current_track_id().is_none());
 }
 
+/// stop() must clear pending gapless state: otherwise the polling thread
+/// sees the sink gone (len 0) while gapless_queued is still true and fires
+/// a phantom gapless transition to the stale next track.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_stop_clears_pending_gapless_queue() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav1 = common::create_test_wav(dir.path(), "stop_gapless1.wav");
+    let wav2 = common::create_test_wav(dir.path(), "stop_gapless2.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav1.to_str().unwrap(), 0.0).unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.0).unwrap();
+    assert!(player.is_gapless_queued());
+
+    player.stop();
+
+    assert!(!player.is_gapless_queued());
+    assert!(
+        !player.check_gapless_transition(),
+        "stopped player must not report a gapless transition"
+    );
+    assert!(player.get_current_track_id().is_none());
+}
+
 // ============================================================
 // Gapless transition & seek fix tests
 // ============================================================

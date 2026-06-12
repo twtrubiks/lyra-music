@@ -1,8 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { PlayerState } from '$lib/types';
 
-export async function playTrack(path: string, durationSecs: number = 0): Promise<void> {
-  return invoke('play_track', { path, durationSecs });
+export async function playTrack(
+  path: string,
+  trackId: number,
+  durationSecs: number = 0,
+): Promise<void> {
+  return invoke('play_track', { path, trackId, durationSecs });
 }
 
 export async function pause(): Promise<void> {

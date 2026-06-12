@@ -68,6 +68,7 @@ describe('handleTrackRemoved — auto-advance', () => {
     expect(mockInvoke).toHaveBeenCalledWith('stop');
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[2].file_path,
+      trackId: tracks[2].id,
       durationSecs: tracks[2].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[2].id);
@@ -87,6 +88,7 @@ describe('handleTrackRemoved — auto-advance', () => {
     // Song 2 (originally at index 1, now at index 0) should play
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[1].file_path,
+      trackId: tracks[1].id,
       durationSecs: tracks[1].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[1].id);
@@ -122,6 +124,7 @@ describe('handleTrackRemoved — auto-advance', () => {
     // Should wrap to Song 1 (index 0)
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[0].file_path,
+      trackId: tracks[0].id,
       durationSecs: tracks[0].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[0].id);
@@ -190,6 +193,7 @@ describe('handleTrackRemoved — auto-advance', () => {
     // Should play Song 3, NOT try to repeat Song 2 (which is deleted)
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[2].file_path,
+      trackId: tracks[2].id,
       durationSecs: tracks[2].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[2].id);
@@ -261,6 +265,7 @@ describe('handleTracksRemovedBatch', () => {
     expect(mockInvoke).toHaveBeenCalledWith('stop');
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[2].file_path,
+      trackId: tracks[2].id,
       durationSecs: tracks[2].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[2].id);
@@ -281,6 +286,7 @@ describe('handleTracksRemovedBatch', () => {
     expect(mockInvoke).toHaveBeenCalledWith('stop');
     expect(mockInvoke).toHaveBeenCalledWith('play_track', {
       path: tracks[3].file_path,
+      trackId: tracks[3].id,
       durationSecs: tracks[3].duration_secs,
     });
     expect(player.currentTrack?.id).toBe(tracks[3].id);
