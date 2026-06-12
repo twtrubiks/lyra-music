@@ -197,6 +197,17 @@ pub fn save_cover_art(
     Ok(file_path.to_string_lossy().to_string())
 }
 
+/// Remove a cover art file from disk. A missing file is fine (already cleaned
+/// up); any other failure (e.g. permissions) is logged so orphaned covers are
+/// not silently left behind.
+pub fn remove_cover_art_file(cover_art_path: &str) {
+    if let Err(e) = fs::remove_file(cover_art_path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("[lyra] failed to remove cover art {cover_art_path}: {e}");
+        }
+    }
+}
+
 /// Read a cover art file from disk and return as a base64 data URI.
 pub fn read_cover_art_from_file(cover_art_path: &str) -> Option<String> {
     let path = Path::new(cover_art_path);

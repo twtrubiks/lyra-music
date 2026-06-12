@@ -56,6 +56,41 @@ fn spawn_player_polling(
     });
 }
 
+/// Create the folder watcher and start watching all saved scan folders.
+/// Returns `None` when the watcher cannot be created — the app still works,
+/// only live library updates are disabled.
+fn init_watcher(
+    db_arc: &Arc<Mutex<Connection>>,
+    app_handle: &tauri::AppHandle,
+) -> Option<scanner::watcher::FolderWatcher> {
+    let watcher = match scanner::watcher::FolderWatcher::new(
+        Arc::<Mutex<Connection>>::clone(db_arc),
+        app_handle.clone(),
+    ) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("[lyra] folder watcher unavailable, live library updates disabled: {e}");
+            return None;
+        }
+    };
+
+    match db_arc.lock() {
+        Ok(conn) => match storage::library_repo::get_all_scan_folders(&conn) {
+            Ok(folders) => {
+                for folder in folders {
+                    if let Err(e) = watcher.watch(&folder) {
+                        eprintln!("[lyra] failed to watch folder {folder}: {e}");
+                    }
+                }
+            }
+            Err(e) => eprintln!("[lyra] failed to load scan folders for watching: {e}"),
+        },
+        Err(e) => eprintln!("[lyra] failed to lock db while starting watcher: {e}"),
+    }
+
+    Some(watcher)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -65,22 +100,7 @@ pub fn run() {
             let db_arc = Arc::new(Mutex::new(conn));
             app.manage(DbState(Arc::<Mutex<Connection>>::clone(&db_arc)));
 
-            let watcher = scanner::watcher::FolderWatcher::new(
-                Arc::<Mutex<Connection>>::clone(&db_arc),
-                app.handle().clone(),
-            )
-            .ok();
-
-            if let Some(ref w) = watcher {
-                if let Ok(conn) = db_arc.lock() {
-                    if let Ok(folders) = storage::library_repo::get_all_scan_folders(&conn) {
-                        for folder in folders {
-                            let _ = w.watch(&folder);
-                        }
-                    }
-                }
-            }
-
+            let watcher = init_watcher(&db_arc, app.handle());
             app.manage(WatcherState(Mutex::new(watcher)));
 
             let player = AudioPlayer::new()?;

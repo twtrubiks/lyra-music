@@ -162,7 +162,7 @@ pub fn search_tracks(query: String, db: State<DbState>) -> Result<Vec<Track>, Ap
 pub fn remove_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     if let Ok(Some(cover_path)) = library_repo::get_track_cover_path(&conn, id) {
-        let _ = std::fs::remove_file(&cover_path);
+        reader::remove_cover_art_file(&cover_path);
     }
     library_repo::delete_track(&conn, id)
 }
@@ -173,7 +173,7 @@ pub fn trash_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     let track = library_repo::get_track_by_id(&conn, id)?
         .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?;
     if let Ok(Some(cover_path)) = library_repo::get_track_cover_path(&conn, id) {
-        let _ = std::fs::remove_file(&cover_path);
+        reader::remove_cover_art_file(&cover_path);
     }
     trash::delete(&track.file_path)
         .map_err(|e| AppError::Generic(format!("Failed to trash file: {e}")))?;
@@ -192,7 +192,7 @@ pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResul
         match trash::delete(&track.file_path) {
             Ok(()) => {
                 if let Some(ref cover_path) = track.cover_art_path {
-                    let _ = std::fs::remove_file(cover_path);
+                    reader::remove_cover_art_file(cover_path);
                 }
                 succeeded_ids.push(track.id);
             }
@@ -250,7 +250,7 @@ pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResu
     // Batch clean up cover art files
     for track in &tracks {
         if let Some(ref cover_path) = track.cover_art_path {
-            let _ = std::fs::remove_file(cover_path);
+            reader::remove_cover_art_file(cover_path);
         }
     }
 

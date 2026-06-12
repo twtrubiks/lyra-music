@@ -142,8 +142,11 @@ fn process_event_batch(
                     if let Some(path_str) = path.to_str() {
                         if folder_scanner::is_supported_audio_file(path_str) {
                             if path.is_file() {
-                                if process_new_file(&conn, app_handle, path_str).is_ok() {
-                                    changed = true;
+                                match process_new_file(&conn, app_handle, path_str) {
+                                    Ok(()) => changed = true,
+                                    Err(e) => eprintln!(
+                                        "[lyra] watcher: failed to import {path_str}: {e}"
+                                    ),
                                 }
                             } else if !path.exists() {
                                 // File moved/trashed: Modify(Name) fires but
@@ -175,7 +178,7 @@ fn process_event_batch(
 fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i64>) {
     if let Ok(Some(track_id)) = library_repo::get_track_id_by_path(conn, path_str) {
         if let Ok(Some(cover_path)) = library_repo::delete_track_by_path(conn, path_str) {
-            let _ = std::fs::remove_file(&cover_path);
+            reader::remove_cover_art_file(&cover_path);
         }
         removed_track_ids.push(track_id);
     }
