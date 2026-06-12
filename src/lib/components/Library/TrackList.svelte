@@ -104,6 +104,11 @@
   let startRightW = 0;
   let tableWidth = 0;
   let justResized = false;
+  let justResizedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    return () => clearTimeout(justResizedTimer);
+  });
 
   function onResizeStart(e: MouseEvent, colIndex: number) {
     e.preventDefault();
@@ -144,7 +149,8 @@
     window.removeEventListener('mousemove', onResizeMove);
     window.removeEventListener('mouseup', onResizeEnd);
     saveColumnWidths(columnWidths);
-    setTimeout(() => {
+    clearTimeout(justResizedTimer);
+    justResizedTimer = setTimeout(() => {
       justResized = false;
     }, 0);
   }

@@ -10,7 +10,6 @@
   async function pickFolder() {
     try {
       const selected = await open({ directory: true });
-      console.log('[lyra] dialog open() returned:', selected, typeof selected);
 
       const raw = Array.isArray(selected) ? selected[0] : selected;
       const folderPath = raw ? String(raw) : null;

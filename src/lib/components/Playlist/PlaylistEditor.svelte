@@ -4,7 +4,6 @@
   import TrackPropertiesDialog from '../Library/TrackPropertiesDialog.svelte';
   import StatusBar from '../Library/StatusBar.svelte';
   import { getPlayerState } from '$lib/state/playerState.svelte';
-  import { getLibraryState } from '$lib/state/libraryState.svelte';
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
@@ -21,7 +20,6 @@
   } = $props();
 
   const player = getPlayerState();
-  const library = getLibraryState();
 
   let tracks = $state<Track[]>([]);
 
