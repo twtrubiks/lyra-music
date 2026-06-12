@@ -23,8 +23,12 @@ pub fn init_db(app_handle: &AppHandle) -> Result<Connection, AppError> {
     Ok(conn)
 }
 
+/// Run schema migrations. Each version step runs inside a transaction so a
+/// crash mid-step cannot commit DDL without bumping `schema_version` — that
+/// would make the next startup re-run the `ALTER TABLE` and fail with
+/// "duplicate column", bricking the app.
 #[allow(clippy::too_many_lines)]
-fn run_migrations(conn: &Connection) -> Result<(), AppError> {
+pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER NOT NULL
@@ -40,7 +44,8 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         .unwrap_or(0);
 
     if current_version < 1 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS tracks (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,29 +81,35 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
             INSERT INTO schema_version (version) VALUES (1);
         ",
         )?;
+        tx.commit()?;
     }
 
     if current_version < 2 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             ALTER TABLE tracks ADD COLUMN cover_art_path TEXT;
             INSERT INTO schema_version (version) VALUES (2);
         ",
         )?;
+        tx.commit()?;
     }
 
     if current_version < 3 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             ALTER TABLE tracks ADD COLUMN file_size_bytes INTEGER NOT NULL DEFAULT 0;
             INSERT INTO schema_version (version) VALUES (3);
         ",
         )?;
-        backfill_file_sizes(conn)?;
+        backfill_file_sizes(&tx)?;
+        tx.commit()?;
     }
 
     if current_version < 4 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
@@ -106,10 +117,12 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
             INSERT INTO schema_version (version) VALUES (4);
         ",
         )?;
+        tx.commit()?;
     }
 
     if current_version < 5 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;
             ALTER TABLE tracks ADD COLUMN last_played_at TEXT;
@@ -117,34 +130,41 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
             INSERT INTO schema_version (version) VALUES (5);
         ",
         )?;
+        tx.commit()?;
     }
 
     if current_version < 6 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album, artist);
             INSERT INTO schema_version (version) VALUES (6);
         ",
         )?;
+        tx.commit()?;
     }
 
     if current_version < 7 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             ALTER TABLE playlists ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
             INSERT INTO schema_version (version) VALUES (7);
         ",
         )?;
-        backfill_playlist_sort_order(conn)?;
+        backfill_playlist_sort_order(&tx)?;
+        tx.commit()?;
     }
 
     if current_version < 8 {
-        conn.execute_batch(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
             "
             ALTER TABLE tracks ADD COLUMN album_artist TEXT;
             INSERT INTO schema_version (version) VALUES (8);
         ",
         )?;
+        tx.commit()?;
     }
 
     Ok(())
@@ -159,24 +179,23 @@ fn backfill_playlist_sort_order(conn: &Connection) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Runs inside the caller's migration transaction — must not open its own.
 fn backfill_file_sizes(conn: &Connection) -> Result<(), AppError> {
     let mut stmt = conn.prepare("SELECT id, file_path FROM tracks WHERE file_size_bytes = 0")?;
     let rows: Vec<(i64, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<Result<Vec<_>, _>>()?;
 
-    let tx = conn.unchecked_transaction()?;
     for (id, file_path) in rows {
         if let Ok(meta) = fs::metadata(&file_path) {
             #[allow(clippy::cast_possible_wrap)]
             let size = meta.len() as i64;
-            tx.execute(
+            conn.execute(
                 "UPDATE tracks SET file_size_bytes = ?1 WHERE id = ?2",
                 rusqlite::params![size, id],
             )?;
         }
     }
-    tx.commit()?;
 
     Ok(())
 }
