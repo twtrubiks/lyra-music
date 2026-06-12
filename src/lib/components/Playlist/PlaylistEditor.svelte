@@ -26,11 +26,24 @@
   let showProperties = $state(false);
   let propertiesDetails = $state<TrackDetails | null>(null);
 
+  /**
+   * Monotonically increasing id of the latest load. Switching playlists
+   * reuses this component instance, so a slow response for the previous
+   * playlist must not overwrite the tracks of the one shown now.
+   */
+  let loadEpoch = 0;
+
   async function loadTracks() {
+    const epoch = ++loadEpoch;
     try {
-      tracks = await playlistApi.getPlaylistTracks(playlistId);
+      const loaded = await playlistApi.getPlaylistTracks(playlistId);
+      if (epoch === loadEpoch) {
+        tracks = loaded;
+      }
     } catch (err) {
-      notifyCritical('Load playlist tracks', err);
+      if (epoch === loadEpoch) {
+        notifyCritical('Load playlist tracks', err);
+      }
     }
   }
 
