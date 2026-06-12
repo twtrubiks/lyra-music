@@ -90,11 +90,31 @@ fn test_search_tracks_with_percent_char() {
     track.title = "100% Pure".to_string();
     library_repo::insert_track(&conn, &track).unwrap();
 
-    // Search for "%" — LIKE pattern becomes "%%%"
-    // This is a known SQL injection-like edge case for LIKE queries
+    let mut plain = common::create_test_track(2);
+    plain.title = "No Percent Here".to_string();
+    library_repo::insert_track(&conn, &plain).unwrap();
+
+    // "%" is escaped, so it only matches titles containing a literal "%"
     let results = library_repo::search_tracks(&conn, "%").unwrap();
-    // "%" in the pattern matches everything, so all tracks match
-    assert!(!results.is_empty());
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].title, "100% Pure");
+}
+
+#[test]
+fn test_search_tracks_percent_query_is_literal() {
+    let conn = common::create_test_db();
+    let mut t1 = common::create_test_track(1);
+    t1.title = "100% Cotton".to_string();
+    library_repo::insert_track(&conn, &t1).unwrap();
+
+    // Without escaping, "100%" would also match this ("100" + anything)
+    let mut t2 = common::create_test_track(2);
+    t2.title = "100 Proof".to_string();
+    library_repo::insert_track(&conn, &t2).unwrap();
+
+    let results = library_repo::search_tracks(&conn, "100%").unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].title, "100% Cotton");
 }
 
 #[test]
@@ -108,11 +128,10 @@ fn test_search_tracks_with_underscore_char() {
     track2.title = "songXname".to_string();
     library_repo::insert_track(&conn, &track2).unwrap();
 
-    // "_" is a wildcard in LIKE, matching any single character
+    // "_" is escaped, so it only matches titles containing a literal "_"
     let results = library_repo::search_tracks(&conn, "_").unwrap();
-    // Both tracks match because "_" in LIKE matches ANY single char
-    // This documents a known limitation of the naive LIKE search
-    assert!(results.len() >= 1);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].title, "song_name");
 }
 
 // ============================================================

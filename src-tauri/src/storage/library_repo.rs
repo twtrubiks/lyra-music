@@ -26,6 +26,10 @@ pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
 }
 
 pub fn insert_track(conn: &Connection, track: &Track) -> Result<i64, AppError> {
+    // cover_art_path is intentionally excluded from the UPDATE clause: cover
+    // extraction runs as a separate step after insert (update_cover_art_path),
+    // and a rescan passes cover_art_path = None — updating here would wipe the
+    // already-extracted path.
     conn.execute(
         "INSERT INTO tracks (file_path, title, artist, album, album_artist, duration_secs, cover_art_path, file_size_bytes)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -156,11 +160,19 @@ pub fn get_tracks_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<Track>, A
 }
 
 pub fn search_tracks(conn: &Connection, query: &str) -> Result<Vec<Track>, AppError> {
-    let pattern = format!("%{query}%");
+    // Escape LIKE wildcards so "%" and "_" in the query match literally
+    // (e.g. searching "100%" must not match "100 Proof").
+    let escaped = query
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
 
     let mut stmt = conn.prepare(&format!(
         "SELECT {TRACK_COLUMNS} FROM tracks
-         WHERE title LIKE ?1 OR artist LIKE ?1 OR album LIKE ?1
+         WHERE title LIKE ?1 ESCAPE '\\'
+            OR artist LIKE ?1 ESCAPE '\\'
+            OR album LIKE ?1 ESCAPE '\\'
          ORDER BY title"
     ))?;
 
