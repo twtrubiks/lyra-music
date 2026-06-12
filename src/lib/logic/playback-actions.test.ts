@@ -469,6 +469,19 @@ describe('autoAdvance — play count integrity', () => {
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
 
+  it('stays stopped when an explicitly picked track fails to load', async () => {
+    const tracks = createMockTracks(2);
+    failPlayTrack();
+
+    await startPlayingTrack(tracks[0], tracks);
+
+    // The track is selected and shown in the player bar, but playback
+    // honestly reflects the failure instead of pretending to play
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+    expect(player.isPlaying).toBe(false);
+    expect(incrementedIds()).toEqual([]);
+  });
+
   it('gapless transition does not credit a track that failed to start', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[0], tracks);

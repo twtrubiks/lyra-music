@@ -17,12 +17,8 @@ const library = getLibraryState();
  */
 let _currentTrackStarted = false;
 
-/**
- * Play a specific track by queue index.
- * When mockMode is true, isPlaying is set to true even if the backend call fails
- * (used when the user explicitly picks a track from Library/Playlist).
- */
-async function playTrackAtIndex(index: number, mockMode = false): Promise<void> {
+/** Play a specific track by queue index. */
+async function playTrackAtIndex(index: number): Promise<void> {
   const track = player.playQueue[index];
   if (!track) return;
   player.currentIndex = index;
@@ -37,9 +33,6 @@ async function playTrackAtIndex(index: number, mockMode = false): Promise<void> 
     tryQueueNext();
   } catch (err) {
     notifyCritical('Play track', err);
-    if (mockMode) {
-      player.isPlaying = true;
-    }
   }
   try {
     const cover = await getTrackCover(track.id);
@@ -182,7 +175,7 @@ export async function autoAdvance(): Promise<void> {
 export async function startPlayingTrack(track: Track, trackList: Track[]): Promise<void> {
   player.playQueue = trackList;
   player.currentIndex = trackList.findIndex((t) => t.id === track.id);
-  await playTrackAtIndex(player.currentIndex, true);
+  await playTrackAtIndex(player.currentIndex);
 }
 
 /**
