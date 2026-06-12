@@ -156,6 +156,7 @@ describe('notifyImportResult', () => {
           title: 'Song',
           artist: 'Artist',
           album: 'Album',
+          album_artist: null,
           duration_secs: 180,
           cover_art: null,
           cover_art_path: null,

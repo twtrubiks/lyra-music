@@ -138,6 +138,15 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         backfill_playlist_sort_order(conn)?;
     }
 
+    if current_version < 8 {
+        conn.execute_batch(
+            "
+            ALTER TABLE tracks ADD COLUMN album_artist TEXT;
+            INSERT INTO schema_version (version) VALUES (8);
+        ",
+        )?;
+    }
+
     Ok(())
 }
 

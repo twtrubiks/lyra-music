@@ -751,6 +751,125 @@ fn test_get_all_albums_same_artist_same_album_merges() {
 }
 
 #[test]
+fn test_get_all_albums_groups_by_album_artist() {
+    let conn = common::create_test_db();
+
+    // Same album split across three track artists, unified by album_artist
+    // (e.g. a compilation: each track tagged with its own performer)
+    for (i, artist) in (1u32..).zip(["Singer A", "Singer B", "Singer C"]) {
+        let mut t = common::create_test_track(i);
+        t.album = "Compilation Hits".to_string();
+        t.artist = artist.to_string();
+        t.album_artist = Some("Various Artists".to_string());
+        library_repo::insert_track(&conn, &t).unwrap();
+    }
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(
+        albums.len(),
+        1,
+        "tracks sharing album_artist should merge into one album card"
+    );
+    assert_eq!(albums[0].name, "Compilation Hits");
+    assert_eq!(albums[0].artist, "Various Artists");
+    assert_eq!(albums[0].track_count, 3);
+}
+
+#[test]
+fn test_get_all_albums_album_artist_mixed_with_fallback() {
+    let conn = common::create_test_db();
+
+    // t1 has an album_artist; t2 has none → falls back to its track artist
+    let mut t1 = common::create_test_track(1);
+    t1.album = "Greatest Hits".to_string();
+    t1.artist = "Artist A".to_string();
+    t1.album_artist = Some("Band X".to_string());
+
+    let mut t2 = common::create_test_track(2);
+    t2.album = "Greatest Hits".to_string();
+    t2.artist = "Artist B".to_string();
+    t2.album_artist = None;
+
+    library_repo::insert_track(&conn, &t1).unwrap();
+    library_repo::insert_track(&conn, &t2).unwrap();
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(albums.len(), 2);
+
+    let artists: Vec<&str> = albums.iter().map(|a| a.artist.as_str()).collect();
+    assert!(artists.contains(&"Band X"));
+    assert!(artists.contains(&"Artist B"));
+}
+
+#[test]
+fn test_get_tracks_by_album_matches_album_artist_group() {
+    let conn = common::create_test_db();
+
+    for (i, artist) in (1u32..).zip(["Singer A", "Singer B", "Singer C"]) {
+        let mut t = common::create_test_track(i);
+        t.album = "Compilation Hits".to_string();
+        t.artist = artist.to_string();
+        t.album_artist = Some("Various Artists".to_string());
+        library_repo::insert_track(&conn, &t).unwrap();
+    }
+
+    // The artist key from the album card (= album_artist) must return all tracks
+    let tracks =
+        library_repo::get_tracks_by_album(&conn, "Compilation Hits", "Various Artists").unwrap();
+    assert_eq!(tracks.len(), 3);
+
+    // Querying by an individual track artist must not match the group
+    let tracks = library_repo::get_tracks_by_album(&conn, "Compilation Hits", "Singer A").unwrap();
+    assert!(tracks.is_empty());
+}
+
+#[test]
+fn test_get_all_albums_album_artist_name_collision_merges() {
+    // Contract test for a known trade-off: under the same album name, a track
+    // whose artist literally equals another group's album_artist computes the
+    // same COALESCE key and merges into that card.
+    let conn = common::create_test_db();
+
+    let mut t1 = common::create_test_track(1);
+    t1.album = "Shared Album".to_string();
+    t1.artist = "Singer A".to_string();
+    t1.album_artist = Some("Various Artists".to_string());
+
+    let mut t2 = common::create_test_track(2);
+    t2.album = "Shared Album".to_string();
+    t2.artist = "Various Artists".to_string();
+    t2.album_artist = None;
+
+    library_repo::insert_track(&conn, &t1).unwrap();
+    library_repo::insert_track(&conn, &t2).unwrap();
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].artist, "Various Artists");
+    assert_eq!(albums[0].track_count, 2);
+
+    let tracks =
+        library_repo::get_tracks_by_album(&conn, "Shared Album", "Various Artists").unwrap();
+    assert_eq!(tracks.len(), 2);
+}
+
+#[test]
+fn test_insert_track_upsert_updates_album_artist() {
+    let conn = common::create_test_db();
+
+    let mut t = common::create_test_track(1);
+    t.album_artist = None;
+    library_repo::insert_track(&conn, &t).unwrap();
+
+    // Rescan after the file gained an album artist tag
+    t.album_artist = Some("New Band".to_string());
+    let id = library_repo::insert_track(&conn, &t).unwrap();
+
+    let stored = library_repo::get_track_by_id(&conn, id).unwrap().unwrap();
+    assert_eq!(stored.album_artist.as_deref(), Some("New Band"));
+}
+
+#[test]
 fn test_get_tracks_by_album_filters_by_artist() {
     let conn = common::create_test_db();
 

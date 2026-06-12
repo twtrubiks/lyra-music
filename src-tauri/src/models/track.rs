@@ -19,6 +19,7 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub album: String,
+    pub album_artist: Option<String>,
     pub duration_secs: f64,
     pub cover_art: Option<String>,
     pub cover_art_path: Option<String>,

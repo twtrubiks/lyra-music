@@ -7,6 +7,7 @@ export function createMockTrack(overrides: Partial<Track> = {}): Track {
     title: 'Test Song',
     artist: 'Test Artist',
     album: 'Test Album',
+    album_artist: null,
     duration_secs: 240,
     cover_art: null,
     cover_art_path: null,

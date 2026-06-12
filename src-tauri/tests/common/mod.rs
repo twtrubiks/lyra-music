@@ -16,6 +16,7 @@ pub fn create_test_db() -> Connection {
             title       TEXT NOT NULL,
             artist      TEXT NOT NULL DEFAULT 'Unknown Artist',
             album       TEXT NOT NULL DEFAULT 'Unknown Album',
+            album_artist TEXT,
             duration_secs REAL NOT NULL DEFAULT 0.0,
             cover_art   TEXT,
             cover_art_path TEXT,
@@ -61,6 +62,7 @@ pub fn create_test_track(idx: u32) -> Track {
         title: format!("Test Track {}", idx),
         artist: format!("Artist {}", idx),
         album: format!("Album {}", idx),
+        album_artist: None,
         duration_secs: 180.0 + idx as f64,
         cover_art: None,
         cover_art_path: None,
@@ -125,6 +127,19 @@ pub fn create_test_wav_with_id3(
     artist: &str,
     tdrc: &str,
 ) -> std::path::PathBuf {
+    create_test_wav_with_id3_frames(
+        dir,
+        name,
+        &[(*b"TIT2", title), (*b"TPE1", artist), (*b"TDRC", tdrc)],
+    )
+}
+
+/// Create a test WAV with an embedded ID3v2.4 chunk containing the given text frames.
+pub fn create_test_wav_with_id3_frames(
+    dir: &std::path::Path,
+    name: &str,
+    frames_spec: &[([u8; 4], &str)],
+) -> std::path::PathBuf {
     fn syncsafe(n: u32) -> [u8; 4] {
         [
             ((n >> 21) & 0x7F) as u8,
@@ -148,9 +163,9 @@ pub fn create_test_wav_with_id3(
     let path = create_test_wav(dir, name);
 
     let mut frames = Vec::new();
-    frames.extend(text_frame(b"TIT2", title));
-    frames.extend(text_frame(b"TPE1", artist));
-    frames.extend(text_frame(b"TDRC", tdrc));
+    for (id, text) in frames_spec {
+        frames.extend(text_frame(id, text));
+    }
 
     let mut tag = Vec::with_capacity(10 + frames.len());
     tag.extend_from_slice(b"ID3\x04\x00\x00"); // ID3v2.4 header, no flags

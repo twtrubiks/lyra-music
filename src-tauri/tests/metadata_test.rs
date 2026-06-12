@@ -47,6 +47,35 @@ fn test_read_metadata_invalid_timestamp_preserves_tags() {
 }
 
 #[test]
+fn test_read_metadata_album_artist_from_tpe2() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = common::create_test_wav_with_id3_frames(
+        dir.path(),
+        "album_artist.wav",
+        &[
+            (*b"TIT2", "Song"),
+            (*b"TPE1", "Track Artist"),
+            (*b"TPE2", "Album Artist"),
+            (*b"TALB", "The Album"),
+        ],
+    );
+
+    let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
+    assert_eq!(track.artist, "Track Artist");
+    assert_eq!(track.album, "The Album");
+    assert_eq!(track.album_artist.as_deref(), Some("Album Artist"));
+}
+
+#[test]
+fn test_read_metadata_album_artist_absent_is_none() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = common::create_test_wav_with_id3(dir.path(), "no_aa.wav", "Song", "Artist", "2020");
+
+    let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
+    assert!(track.album_artist.is_none());
+}
+
+#[test]
 fn test_read_metadata_nonexistent_file() {
     let result = reader::read_metadata("/nonexistent/file.mp3");
     assert!(result.is_err());
@@ -122,6 +151,7 @@ fn test_read_track_details_nonexistent_file() {
         title: "Fake".to_string(),
         artist: "Fake".to_string(),
         album: "Fake".to_string(),
+        album_artist: None,
         duration_secs: 0.0,
         cover_art: None,
         cover_art_path: None,

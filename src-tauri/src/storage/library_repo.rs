@@ -5,7 +5,7 @@ use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::Track;
 
 /// 標準 Track 查詢欄位
-const TRACK_COLUMNS: &str = "id, file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes, play_count, last_played_at";
+const TRACK_COLUMNS: &str = "id, file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes, play_count, last_played_at, album_artist";
 
 /// 從 SQL Row 映射為 Track（欄位順序需對應 `TRACK_COLUMNS`）
 pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
@@ -15,6 +15,7 @@ pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
         title: row.get(2)?,
         artist: row.get(3)?,
         album: row.get(4)?,
+        album_artist: row.get(10)?,
         duration_secs: row.get(5)?,
         cover_art: None,
         cover_art_path: row.get(6)?,
@@ -26,12 +27,13 @@ pub fn row_to_track(row: &rusqlite::Row) -> rusqlite::Result<Track> {
 
 pub fn insert_track(conn: &Connection, track: &Track) -> Result<i64, AppError> {
     conn.execute(
-        "INSERT INTO tracks (file_path, title, artist, album, duration_secs, cover_art_path, file_size_bytes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO tracks (file_path, title, artist, album, album_artist, duration_secs, cover_art_path, file_size_bytes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(file_path) DO UPDATE SET
              title = excluded.title,
              artist = excluded.artist,
              album = excluded.album,
+             album_artist = excluded.album_artist,
              duration_secs = excluded.duration_secs,
              file_size_bytes = excluded.file_size_bytes",
         params![
@@ -39,6 +41,7 @@ pub fn insert_track(conn: &Connection, track: &Track) -> Result<i64, AppError> {
             track.title,
             track.artist,
             track.album,
+            track.album_artist,
             track.duration_secs,
             track.cover_art_path,
             track.file_size_bytes,
@@ -199,11 +202,15 @@ pub fn get_all_artists(conn: &Connection) -> Result<Vec<ArtistSummary>, AppError
 }
 
 pub fn get_all_albums(conn: &Connection) -> Result<Vec<AlbumSummary>, AppError> {
+    // Group by album artist when present (keeps compilations / multi-performer
+    // albums as one card), falling back to the track artist otherwise.
+    // Known trade-off: a track whose artist literally equals another group's
+    // album_artist (under the same album name) merges into that card.
     let mut stmt = conn.prepare(
-        "SELECT album, artist, COUNT(*), cover_art_path
+        "SELECT album, COALESCE(album_artist, artist) AS display_artist, COUNT(*), cover_art_path
          FROM tracks
-         GROUP BY album, artist
-         ORDER BY album, artist",
+         GROUP BY album, display_artist
+         ORDER BY album, display_artist",
     )?;
 
     let albums = stmt
@@ -237,8 +244,11 @@ pub fn get_tracks_by_album(
     album: &str,
     artist: &str,
 ) -> Result<Vec<Track>, AppError> {
+    // `artist` is the album-card key from get_all_albums: album_artist when
+    // present, the track artist otherwise.
     let mut stmt = conn.prepare(&format!(
-        "SELECT {TRACK_COLUMNS} FROM tracks WHERE album = ?1 AND artist = ?2 ORDER BY title"
+        "SELECT {TRACK_COLUMNS} FROM tracks
+         WHERE album = ?1 AND COALESCE(album_artist, artist) = ?2 ORDER BY title"
     ))?;
 
     let tracks = stmt

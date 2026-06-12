@@ -7,7 +7,7 @@ use lofty::config::{ParseOptions, ParsingMode};
 use lofty::file::{AudioFile, TaggedFile, TaggedFileExt};
 use lofty::picture::PictureType;
 use lofty::probe::Probe;
-use lofty::tag::Accessor;
+use lofty::tag::{Accessor, ItemKey};
 
 use crate::error::AppError;
 use crate::models::track::{Track, TrackDetails};
@@ -41,7 +41,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
                 .primary_tag()
                 .or_else(|| tagged_file.first_tag());
 
-            let (title, artist, album) = match tag {
+            let (title, artist, album, album_artist) = match tag {
                 Some(t) => {
                     let title = t.title().map_or(fallback_title, |s| s.to_string());
                     let artist = t
@@ -50,12 +50,18 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
                     let album = t
                         .album()
                         .map_or_else(|| "Unknown Album".to_string(), |s| s.to_string());
-                    (title, artist, album)
+                    let album_artist = t
+                        .get_string(ItemKey::AlbumArtist)
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(ToString::to_string);
+                    (title, artist, album, album_artist)
                 }
                 None => (
                     fallback_title,
                     "Unknown Artist".to_string(),
                     "Unknown Album".to_string(),
+                    None,
                 ),
             };
 
@@ -65,6 +71,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
                 title,
                 artist,
                 album,
+                album_artist,
                 duration_secs,
                 cover_art: None,
                 cover_art_path: None,
@@ -94,6 +101,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
                 title: fallback_title,
                 artist: "Unknown Artist".to_string(),
                 album: "Unknown Album".to_string(),
+                album_artist: None,
                 duration_secs,
                 cover_art: None,
                 cover_art_path: None,
