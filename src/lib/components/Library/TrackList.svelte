@@ -107,7 +107,13 @@
   let justResizedTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
-    return () => clearTimeout(justResizedTimer);
+    return () => {
+      clearTimeout(justResizedTimer);
+      // A drag aborted by unmount never reaches onResizeEnd, which would
+      // leave these window listeners holding state of a destroyed component
+      window.removeEventListener('mousemove', onResizeMove);
+      window.removeEventListener('mouseup', onResizeEnd);
+    };
   });
 
   function onResizeStart(e: MouseEvent, colIndex: number) {
