@@ -9,8 +9,7 @@
   import {
     handleNext,
     handlePrev,
-    autoAdvance,
-    handleGaplessTransition,
+    applyPlayerStateEvent,
     toggleShuffle,
     cycleRepeat,
     tryQueueNext,
@@ -83,18 +82,7 @@
     (async () => {
       try {
         unlisten = await listen<PlayerState>('player-state-changed', (event) => {
-          const state = event.payload;
-          player.isPlaying = state.is_playing;
-          player.positionSecs = state.position_secs;
-          if (state.duration_secs > 0) {
-            player.durationSecs = state.duration_secs;
-          }
-          player.volume = state.volume;
-          if (state.gapless_transitioned && state.current_track_id != null) {
-            handleGaplessTransition(state.current_track_id);
-          } else if (state.track_ended) {
-            autoAdvance();
-          }
+          applyPlayerStateEvent(event.payload);
         });
       } catch (err) {
         warnNonCritical('Player event listener', err);

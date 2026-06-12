@@ -5,7 +5,7 @@ import { getNextIndex, getPrevIndex, generateShuffledIndices } from '$lib/logic/
 import * as playbackApi from '$lib/api/playback';
 import { getTrackCover, incrementPlayCount } from '$lib/api/library';
 import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
-import type { Track, RepeatMode } from '$lib/types';
+import type { Track, RepeatMode, PlayerState } from '$lib/types';
 
 const player = getPlayerState();
 const library = getLibraryState();
@@ -17,10 +17,43 @@ const library = getLibraryState();
  */
 let _currentTrackStarted = false;
 
+/**
+ * Mutex between event-driven advances (autoAdvance / gapless transition).
+ * Backend poll events arriving while any track change is in flight are
+ * ignored — otherwise they would treat the in-flight track as "just
+ * finished", miscounting plays and reloading it.
+ */
+let _advanceInProgress = false;
+
+/**
+ * User-initiated track changes currently in flight. Unlike event-driven
+ * advances, user actions are never dropped — they preempt whatever is in
+ * progress; this count only shields them from concurrent poll events.
+ */
+let _manualChangesInFlight = 0;
+
+/**
+ * Monotonically increasing id of the latest track change. An older change
+ * resuming after its await compares epochs and skips its post-load effects
+ * when a newer change has taken over.
+ */
+let _changeEpoch = 0;
+
+/**
+ * A repeat-one gapless transition dropped by the in-flight guards. Its track
+ * id equals the current one, so the id-mismatch reconciliation in
+ * applyPlayerStateEvent can never detect it; it is remembered here and
+ * replayed on a later poll once the guards clear. Cleared without replaying
+ * when the backend moves to a different track — dropping it can at most miss
+ * one play count, never miscredit one.
+ */
+let _pendingSameTrackTransition: number | null = null;
+
 /** Play a specific track by queue index. */
 async function playTrackAtIndex(index: number): Promise<void> {
   const track = player.playQueue[index];
   if (!track) return;
+  const epoch = ++_changeEpoch;
   player.currentIndex = index;
   player.currentTrack = track;
   player.positionSecs = 0;
@@ -28,11 +61,14 @@ async function playTrackAtIndex(index: number): Promise<void> {
   _currentTrackStarted = false;
   try {
     await playbackApi.playTrack(track.file_path, track.id, track.duration_secs);
+    if (epoch !== _changeEpoch) return; // superseded by a newer track change
     player.isPlaying = true;
     _currentTrackStarted = true;
     tryQueueNext();
   } catch (err) {
-    notifyCritical('Play track', err);
+    if (epoch === _changeEpoch) {
+      notifyCritical('Play track', err);
+    }
   }
   try {
     const cover = await getTrackCover(track.id);
@@ -71,7 +107,12 @@ export async function handlePrev(): Promise<void> {
     player.shuffledIndices,
   );
   if (prevIdx === null) return;
-  await playTrackAtIndex(prevIdx);
+  _manualChangesInFlight++;
+  try {
+    await playTrackAtIndex(prevIdx);
+  } finally {
+    _manualChangesInFlight--;
+  }
 }
 
 /** Go to next track */
@@ -84,12 +125,17 @@ export async function handleNext(): Promise<void> {
     player.shuffledIndices,
   );
   if (nextIdx === null) return;
-  await playTrackAtIndex(nextIdx);
+  _manualChangesInFlight++;
+  try {
+    await playTrackAtIndex(nextIdx);
+  } finally {
+    _manualChangesInFlight--;
+  }
 }
 
 /** Handle gapless transition: backend already switched track, just update frontend state */
 export async function handleGaplessTransition(newTrackId: number): Promise<void> {
-  if (_advanceInProgress) return;
+  if (_advanceInProgress || _manualChangesInFlight > 0) return;
   _advanceInProgress = true;
   try {
     const finishedTrack = player.currentTrack;
@@ -107,7 +153,21 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
       );
     }
 
-    const newIdx = player.playQueue.findIndex((t) => t.id === newTrackId);
+    // The gapless next was queued from getNextIndex, so prefer that index:
+    // when the same track appears more than once in the queue, findIndex
+    // would land on the first occurrence and the follow-up queueing would
+    // pick the wrong next track.
+    const expectedIdx = getNextIndex(
+      player.currentIndex,
+      player.playQueue.length,
+      player.repeatMode,
+      player.shuffleEnabled,
+      player.shuffledIndices,
+    );
+    const newIdx =
+      expectedIdx !== null && player.playQueue[expectedIdx]?.id === newTrackId
+        ? expectedIdx
+        : player.playQueue.findIndex((t) => t.id === newTrackId);
     if (newIdx >= 0) {
       player.currentIndex = newIdx;
       player.currentTrack = player.playQueue[newIdx];
@@ -131,11 +191,9 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
   }
 }
 
-let _advanceInProgress = false;
-
 /** Auto-advance when track ends */
 export async function autoAdvance(): Promise<void> {
-  if (_advanceInProgress) return;
+  if (_advanceInProgress || _manualChangesInFlight > 0) return;
   _advanceInProgress = true;
   try {
     const finishedTrack = player.currentTrack;
@@ -173,9 +231,77 @@ export async function autoAdvance(): Promise<void> {
 
 /** Start playing a track from a given track list. */
 export async function startPlayingTrack(track: Track, trackList: Track[]): Promise<void> {
-  player.playQueue = trackList;
-  player.currentIndex = trackList.findIndex((t) => t.id === track.id);
-  await playTrackAtIndex(player.currentIndex);
+  _manualChangesInFlight++;
+  try {
+    player.playQueue = trackList;
+    player.currentIndex = trackList.findIndex((t) => t.id === track.id);
+    await playTrackAtIndex(player.currentIndex);
+  } finally {
+    _manualChangesInFlight--;
+  }
+}
+
+/**
+ * Apply a backend `player-state-changed` poll event to frontend state and
+ * dispatch end-of-track handling.
+ */
+export function applyPlayerStateEvent(state: PlayerState): void {
+  player.isPlaying = state.is_playing;
+  player.positionSecs = state.position_secs;
+  if (state.duration_secs > 0) {
+    player.durationSecs = state.duration_secs;
+  }
+  player.volume = state.volume;
+  if (state.gapless_transitioned && state.current_track_id != null) {
+    if (
+      (_advanceInProgress || _manualChangesInFlight > 0) &&
+      player.repeatMode === 'repeat-one' &&
+      state.current_track_id === player.currentTrack?.id
+    ) {
+      // The guards below will drop this one-shot event, and the same-id
+      // reconciliation can't recover it — remember it for a later poll.
+      _pendingSameTrackTransition = state.current_track_id;
+    }
+    void handleGaplessTransition(state.current_track_id);
+  } else if (state.track_ended && state.current_track_id === player.currentTrack?.id) {
+    // Identity check: only advance when the event describes the track the
+    // UI considers current. A stale ended event snapshotted before a manual
+    // track change must not advance again.
+    void autoAdvance();
+  } else if (
+    state.is_playing &&
+    state.current_track_id != null &&
+    player.currentTrack !== null &&
+    state.current_track_id !== player.currentTrack.id &&
+    player.playQueue.some((t) => t.id === state.current_track_id)
+  ) {
+    // gapless_transitioned is emitted for a single poll cycle only. If it
+    // arrived while an advance or manual change was in flight, the guard in
+    // handleGaplessTransition dropped it and the backend never re-emits —
+    // leaving the backend on the next track while the UI shows the previous
+    // one. Reconcile from the steady-state current_track_id instead; the
+    // same in-flight guards keep ordinary manual changes safe, and polls
+    // repeat every 250ms so a dropped cycle self-heals on the next one.
+    // The queue-membership check keeps this from re-firing forever (and
+    // re-crediting play counts) when the backend plays a track the user has
+    // since removed from the queue — reconciliation is impossible there.
+    void handleGaplessTransition(state.current_track_id);
+  } else if (_pendingSameTrackTransition != null) {
+    if (
+      state.is_playing &&
+      state.current_track_id === _pendingSameTrackTransition &&
+      state.current_track_id === player.currentTrack?.id &&
+      !_advanceInProgress &&
+      _manualChangesInFlight === 0
+    ) {
+      const pendingId = _pendingSameTrackTransition;
+      _pendingSameTrackTransition = null;
+      void handleGaplessTransition(pendingId);
+    } else if (state.current_track_id !== _pendingSameTrackTransition) {
+      // The backend moved elsewhere (manual change, stop): stale, discard.
+      _pendingSameTrackTransition = null;
+    }
+  }
 }
 
 /**

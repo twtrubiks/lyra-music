@@ -16,7 +16,10 @@ import {
   autoAdvance,
   startPlayingTrack,
   handleGaplessTransition,
+  handleNext,
+  applyPlayerStateEvent,
 } from '$lib/logic/playback-actions';
+import type { PlayerState } from '$lib/types';
 import { getPlayerState } from '$lib/state/playerState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
@@ -565,5 +568,382 @@ describe('handleTracksRemovedBatch — concurrent queue', () => {
     // Only track 1 and 5 should remain
     expect(player.playQueue.map((t) => t.id)).toEqual([1, 5]);
     expect(playlistState.playlists[0].track_ids).toEqual([1, 5]);
+  });
+});
+
+describe('manual track change vs backend poll events — race protection', () => {
+  const player = getPlayerState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  /** Track ids passed to increment_play_count, in call order. */
+  function incrementedIds(): number[] {
+    return mockInvoke.mock.calls
+      .filter(([cmd]) => cmd === 'increment_play_count')
+      .map(([, args]) => (args as { trackId: number }).trackId);
+  }
+
+  function pollEvent(overrides: Partial<PlayerState>): PlayerState {
+    return {
+      is_playing: false,
+      current_track_id: null,
+      position_secs: 0,
+      duration_secs: 0,
+      volume: 0.5,
+      track_ended: false,
+      gapless_queued: false,
+      gapless_transitioned: false,
+      ...overrides,
+    };
+  }
+
+  it('ignores a gapless event that arrives while a manual next is in flight', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    // Make play_track hang so the manual next stays in flight
+    let resolvePlay!: (value?: unknown) => void;
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            resolvePlay = res;
+          })
+        : Promise.resolve(undefined),
+    );
+
+    const nextInFlight = handleNext(); // manual switch to track 1
+
+    // Backend poll reports the natural gapless switch to track 1 mid-flight.
+    // Without the in-flight guard the handler would run against the
+    // half-updated state and re-queue the next track on top of the pending
+    // load, reloading the track the user just picked.
+    await handleGaplessTransition(tracks[1].id);
+
+    expect(incrementedIds()).toEqual([]);
+    expect(mockInvoke).not.toHaveBeenCalledWith('queue_next_track', expect.anything());
+
+    resolvePlay();
+    await nextInFlight;
+
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
+    const playCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'play_track');
+    expect(playCalls).toHaveLength(1);
+  });
+
+  it('a second manual next preempts the first instead of being dropped', async () => {
+    const tracks = createMockTracks(4);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    const playResolvers: Array<(value?: unknown) => void> = [];
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            playResolvers.push(res);
+          })
+        : Promise.resolve(undefined),
+    );
+
+    const firstNext = handleNext(); // -> track 1, in flight
+    const secondNext = handleNext(); // user double-clicks -> track 2
+
+    // The newer load finishes first; the stale one resolves last
+    playResolvers[1]?.(undefined);
+    playResolvers[0]?.(undefined);
+    await Promise.all([firstNext, secondNext]);
+
+    // Latest user intent wins, and the stale change must not run its
+    // post-load effects (it would re-queue on top of the newer track)
+    expect(player.currentTrack?.id).toBe(tracks[2].id);
+    expect(player.currentIndex).toBe(2);
+    const playCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'play_track');
+    expect(playCalls).toHaveLength(2);
+    const queueCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'queue_next_track');
+    expect(queueCalls).toHaveLength(1);
+  });
+
+  it('a user click during an in-flight auto-advance wins instead of being dropped', async () => {
+    const tracks = createMockTracks(4);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    const playResolvers: Array<(value?: unknown) => void> = [];
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            playResolvers.push(res);
+          })
+        : Promise.resolve(undefined),
+    );
+
+    // Track 0 finishes; auto-advance to track 1 hangs on a slow load
+    const advance = autoAdvance();
+    // User explicitly picks track 3 while the advance is still in flight
+    const click = startPlayingTrack(tracks[3], tracks);
+
+    playResolvers[0]?.(undefined);
+    playResolvers[1]?.(undefined);
+    await Promise.all([advance, click]);
+
+    // The user's pick is never silently dropped, and the superseded
+    // auto-advance must not clobber it when its load resolves
+    expect(player.currentTrack?.id).toBe(tracks[3].id);
+    expect(player.currentIndex).toBe(3);
+    // Track 0 genuinely finished playing — still counted exactly once
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+  });
+
+  it('ignores track_ended describing a different track than the current one', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[1], tracks);
+    mockInvoke.mockClear();
+
+    // Stale event snapshotted before a manual track change: it describes
+    // track 0, but the UI is already on track 1.
+    applyPlayerStateEvent(
+      pollEvent({ track_ended: true, current_track_id: tracks[0].id, position_secs: 200 }),
+    );
+
+    expect(mockInvoke).not.toHaveBeenCalledWith('play_track', expect.anything());
+    expect(incrementedIds()).toEqual([]);
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
+  });
+
+  it('advances on track_ended when the event matches the current track', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    applyPlayerStateEvent(pollEvent({ track_ended: true, current_track_id: tracks[0].id }));
+
+    await vi.waitFor(() => {
+      expect(player.currentTrack?.id).toBe(tracks[1].id);
+    });
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+  });
+
+  it('does not advance on track_ended when nothing is playing', () => {
+    applyPlayerStateEvent(pollEvent({ track_ended: true, current_track_id: 7 }));
+
+    expect(mockInvoke).not.toHaveBeenCalledWith('play_track', expect.anything());
+    expect(player.currentTrack).toBeNull();
+  });
+
+  it('reconciles a dropped gapless transition from a later steady-state poll', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    // The one-shot gapless_transitioned event was dropped by an in-flight
+    // guard; a later poll just shows the backend already playing track 1.
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
+
+    await vi.waitFor(() => {
+      expect(player.currentTrack?.id).toBe(tracks[1].id);
+    });
+    // The finished track is still credited exactly once
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+    expect(player.currentIndex).toBe(1);
+  });
+
+  it('does not reconcile while a manual change is in flight', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    let resolvePlay!: (value?: unknown) => void;
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            resolvePlay = res;
+          })
+        : Promise.resolve(undefined),
+    );
+
+    const nextInFlight = handleNext(); // manual switch to track 1, in flight
+
+    // Poll snapshotted before the manual play_track landed: backend still
+    // reports track 0 playing while the UI optimistically shows track 1.
+    // Reconciling here would "transition back" to the old track.
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    await Promise.resolve();
+
+    expect(incrementedIds()).toEqual([]);
+
+    resolvePlay();
+    await nextInFlight;
+
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
+    expect(player.currentIndex).toBe(1);
+  });
+
+  it('does not reconcile when backend and UI agree on the current track', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    await Promise.resolve();
+
+    expect(incrementedIds()).toEqual([]);
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
+  it('does not credit repeatedly when the backend plays a track missing from the queue', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    // The backend gapless-transitioned into a track the user has since
+    // removed from the frontend queue. Polls keep reporting it every 250ms;
+    // reconciling would credit the visible track once per poll, forever.
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: 999 }));
+    await Promise.resolve();
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: 999 }));
+    await Promise.resolve();
+
+    expect(incrementedIds()).toEqual([]);
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
+  it('does not reconcile when the backend is not playing', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    // Stale not-playing snapshot mentioning another track must not advance
+    applyPlayerStateEvent(pollEvent({ is_playing: false, current_track_id: tracks[1].id }));
+    await Promise.resolve();
+
+    expect(incrementedIds()).toEqual([]);
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
+  it('applies playback state fields from the event', () => {
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: true, position_secs: 12.5, duration_secs: 300, volume: 0.7 }),
+    );
+
+    expect(player.isPlaying).toBe(true);
+    expect(player.positionSecs).toBe(12.5);
+    expect(player.durationSecs).toBe(300);
+    expect(player.volume).toBe(0.7);
+  });
+
+  it('keeps the known duration when the event reports 0', async () => {
+    const tracks = createMockTracks(1);
+    await startPlayingTrack(tracks[0], tracks);
+    player.durationSecs = 240;
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, duration_secs: 0 }));
+
+    expect(player.durationSecs).toBe(240);
+  });
+
+  it('gapless transition lands on the queued duplicate, not the first matching id', async () => {
+    const tracks = createMockTracks(3); // ids 1, 2, 3
+    // The same track appears twice in the queue: ids [1, 2, 1, 3]
+    const queue = [tracks[0], tracks[1], { ...tracks[0] }, tracks[2]];
+    await startPlayingTrack(tracks[1], queue); // playing index 1
+    mockInvoke.mockClear();
+
+    // The backend transitioned into the queued next: the duplicate at index 2.
+    // Resolving the id with findIndex alone would land on index 0 and queue
+    // the wrong follow-up track.
+    await handleGaplessTransition(tracks[0].id);
+
+    expect(player.currentIndex).toBe(2);
+    expect(mockInvoke).toHaveBeenCalledWith('queue_next_track', {
+      path: tracks[2].file_path,
+      nextId: tracks[2].id,
+      durationSecs: tracks[2].duration_secs,
+    });
+  });
+
+  it('replays a repeat-one transition dropped during a manual change, exactly once', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    player.repeatMode = 'repeat-one';
+    mockInvoke.mockClear();
+
+    let resolvePlay!: (value?: unknown) => void;
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            resolvePlay = res;
+          })
+        : Promise.resolve(undefined),
+    );
+
+    const nextInFlight = handleNext(); // repeat-one: manual restart of track 0
+
+    // The loop-completed transition carries the same track id, so the
+    // id-mismatch reconciliation can never see it once it is dropped here.
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: true, gapless_transitioned: true, current_track_id: tracks[0].id }),
+    );
+    await Promise.resolve();
+    expect(incrementedIds()).toEqual([]);
+
+    resolvePlay();
+    await nextInFlight;
+
+    // A later steady-state poll replays the remembered transition once
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    await vi.waitFor(() => {
+      expect(incrementedIds()).toEqual([tracks[0].id]);
+    });
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    await Promise.resolve();
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+  });
+
+  it('discards a pending repeat-one transition when the user moves to another track', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    player.repeatMode = 'repeat-one';
+    mockInvoke.mockClear();
+
+    let resolvePlay!: (value?: unknown) => void;
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            resolvePlay = res;
+          })
+        : Promise.resolve(undefined),
+    );
+    const nextInFlight = handleNext();
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: true, gapless_transitioned: true, current_track_id: tracks[0].id }),
+    );
+    resolvePlay();
+    await nextInFlight;
+
+    // The user switches away before any steady poll replays the transition
+    mockInvoke.mockImplementation(() => Promise.resolve(undefined));
+    player.repeatMode = 'off';
+    await startPlayingTrack(tracks[1], tracks);
+    mockInvoke.mockClear();
+
+    // Polls now describe track 1 — the stale pending transition must be
+    // dropped silently instead of crediting whatever is shown now
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
+    await Promise.resolve();
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
+    await Promise.resolve();
+
+    expect(incrementedIds()).toEqual([]);
   });
 });
