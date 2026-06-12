@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { notifyFailedImports, notifyImportResult } from './error-handler';
+import { notifyCritical, notifyFailedImports, notifyImportResult } from './error-handler';
 import { getErrorState } from '$lib/state/errorState.svelte';
 import type { FailedFile, ImportResult } from '$lib/types';
 
@@ -81,6 +81,36 @@ describe('notifyFailedImports', () => {
 
     vi.advanceTimersByTime(1);
     expect(getErrorState().errors).toHaveLength(0);
+  });
+});
+
+describe('notifyCritical', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    getErrorState().errors = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('includes the underlying error message so the user sees the reason', () => {
+    notifyCritical('Play track', 'Audio error: /usb/music/song.mp3: No such file or directory');
+
+    const state = getErrorState();
+    expect(state.errors).toHaveLength(1);
+    expect(state.errors[0].level).toBe('error');
+    expect(state.errors[0].message).toContain('Play track failed');
+    expect(state.errors[0].message).toContain('song.mp3');
+    expect(state.errors[0].message).toContain('No such file or directory');
+  });
+
+  it('extracts the message from Error instances', () => {
+    notifyCritical('Scan folder', new Error('permission denied'));
+
+    expect(getErrorState().errors[0].message).toBe('Scan folder failed: permission denied');
   });
 });
 

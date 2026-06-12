@@ -91,3 +91,10 @@ export function formatFileSize(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024);
   return `${gb.toFixed(2)} GB`;
 }
+
+/**
+ * Format a track count with correct pluralization, e.g. "1 track", "5 tracks".
+ */
+export function formatTrackCount(count: number): string {
+  return `${count} ${count === 1 ? 'track' : 'tracks'}`;
+}

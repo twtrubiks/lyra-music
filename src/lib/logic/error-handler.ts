@@ -18,7 +18,7 @@ export function warnNonCritical(context: string, err: unknown): void {
 export function notifyCritical(context: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[lyra] ${context}: ${message}`);
-  pushError(`${context} failed`);
+  pushError(`${context} failed: ${message}`);
 }
 
 export function notifyImportResult(result: ImportResult): void {

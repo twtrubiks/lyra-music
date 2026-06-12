@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
-  import { formatTotalDuration, formatFileSize } from '$lib/logic/format';
+  import { formatTotalDuration, formatFileSize, formatTrackCount } from '$lib/logic/format';
 
   let { tracks }: { tracks: Track[] } = $props();
 
@@ -11,7 +11,7 @@
 
 {#if count > 0}
   <div class="status-bar">
-    <span>{count} tracks</span>
+    <span>{formatTrackCount(count)}</span>
     <span class="sep">|</span>
     <span>{formatTotalDuration(totalDuration)}</span>
     <span class="sep">|</span>

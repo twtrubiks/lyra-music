@@ -1,8 +1,6 @@
 /**
- * Tests for handleTrackRemoved auto-advance behavior.
- *
- * When the currently playing track is removed (right-click Remove or Trash),
- * the player should automatically advance to the next track instead of stopping.
+ * Tests for playback actions: handleTrackRemoved auto-advance behavior
+ * and play-count integrity on auto-advance / gapless transitions.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMockTrack, createMockTracks, createMockPlaylist } from '$lib/test-helpers';
@@ -12,9 +10,16 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-import { handleTrackRemoved, handleTracksRemovedBatch } from '$lib/logic/playback-actions';
+import {
+  handleTrackRemoved,
+  handleTracksRemovedBatch,
+  autoAdvance,
+  startPlayingTrack,
+  handleGaplessTransition,
+} from '$lib/logic/playback-actions';
 import { getPlayerState } from '$lib/state/playerState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
+import { getLibraryState } from '$lib/state/libraryState.svelte';
 
 function resetPlayerState() {
   const player = getPlayerState();
@@ -365,6 +370,124 @@ describe('handleTracksRemovedBatch', () => {
     expect(player.currentIndex).toBe(1); // adjusted from 3 to 1
     expect(player.isPlaying).toBe(true);
     expect(mockInvoke).not.toHaveBeenCalledWith('stop');
+  });
+});
+
+describe('autoAdvance — play count integrity', () => {
+  const player = getPlayerState();
+  const library = getLibraryState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetPlaylistState();
+    library.allTracks = [];
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetPlaylistState();
+    library.allTracks = [];
+  });
+
+  /** Track ids passed to increment_play_count, in call order. */
+  function incrementedIds(): number[] {
+    return mockInvoke.mock.calls
+      .filter(([cmd]) => cmd === 'increment_play_count')
+      .map(([, args]) => (args as { trackId: number }).trackId);
+  }
+
+  /** Make every play_track call fail (e.g. files on an unmounted USB drive). */
+  function failPlayTrack() {
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? Promise.reject(new Error('Audio error: missing file'))
+        : Promise.resolve(undefined),
+    );
+  }
+
+  it('increments play count when a started track finishes', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+
+    await autoAdvance();
+
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
+  });
+
+  it('does not increment play count for tracks that never started playing', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+
+    failPlayTrack();
+
+    // track 0 finishes → legit +1, then advancing to track 1 fails
+    await autoAdvance();
+    // stale track_ended events keep arriving (the original pollution loop)
+    await autoAdvance();
+    await autoAdvance();
+
+    // Only the track that actually played is counted
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+    // And the optimistic local counts are untouched for never-played tracks
+    expect(player.playQueue[1].play_count).toBe(tracks[1].play_count);
+    expect(player.playQueue[2].play_count).toBe(tracks[2].play_count);
+  });
+
+  it('keeps counting after playback recovers from a failed track', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+
+    failPlayTrack();
+    // track 0 finishes → +1, track 1 fails to start
+    await autoAdvance();
+
+    mockInvoke.mockResolvedValue(undefined);
+    // file is reachable again (e.g. USB remounted): track 1 never played
+    // so it is not counted, and track 2 starts normally
+    await autoAdvance();
+
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+    expect(player.currentTrack?.id).toBe(tracks[2].id);
+
+    // track 2 genuinely played — its completion is counted again
+    await autoAdvance();
+    expect(incrementedIds()).toEqual([tracks[0].id, tracks[2].id]);
+  });
+
+  it('counts every completion in repeat-one mode', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    player.repeatMode = 'repeat-one';
+
+    await autoAdvance();
+    await autoAdvance();
+
+    expect(incrementedIds()).toEqual([tracks[0].id, tracks[0].id]);
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
+  it('gapless transition does not credit a track that failed to start', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+
+    failPlayTrack();
+    // track 0 finishes → +1, attempt to start track 1 fails
+    await autoAdvance();
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
+
+    mockInvoke.mockResolvedValue(undefined);
+    // backend gapless-switched to track 2 (queued before the failure)
+    await handleGaplessTransition(tracks[2].id);
+
+    expect(incrementedIds()).toEqual([tracks[0].id]);
+    expect(player.currentTrack?.id).toBe(tracks[2].id);
+
+    // track 2 is genuinely playing now — its completion must count
+    await autoAdvance();
+    expect(incrementedIds()).toEqual([tracks[0].id, tracks[2].id]);
   });
 });
 

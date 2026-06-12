@@ -437,3 +437,55 @@ fn test_track_ended_false_when_gapless_queued() {
         "has_track_ended should be false while gapless is queued"
     );
 }
+
+/// Regression: after a track ends naturally, a failed load (missing file)
+/// must not leave stale state that re-arms has_track_ended() — that stale
+/// signal made the frontend auto-advance loop pollute play counts.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_failed_load_does_not_rearm_track_ended() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav = common::create_test_wav(dir.path(), "ended_then_fail.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav.to_str().unwrap(), 0.1).unwrap();
+
+    // Wait for the 0.1s track to finish naturally
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !player.has_track_ended() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "test track never ended"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    player.acknowledge_track_ended();
+
+    // Auto-advance hits a missing file
+    let result = player.load_and_play("/nonexistent/missing.mp3", 30.0);
+    assert!(result.is_err());
+
+    // The failed load must not report track_ended again
+    assert!(
+        !player.has_track_ended(),
+        "failed load re-armed track_ended"
+    );
+    // And must leave coherent (cleared) state instead of the old track's
+    assert!(!player.is_playing());
+    assert_eq!(player.get_pos(), 0.0);
+    assert_eq!(player.get_duration(), 0.0);
+}
+
+/// A failed load should report which file could not be opened.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_failed_load_error_includes_path() {
+    let mut player = AudioPlayer::new().expect("need audio device");
+    let err = player
+        .load_and_play("/nonexistent/missing.mp3", 30.0)
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("/nonexistent/missing.mp3"),
+        "error should name the file, got: {err}"
+    );
+}

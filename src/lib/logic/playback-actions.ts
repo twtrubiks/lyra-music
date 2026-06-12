@@ -11,6 +11,13 @@ const player = getPlayerState();
 const library = getLibraryState();
 
 /**
+ * True once the current track has actually started playing on the backend.
+ * Guards play-count increments: a track whose file failed to load must not
+ * be credited when a (possibly stale) track_ended event arrives.
+ */
+let _currentTrackStarted = false;
+
+/**
  * Play a specific track by queue index.
  * When mockMode is true, isPlaying is set to true even if the backend call fails
  * (used when the user explicitly picks a track from Library/Playlist).
@@ -22,9 +29,11 @@ async function playTrackAtIndex(index: number, mockMode = false): Promise<void> 
   player.currentTrack = track;
   player.positionSecs = 0;
   player.durationSecs = track.duration_secs;
+  _currentTrackStarted = false;
   try {
     await playbackApi.playTrack(track.file_path, track.duration_secs);
     player.isPlaying = true;
+    _currentTrackStarted = true;
     tryQueueNext();
   } catch (err) {
     notifyCritical('Play track', err);
@@ -91,7 +100,7 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
   _advanceInProgress = true;
   try {
     const finishedTrack = player.currentTrack;
-    if (finishedTrack) {
+    if (finishedTrack && _currentTrackStarted) {
       incrementPlayCount(finishedTrack.id).catch((err) =>
         warnNonCritical('Increment play count', err),
       );
@@ -109,6 +118,9 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
     if (newIdx >= 0) {
       player.currentIndex = newIdx;
       player.currentTrack = player.playQueue[newIdx];
+      // The backend only emits gapless_transitioned after a successful
+      // queue_next, so the new track is genuinely playing
+      _currentTrackStarted = true;
       player.positionSecs = 0;
       player.durationSecs = player.playQueue[newIdx].duration_secs;
       try {
@@ -134,7 +146,7 @@ export async function autoAdvance(): Promise<void> {
   _advanceInProgress = true;
   try {
     const finishedTrack = player.currentTrack;
-    if (finishedTrack) {
+    if (finishedTrack && _currentTrackStarted) {
       incrementPlayCount(finishedTrack.id).catch((err) =>
         warnNonCritical('Increment play count', err),
       );

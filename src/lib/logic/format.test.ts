@@ -8,6 +8,7 @@ import {
   formatTotalDuration,
   formatFileSize,
   formatSampleRate,
+  formatTrackCount,
 } from './format';
 import { createMockTrack, createMockTracks } from '$lib/test-helpers';
 
@@ -248,5 +249,17 @@ describe('formatFileSize', () => {
 
   it('formats gigabytes', () => {
     expect(formatFileSize(1.25 * 1024 * 1024 * 1024)).toBe('1.25 GB');
+  });
+});
+
+describe('formatTrackCount', () => {
+  it('uses singular for exactly one track', () => {
+    expect(formatTrackCount(1)).toBe('1 track');
+  });
+
+  it('uses plural for zero or multiple tracks', () => {
+    expect(formatTrackCount(0)).toBe('0 tracks');
+    expect(formatTrackCount(2)).toBe('2 tracks');
+    expect(formatTrackCount(42)).toBe('42 tracks');
   });
 });

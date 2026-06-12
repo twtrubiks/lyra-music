@@ -48,7 +48,6 @@ impl AudioPlayer {
     }
 
     pub fn load_and_play(&mut self, path: &str, fallback_duration: f64) -> Result<(), AppError> {
-        self.track_loaded = true;
         self.cumulative_duration = 0.0;
         self.gapless_queued = false;
         self.next_file_path = None;
@@ -61,9 +60,17 @@ impl AudioPlayer {
         }
 
         // Open file once, read duration, then append the same decoder
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let decoder = Decoder::new(reader).map_err(|e| AppError::Audio(e.to_string()))?;
+        let decoder = match Self::open_decoder(path) {
+            Ok(d) => d,
+            Err(e) => {
+                // A failed load must leave no stale playback state: keeping the
+                // previous sink (empty, position at end-of-track) would re-arm
+                // has_track_ended() on every poll and cascade auto-advance.
+                self.stop();
+                self.duration_secs = 0.0;
+                return Err(e);
+            }
+        };
         self.duration_secs = decoder
             .total_duration()
             .map_or(fallback_duration, |d: std::time::Duration| d.as_secs_f64());
@@ -74,8 +81,14 @@ impl AudioPlayer {
 
         self.sink = Some(sink);
         self.current_file_path = Some(path.to_string());
+        self.track_loaded = true;
 
         Ok(())
+    }
+
+    fn open_decoder(path: &str) -> Result<Decoder<BufReader<File>>, AppError> {
+        let file = File::open(path).map_err(|e| AppError::Audio(format!("{path}: {e}")))?;
+        Decoder::new(BufReader::new(file)).map_err(|e| AppError::Audio(format!("{path}: {e}")))
     }
 
     pub fn play(&self) {
