@@ -30,7 +30,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
         .to_string();
 
     #[allow(clippy::cast_possible_wrap)]
-    let file_size_bytes = fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
+    let file_size_bytes = fs::metadata(path).map_or(0, |m| m.len() as i64);
 
     match read_tagged_file(path) {
         Ok(tagged_file) => {
@@ -132,9 +132,7 @@ pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails
         .to_uppercase();
 
     #[allow(clippy::cast_possible_wrap)]
-    let file_size_bytes = fs::metadata(path)
-        .map(|m| m.len() as i64)
-        .unwrap_or(track.file_size_bytes);
+    let file_size_bytes = fs::metadata(path).map_or(track.file_size_bytes, |m| m.len() as i64);
 
     Ok(TrackDetails {
         id: track.id,
