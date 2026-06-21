@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  verify-version:
     runs-on: ubuntu-24.04
 
     steps:
@@ -37,7 +37,30 @@ jobs:
 
           echo "All versions match: $TAG_VERSION"
 
+  release:
+    needs: verify-version
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-24.04
+            args: ""
+            rust-targets: ""
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -60,6 +83,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -79,10 +104,21 @@ jobs:
           releaseBody: |
             ## 安裝方式
 
+            ### Linux
+
             | 格式 | 安裝指令 |
             |------|----------|
             | AppImage | `chmod +x *.AppImage && ./*.AppImage` |
             | deb | `sudo dpkg -i *.deb` |
             | rpm | `sudo rpm -i *.rpm` |
+
+            ### macOS
+
+            下載 `.dmg`（universal，支援 Apple Silicon 與 Intel）。未經 Apple 公證，首次開啟請在 Finder 對 App 按右鍵 →「打開」，或執行 `xattr -cr "/Applications/Lyra Music.app"`。
+
+            ### Windows
+
+            下載 `.msi` 或 `.exe` 安裝。未簽章，首次執行 SmartScreen 會警告 → 點「更多資訊」→「仍要執行」。
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}
