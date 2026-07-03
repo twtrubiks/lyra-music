@@ -20,7 +20,11 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost blob: data:; media-src 'self' asset: https://asset.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost blob: data:; media-src 'self' asset: https://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/covers/**"]
+      }
     }
   },
   "bundle": {

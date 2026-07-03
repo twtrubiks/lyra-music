@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { convertFileSrc } from '@tauri-apps/api/core';
   import type { AlbumSummary } from '$lib/types';
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as libraryApi from '$lib/api/library';
@@ -9,7 +10,7 @@
   let albums = $state<AlbumSummary[]>([]);
   let searchQuery = $state('');
   let isLoading = $state(true);
-  let coverCache = $state<Record<string, string | null>>({});
+  let failedCovers = $state<Record<string, boolean>>({});
 
   let filteredAlbums = $derived(
     searchQuery.trim()
@@ -33,20 +34,15 @@
     return `${a.name}::${a.artist}`;
   }
 
-  async function loadCover(album: AlbumSummary) {
-    const key = albumKey(album);
-    if (key in coverCache) return;
-    try {
-      const tracks = await libraryApi.getTracksByAlbum(album.name, album.artist);
-      if (tracks.length > 0) {
-        const cover = await libraryApi.getTrackCover(tracks[0].id);
-        coverCache = { ...coverCache, [key]: cover };
-      } else {
-        coverCache = { ...coverCache, [key]: null };
-      }
-    } catch {
-      coverCache = { ...coverCache, [key]: null };
-    }
+  // Covers are served straight off disk via the asset protocol — no IPC,
+  // no base64; the WebView lazy-loads off-screen images itself.
+  function coverSrc(album: AlbumSummary): string | null {
+    if (!album.cover_art_path || failedCovers[albumKey(album)]) return null;
+    return convertFileSrc(album.cover_art_path);
+  }
+
+  function markCoverFailed(album: AlbumSummary) {
+    failedCovers = { ...failedCovers, [albumKey(album)]: true };
   }
 
   $effect(() => {
@@ -59,15 +55,6 @@
         isLoading = false;
       }
     })();
-  });
-
-  // Load covers for visible albums
-  $effect(() => {
-    for (const album of filteredAlbums) {
-      if (!(albumKey(album) in coverCache)) {
-        loadCover(album);
-      }
-    }
   });
 </script>
 
@@ -92,10 +79,16 @@
     {:else}
       <div class="album-grid">
         {#each filteredAlbums as album (album.name + '::' + album.artist)}
+          {@const cover = coverSrc(album)}
           <button class="album-card" onclick={() => goToAlbum(album)}>
             <div class="album-cover">
-              {#if coverCache[albumKey(album)]}
-                <img src={coverCache[albumKey(album)]} alt={album.name} />
+              {#if cover}
+                <img
+                  src={cover}
+                  alt={album.name}
+                  loading="lazy"
+                  onerror={() => markCoverFailed(album)}
+                />
               {:else}
                 <div class="cover-placeholder">
                   <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">

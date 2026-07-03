@@ -748,6 +748,46 @@ fn test_get_all_albums_groups_by_album_and_artist() {
 }
 
 #[test]
+fn test_get_all_albums_cover_falls_back_to_any_track_with_cover() {
+    let conn = common::create_test_db();
+
+    // Album X: the track without a cover comes first.
+    let mut x1 = common::create_test_track(1);
+    x1.album = "Album X".to_string();
+    x1.artist = "Artist X".to_string();
+    let mut x2 = common::create_test_track(2);
+    x2.album = "Album X".to_string();
+    x2.artist = "Artist X".to_string();
+    x2.cover_art_path = Some("/covers/x.jpg".to_string());
+
+    // Album Y: the track with a cover comes first.
+    let mut y1 = common::create_test_track(3);
+    y1.album = "Album Y".to_string();
+    y1.artist = "Artist Y".to_string();
+    y1.cover_art_path = Some("/covers/y.jpg".to_string());
+    let mut y2 = common::create_test_track(4);
+    y2.album = "Album Y".to_string();
+    y2.artist = "Artist Y".to_string();
+
+    for t in [&x1, &x2, &y1, &y2] {
+        library_repo::insert_track(&conn, t).unwrap();
+    }
+
+    let albums = library_repo::get_all_albums(&conn).unwrap();
+    assert_eq!(albums.len(), 2);
+    // Whichever row SQLite picks per group, an album with any covered track
+    // must surface that cover — a bare grouped column returns an arbitrary
+    // row's value and can come up NULL.
+    for album in &albums {
+        assert!(
+            album.cover_art_path.is_some(),
+            "album {} should surface a cover from one of its tracks",
+            album.name
+        );
+    }
+}
+
+#[test]
 fn test_get_all_albums_same_artist_same_album_merges() {
     let conn = common::create_test_db();
 

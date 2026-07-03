@@ -219,7 +219,8 @@ pub fn get_all_albums(conn: &Connection) -> Result<Vec<AlbumSummary>, AppError> 
     // Known trade-off: a track whose artist literally equals another group's
     // album_artist (under the same album name) merges into that card.
     let mut stmt = conn.prepare(
-        "SELECT album, COALESCE(album_artist, artist) AS display_artist, COUNT(*), cover_art_path
+        "SELECT album, COALESCE(album_artist, artist) AS display_artist, COUNT(*),
+                MAX(cover_art_path)
          FROM tracks
          GROUP BY album, display_artist
          ORDER BY album, display_artist",
