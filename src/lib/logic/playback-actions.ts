@@ -3,7 +3,13 @@ import { getPlaylistState } from '$lib/state/playlistState.svelte';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getNextIndex, getPrevIndex, generateShuffledIndices } from '$lib/logic/playmode';
 import * as playbackApi from '$lib/api/playback';
+import * as playlistApi from '$lib/api/playlist';
 import { getTrackCover, incrementPlayCount } from '$lib/api/library';
+import {
+  resolveResumeTarget,
+  maybeSavePlaybackPosition,
+  resetSaveThrottle,
+} from '$lib/logic/resume-playback';
 import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
 import type { Track, RepeatMode, PlayerState } from '$lib/types';
 
@@ -49,8 +55,17 @@ let _changeEpoch = 0;
  */
 let _pendingSameTrackTransition: number | null = null;
 
+/**
+ * Set when the queue finished naturally and the saved playlist position was
+ * rewound to the queue start. The backend keeps reporting the finished track
+ * on subsequent idle polls; without this flag those polls would immediately
+ * overwrite the rewound position with the tail of the last track.
+ */
+let _queueFinished = false;
+
 /** Play a specific track by queue index. */
 async function playTrackAtIndex(index: number): Promise<void> {
+  _queueFinished = false;
   const track = player.playQueue[index];
   if (!track) return;
   const epoch = ++_changeEpoch;
@@ -221,6 +236,12 @@ export async function autoAdvance(): Promise<void> {
     );
     if (nextIdx === null) {
       player.isPlaying = false;
+      // Playlist finished: rewind the saved position so the next resume
+      // starts over instead of landing at the tail of the last track.
+      if (player.queueSourcePlaylistId != null && player.playQueue.length > 0) {
+        maybeSavePlaybackPosition(player.queueSourcePlaylistId, player.playQueue[0].id, 0, false);
+        _queueFinished = true;
+      }
       return;
     }
     await playTrackAtIndex(nextIdx);
@@ -229,15 +250,56 @@ export async function autoAdvance(): Promise<void> {
   }
 }
 
-/** Start playing a track from a given track list. */
-export async function startPlayingTrack(track: Track, trackList: Track[]): Promise<void> {
+/**
+ * Start playing a track from a given track list. `sourcePlaylistId` binds the
+ * queue to a playlist so its playback position gets persisted for resume;
+ * playing from the library/browse views leaves it null.
+ */
+export async function startPlayingTrack(
+  track: Track,
+  trackList: Track[],
+  sourcePlaylistId: number | null = null,
+): Promise<void> {
   _manualChangesInFlight++;
   try {
     player.playQueue = trackList;
     player.currentIndex = trackList.findIndex((t) => t.id === track.id);
+    player.queueSourcePlaylistId = sourcePlaylistId;
+    // The throttle keys on track id only — reset it so the first save after
+    // rebinding lands even when the new playlist shares the same track.
+    resetSaveThrottle();
     await playTrackAtIndex(player.currentIndex);
   } finally {
     _manualChangesInFlight--;
+  }
+}
+
+/**
+ * Start playing a playlist from its last saved position (斷點續播).
+ * Falls back to the first track when nothing was saved or the saved track
+ * has been removed from the playlist since.
+ */
+export async function resumePlaylistPlayback(playlistId: number, tracks: Track[]): Promise<void> {
+  if (tracks.length === 0) return;
+  let target: { index: number; secs: number } | null = null;
+  try {
+    const [lastTrackId, lastSecs] = await playlistApi.getLastPlaybackPosition(playlistId);
+    target = resolveResumeTarget(tracks, lastTrackId, lastSecs);
+  } catch (err) {
+    warnNonCritical('Get last playback position', err);
+  }
+  await startPlayingTrack(tracks[target?.index ?? 0], tracks, playlistId);
+  // A manual track change may have preempted the resume while it was loading;
+  // seeking then would land the new track at the old track's position.
+  if (target && target.secs > 0 && player.currentTrack?.id === tracks[target.index].id) {
+    player.positionSecs = target.secs;
+    try {
+      await playbackApi.seek(target.secs);
+    } catch (err) {
+      warnNonCritical('Seek to saved position', err);
+    }
+    // seek can drop the gapless queue on its reload fallback — re-queue
+    tryQueueNext();
   }
 }
 
@@ -252,6 +314,21 @@ export function applyPlayerStateEvent(state: PlayerState): void {
     player.durationSecs = state.duration_secs;
   }
   player.volume = state.volume;
+  if (
+    player.queueSourcePlaylistId != null &&
+    player.currentTrack != null &&
+    state.current_track_id === player.currentTrack.id &&
+    !state.track_ended &&
+    !state.gapless_transitioned &&
+    !_queueFinished
+  ) {
+    maybeSavePlaybackPosition(
+      player.queueSourcePlaylistId,
+      player.currentTrack.id,
+      state.position_secs,
+      state.is_playing,
+    );
+  }
   if (state.gapless_transitioned && state.current_track_id != null) {
     if (
       (_advanceInProgress || _manualChangesInFlight > 0) &&

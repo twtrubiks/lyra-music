@@ -7,7 +7,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
-  import { startPlayingTrack } from '$lib/logic/playback-actions';
+  import { startPlayingTrack, resumePlaylistPlayback } from '$lib/logic/playback-actions';
   import { optimisticTrash, optimisticPlaylistRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
 
@@ -48,7 +48,11 @@
   }
 
   async function handlePlay(track: Track) {
-    await startPlayingTrack(track, tracks);
+    await startPlayingTrack(track, tracks, playlistId);
+  }
+
+  async function handlePlayAll() {
+    await resumePlaylistPlayback(playlistId, tracks);
   }
 
   async function handleRemove(tracksToRemove: Track[]) {
@@ -102,6 +106,17 @@
 <div class="playlist-editor">
   <div class="header">
     <h2>{playlistName}</h2>
+    <button
+      class="play-all-btn"
+      onclick={handlePlayAll}
+      disabled={tracks.length === 0}
+      title="從上次播放進度繼續"
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+        <path d="M8 5v14l11-7z" />
+      </svg>
+      播放
+    </button>
   </div>
 
   <TrackList
@@ -148,5 +163,29 @@
     font-size: 22px;
     font-weight: 700;
     color: #eee;
+  }
+
+  .play-all-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: #e94560;
+    border: none;
+    border-radius: 16px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .play-all-btn:hover:not(:disabled) {
+    background: #ff6b81;
+  }
+
+  .play-all-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 </style>

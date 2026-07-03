@@ -13,6 +13,9 @@ let repeatMode = $state<RepeatMode>('off');
 let shuffledIndices = $state<number[]>([]);
 let miniMode = $state(false);
 
+/** Playlist the current queue was started from; null when playing from the library/browse views. */
+let queueSourcePlaylistId = $state<number | null>(null);
+
 const hasNext = $derived(currentIndex < playQueue.length - 1);
 const hasPrev = $derived(currentIndex > 0);
 
@@ -89,6 +92,12 @@ export function getPlayerState() {
     },
     set miniMode(v: boolean) {
       miniMode = v;
+    },
+    get queueSourcePlaylistId() {
+      return queueSourcePlaylistId;
+    },
+    set queueSourcePlaylistId(v: number | null) {
+      queueSourcePlaylistId = v;
     },
   };
 }

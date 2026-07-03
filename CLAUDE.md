@@ -57,7 +57,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 
 - `lib/api/` — Tauri IPC 封裝（`playback.ts`、`library.ts`、`playlist.ts`）
 - `lib/state/` — Svelte 5 runes 響應式狀態（透過 `getPlayerState()` 等取得單例）
-- `lib/logic/` — 抽離的純函式，便於測試（播放動作、鍵盤快捷鍵、排序、選取、虛擬捲動、格式化）
+- `lib/logic/` — 抽離的純函式，便於測試（播放動作、斷點續播、鍵盤快捷鍵、排序、選取、虛擬捲動、格式化）
 - `lib/components/` — 依功能分組的 UI 元件（Player/、Library/、Browse/、Playlist/、Sidebar/、Settings/）
 - `lib/types/index.ts` — 所有 TypeScript 介面（Track、Playlist 等）
 - `lib/__mocks__/` — 測試用 Tauri/dialog mock
