@@ -535,3 +535,105 @@ fn test_queue_next_missing_file_error_includes_path() {
     // A failed preload must not leave the player half-queued
     assert!(!player.is_gapless_queued());
 }
+
+// ============================================================
+// Completion sequence tests — play counts are credited in the
+// backend from these signals, so their integrity is what keeps
+// play_count pollution structurally impossible.
+// ============================================================
+
+/// A natural end acknowledged by the polling thread records exactly one
+/// completion for the current track.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_acknowledge_track_ended_records_completion() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav = common::create_test_wav(dir.path(), "completion_ack.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav.to_str().unwrap(), 0.1).unwrap();
+    player.set_current_track_id(Some(42));
+    assert_eq!(player.completion_seq(), 0);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !player.has_track_ended() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "test track never ended"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    player.acknowledge_track_ended();
+
+    assert_eq!(player.completion_seq(), 1);
+    assert_eq!(player.last_completed_track_id(), Some(42));
+
+    // The one-shot flag is consumed, but the completion info persists:
+    // a consumer that missed this cycle can still see it next poll.
+    assert!(!player.has_track_ended());
+    assert_eq!(player.completion_seq(), 1);
+    assert_eq!(player.last_completed_track_id(), Some(42));
+}
+
+/// A gapless transition records the completion of the *previous* track
+/// (captured before current_track_id is swapped to the queued next).
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_gapless_transition_records_completion_of_previous_track() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav1 = common::create_test_wav(dir.path(), "completion_gap1.wav");
+    let wav2 = common::create_test_wav(dir.path(), "completion_gap2.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav1.to_str().unwrap(), 0.1).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.1).unwrap();
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        if player.check_gapless_transition() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "gapless transition never fired"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    assert_eq!(player.completion_seq(), 1);
+    assert_eq!(player.last_completed_track_id(), Some(1));
+    assert_eq!(player.get_current_track_id(), Some(2));
+}
+
+/// A failed load never produces a completion: no ended signal re-arms, so
+/// the sequence stays put and nothing can be credited.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_failed_load_records_no_completion() {
+    let mut player = AudioPlayer::new().expect("need audio device");
+    let result = player.load_and_play("/nonexistent/missing.mp3", 30.0);
+    assert!(result.is_err());
+
+    assert_eq!(player.completion_seq(), 0);
+    assert!(player.last_completed_track_id().is_none());
+    assert!(!player.has_track_ended());
+}
+
+/// stop() interrupts playback — an interrupted track is not a completion,
+/// and history from earlier completions survives the stop.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_stop_is_not_a_completion() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav = common::create_test_wav(dir.path(), "completion_stop.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav.to_str().unwrap(), 30.0).unwrap();
+    player.set_current_track_id(Some(7));
+
+    player.stop();
+
+    assert_eq!(player.completion_seq(), 0);
+    assert!(player.last_completed_track_id().is_none());
+}

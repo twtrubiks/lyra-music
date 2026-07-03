@@ -23,8 +23,16 @@ fn spawn_player_polling(
     shutdown: Arc<AtomicBool>,
     app_handle: tauri::AppHandle,
     player: SharedPlayer,
+    db: Arc<Mutex<Connection>>,
 ) {
     std::thread::spawn(move || {
+        // Play counts are credited here, not in the frontend: completion
+        // detection (check_gapless_transition / acknowledge_track_ended)
+        // and crediting happen in this one thread, so exactly-once holds by
+        // construction — no cross-IPC guard flags needed. The DB write lands
+        // before the emit, so the event announcing a completion never races
+        // ahead of the row it describes.
+        let mut credited_seq: u64 = 0;
         while !shutdown.load(Ordering::Relaxed) {
             std::thread::sleep(std::time::Duration::from_millis(250));
             let state = {
@@ -49,8 +57,27 @@ fn spawn_player_polling(
                     track_ended: ended,
                     gapless_queued: p.is_gapless_queued(),
                     gapless_transitioned: transitioned,
+                    completion_seq: p.completion_seq(),
+                    last_completed_track_id: p.last_completed_track_id(),
                 }
             };
+            // DB write outside the player lock — lock scopes stay disjoint.
+            // At most one completion can occur per poll cycle for real-length
+            // tracks, so crediting last_completed_track_id per seq advance
+            // covers every completion.
+            if state.completion_seq > credited_seq {
+                credited_seq = state.completion_seq;
+                if let Some(id) = state.last_completed_track_id {
+                    match db.lock() {
+                        Ok(conn) => {
+                            if let Err(e) = storage::library_repo::increment_play_count(&conn, id) {
+                                eprintln!("[lyra] failed to credit play count for track {id}: {e}");
+                            }
+                        }
+                        Err(e) => eprintln!("[lyra] db lock poisoned in polling thread: {e}"),
+                    }
+                }
+            }
             let _ = app_handle.emit("player-state-changed", &state);
         }
     });
@@ -112,7 +139,12 @@ pub fn run() {
             let shutdown_for_event = Arc::<AtomicBool>::clone(&shutdown);
 
             let player_for_thread = Arc::clone(app.state::<SharedPlayer>().inner());
-            spawn_player_polling(shutdown_for_thread, app.handle().clone(), player_for_thread);
+            spawn_player_polling(
+                shutdown_for_thread,
+                app.handle().clone(),
+                player_for_thread,
+                Arc::<Mutex<Connection>>::clone(&db_arc),
+            );
 
             let main_window = app.get_webview_window("main");
             if let Some(window) = main_window {
@@ -151,7 +183,6 @@ pub fn run() {
             commands::library::get_all_albums,
             commands::library::get_tracks_by_artist,
             commands::library::get_tracks_by_album,
-            commands::library::increment_play_count,
             commands::library::get_most_played_tracks,
             commands::library::start_watching,
             commands::library::stop_watching,

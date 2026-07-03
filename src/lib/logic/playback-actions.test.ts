@@ -1,9 +1,15 @@
 /**
- * Tests for playback actions: handleTrackRemoved auto-advance behavior
- * and play-count integrity on auto-advance / gapless transitions.
+ * Tests for playback actions: handleTrackRemoved auto-advance behavior,
+ * advance flow after failures, and play-count mirroring from the backend's
+ * level-triggered completion_seq.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMockTrack, createMockTracks, createMockPlaylist } from '$lib/test-helpers';
+import {
+  createMockTrack,
+  createMockTracks,
+  createMockPlaylist,
+  createMockPlayerState,
+} from '$lib/test-helpers';
 
 const mockInvoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,6 +24,7 @@ import {
   handleGaplessTransition,
   handleNext,
   applyPlayerStateEvent,
+  resetCompletionTracking,
 } from '$lib/logic/playback-actions';
 import type { PlayerState } from '$lib/types';
 import { getPlayerState } from '$lib/state/playerState.svelte';
@@ -40,6 +47,10 @@ function resetPlayerState() {
 function resetPlaylistState() {
   const playlistState = getPlaylistState();
   playlistState.playlists = [];
+}
+
+function pollEvent(overrides: Partial<PlayerState> = {}): PlayerState {
+  return createMockPlayerState(overrides);
 }
 
 describe('handleTrackRemoved — auto-advance', () => {
@@ -382,7 +393,7 @@ describe('handleTracksRemovedBatch', () => {
   });
 });
 
-describe('autoAdvance — play count integrity', () => {
+describe('autoAdvance — advance flow', () => {
   const player = getPlayerState();
   const library = getLibraryState();
 
@@ -400,13 +411,6 @@ describe('autoAdvance — play count integrity', () => {
     library.allTracks = [];
   });
 
-  /** Track ids passed to increment_play_count, in call order. */
-  function incrementedIds(): number[] {
-    return mockInvoke.mock.calls
-      .filter(([cmd]) => cmd === 'increment_play_count')
-      .map(([, args]) => (args as { trackId: number }).trackId);
-  }
-
   /** Make every play_track call fail (e.g. files on an unmounted USB drive). */
   function failPlayTrack() {
     mockInvoke.mockImplementation((...args: unknown[]) =>
@@ -416,57 +420,35 @@ describe('autoAdvance — play count integrity', () => {
     );
   }
 
-  it('increments play count when a started track finishes', async () => {
+  it('advances to the next track when the current one finishes', async () => {
     const tracks = createMockTracks(2);
     await startPlayingTrack(tracks[0], tracks);
 
     await autoAdvance();
 
-    expect(incrementedIds()).toEqual([tracks[0].id]);
     expect(player.currentTrack?.id).toBe(tracks[1].id);
+    // Crediting the finished track is the backend's job now — the frontend
+    // must not write play counts over IPC anymore
+    expect(mockInvoke).not.toHaveBeenCalledWith('increment_play_count', expect.anything());
   });
 
-  it('does not increment play count for tracks that never started playing', async () => {
+  it('continues advancing past a track that fails to load', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[0], tracks);
 
     failPlayTrack();
-
-    // track 0 finishes → legit +1, then advancing to track 1 fails
+    // track 0 finishes, track 1 fails to start
     await autoAdvance();
-    // stale track_ended events keep arriving (the original pollution loop)
-    await autoAdvance();
-    await autoAdvance();
-
-    // Only the track that actually played is counted
-    expect(incrementedIds()).toEqual([tracks[0].id]);
-    // And the optimistic local counts are untouched for never-played tracks
-    expect(player.playQueue[1].play_count).toBe(tracks[1].play_count);
-    expect(player.playQueue[2].play_count).toBe(tracks[2].play_count);
-  });
-
-  it('keeps counting after playback recovers from a failed track', async () => {
-    const tracks = createMockTracks(3);
-    await startPlayingTrack(tracks[0], tracks);
-
-    failPlayTrack();
-    // track 0 finishes → +1, track 1 fails to start
-    await autoAdvance();
+    expect(player.currentTrack?.id).toBe(tracks[1].id);
 
     mockInvoke.mockResolvedValue(undefined);
-    // file is reachable again (e.g. USB remounted): track 1 never played
-    // so it is not counted, and track 2 starts normally
+    // file is reachable again (e.g. USB remounted): track 2 starts normally
     await autoAdvance();
-
-    expect(incrementedIds()).toEqual([tracks[0].id]);
     expect(player.currentTrack?.id).toBe(tracks[2].id);
-
-    // track 2 genuinely played — its completion is counted again
-    await autoAdvance();
-    expect(incrementedIds()).toEqual([tracks[0].id, tracks[2].id]);
+    expect(player.isPlaying).toBe(true);
   });
 
-  it('counts every completion in repeat-one mode', async () => {
+  it('repeat-one replays the same track on natural end', async () => {
     const tracks = createMockTracks(2);
     await startPlayingTrack(tracks[0], tracks);
     player.repeatMode = 'repeat-one';
@@ -474,7 +456,6 @@ describe('autoAdvance — play count integrity', () => {
     await autoAdvance();
     await autoAdvance();
 
-    expect(incrementedIds()).toEqual([tracks[0].id, tracks[0].id]);
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
 
@@ -488,28 +469,177 @@ describe('autoAdvance — play count integrity', () => {
     // honestly reflects the failure instead of pretending to play
     expect(player.currentTrack?.id).toBe(tracks[0].id);
     expect(player.isPlaying).toBe(false);
-    expect(incrementedIds()).toEqual([]);
+  });
+});
+
+describe('play count mirroring — completion_seq', () => {
+  const player = getPlayerState();
+  const library = getLibraryState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetPlaylistState();
+    resetCompletionTracking();
+    library.allTracks = [];
   });
 
-  it('gapless transition does not credit a track that failed to start', async () => {
+  afterEach(() => {
+    resetPlayerState();
+    resetPlaylistState();
+    library.allTracks = [];
+  });
+
+  it('baselines on the first poll without crediting', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    library.allTracks = [...tracks];
+
+    // The first event after a page (re)load can carry a non-zero sequence:
+    // its completions were already credited in the DB before this load.
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[0].id,
+        completion_seq: 5,
+        last_completed_track_id: tracks[1].id,
+      }),
+    );
+
+    expect(player.playQueue[1].play_count).toBe(0);
+    expect(library.allTracks[1].play_count).toBe(0);
+  });
+
+  it('mirrors a backend-credited completion into playQueue and library', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    library.allTracks = [...tracks];
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    // Backend detected the gapless switch and already wrote the DB row
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[1].id,
+        gapless_transitioned: true,
+        completion_seq: 1,
+        last_completed_track_id: tracks[0].id,
+      }),
+    );
+
+    expect(player.playQueue[0].play_count).toBe(1);
+    expect(library.allTracks[0].play_count).toBe(1);
+    // No frontend IPC write — the backend polling thread owns the DB update
+    expect(mockInvoke).not.toHaveBeenCalledWith('increment_play_count', expect.anything());
+  });
+
+  it('does not credit again when polls repeat the same sequence', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    library.allTracks = [...tracks];
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    const completed = {
+      is_playing: true,
+      current_track_id: tracks[1].id,
+      completion_seq: 1,
+      last_completed_track_id: tracks[0].id,
+    };
+    // Level-triggered fields repeat in every 250ms poll after the completion
+    applyPlayerStateEvent(pollEvent(completed));
+    applyPlayerStateEvent(pollEvent(completed));
+    applyPlayerStateEvent(pollEvent(completed));
+
+    expect(player.playQueue[0].play_count).toBe(1);
+    expect(library.allTracks[0].play_count).toBe(1);
+  });
+
+  it('credits every repeat-one loop — same track id, advancing sequence', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    player.repeatMode = 'repeat-one';
+    library.allTracks = [...tracks];
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    // Two loop completions: the track id never changes, only the sequence —
+    // exactly the case the old one-shot events could silently drop
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[0].id,
+        gapless_transitioned: true,
+        completion_seq: 1,
+        last_completed_track_id: tracks[0].id,
+      }),
+    );
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[0].id,
+        gapless_transitioned: true,
+        completion_seq: 2,
+        last_completed_track_id: tracks[0].id,
+      }),
+    );
+
+    expect(player.playQueue[0].play_count).toBe(2);
+    expect(library.allTracks[0].play_count).toBe(2);
+  });
+
+  it('credits even while a manual track change is in flight', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[0], tracks);
+    library.allTracks = [...tracks];
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    mockInvoke.mockClear();
 
-    failPlayTrack();
-    // track 0 finishes → +1, attempt to start track 1 fails
-    await autoAdvance();
+    let resolvePlay!: (value?: unknown) => void;
+    mockInvoke.mockImplementation((...args: unknown[]) =>
+      args[0] === 'play_track'
+        ? new Promise((res) => {
+            resolvePlay = res;
+          })
+        : Promise.resolve(undefined),
+    );
+    const nextInFlight = handleNext();
+
+    // The in-flight guards drop the one-shot transition handling, but the
+    // sequence comparison runs unguarded — the count can no longer be lost
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[0].id,
+        gapless_transitioned: true,
+        completion_seq: 1,
+        last_completed_track_id: tracks[0].id,
+      }),
+    );
+    expect(player.playQueue[0].play_count).toBe(1);
+    expect(library.allTracks[0].play_count).toBe(1);
+
+    resolvePlay();
+    await nextInFlight;
     expect(player.currentTrack?.id).toBe(tracks[1].id);
+  });
 
-    mockInvoke.mockResolvedValue(undefined);
-    // backend gapless-switched to track 2 (queued before the failure)
-    await handleGaplessTransition(tracks[2].id);
+  it('ignores a completion for a track absent from queue and library', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    library.allTracks = [...tracks];
 
-    expect(incrementedIds()).toEqual([tracks[0].id]);
-    expect(player.currentTrack?.id).toBe(tracks[2].id);
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[0].id,
+        completion_seq: 1,
+        last_completed_track_id: 999,
+      }),
+    );
 
-    // track 2 is genuinely playing now — its completion must count
-    await autoAdvance();
-    expect(incrementedIds()).toEqual([tracks[0].id, tracks[2].id]);
+    expect(player.playQueue.every((t) => t.play_count === 0)).toBe(true);
+    expect(library.allTracks.every((t) => t.play_count === 0)).toBe(true);
   });
 });
 
@@ -579,33 +709,13 @@ describe('manual track change vs backend poll events — race protection', () =>
     mockInvoke.mockResolvedValue(undefined);
     resetPlayerState();
     resetPlaylistState();
+    resetCompletionTracking();
   });
 
   afterEach(() => {
     resetPlayerState();
     resetPlaylistState();
   });
-
-  /** Track ids passed to increment_play_count, in call order. */
-  function incrementedIds(): number[] {
-    return mockInvoke.mock.calls
-      .filter(([cmd]) => cmd === 'increment_play_count')
-      .map(([, args]) => (args as { trackId: number }).trackId);
-  }
-
-  function pollEvent(overrides: Partial<PlayerState>): PlayerState {
-    return {
-      is_playing: false,
-      current_track_id: null,
-      position_secs: 0,
-      duration_secs: 0,
-      volume: 0.5,
-      track_ended: false,
-      gapless_queued: false,
-      gapless_transitioned: false,
-      ...overrides,
-    };
-  }
 
   it('ignores a gapless event that arrives while a manual next is in flight', async () => {
     const tracks = createMockTracks(3);
@@ -630,7 +740,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     // load, reloading the track the user just picked.
     await handleGaplessTransition(tracks[1].id);
 
-    expect(incrementedIds()).toEqual([]);
     expect(mockInvoke).not.toHaveBeenCalledWith('queue_next_track', expect.anything());
 
     resolvePlay();
@@ -700,8 +809,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     // auto-advance must not clobber it when its load resolves
     expect(player.currentTrack?.id).toBe(tracks[3].id);
     expect(player.currentIndex).toBe(3);
-    // Track 0 genuinely finished playing — still counted exactly once
-    expect(incrementedIds()).toEqual([tracks[0].id]);
   });
 
   it('ignores track_ended describing a different track than the current one', async () => {
@@ -716,7 +823,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     );
 
     expect(mockInvoke).not.toHaveBeenCalledWith('play_track', expect.anything());
-    expect(incrementedIds()).toEqual([]);
     expect(player.currentTrack?.id).toBe(tracks[1].id);
   });
 
@@ -730,7 +836,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     await vi.waitFor(() => {
       expect(player.currentTrack?.id).toBe(tracks[1].id);
     });
-    expect(incrementedIds()).toEqual([tracks[0].id]);
   });
 
   it('does not advance on track_ended when nothing is playing', () => {
@@ -743,17 +848,26 @@ describe('manual track change vs backend poll events — race protection', () =>
   it('reconciles a dropped gapless transition from a later steady-state poll', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[0], tracks);
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
     mockInvoke.mockClear();
 
     // The one-shot gapless_transitioned event was dropped by an in-flight
-    // guard; a later poll just shows the backend already playing track 1.
-    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
+    // guard; a later poll just shows the backend already playing track 1,
+    // with the completion still visible in the level-triggered sequence.
+    applyPlayerStateEvent(
+      pollEvent({
+        is_playing: true,
+        current_track_id: tracks[1].id,
+        completion_seq: 1,
+        last_completed_track_id: tracks[0].id,
+      }),
+    );
 
     await vi.waitFor(() => {
       expect(player.currentTrack?.id).toBe(tracks[1].id);
     });
-    // The finished track is still credited exactly once
-    expect(incrementedIds()).toEqual([tracks[0].id]);
+    // The finished track is still credited exactly once — mirrored from seq
+    expect(player.playQueue[0].play_count).toBe(1);
     expect(player.currentIndex).toBe(1);
   });
 
@@ -779,8 +893,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
     await Promise.resolve();
 
-    expect(incrementedIds()).toEqual([]);
-
     resolvePlay();
     await nextInFlight;
 
@@ -796,24 +908,23 @@ describe('manual track change vs backend poll events — race protection', () =>
     applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
     await Promise.resolve();
 
-    expect(incrementedIds()).toEqual([]);
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
 
-  it('does not credit repeatedly when the backend plays a track missing from the queue', async () => {
+  it('does not reconcile into a track missing from the queue', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[0], tracks);
     mockInvoke.mockClear();
 
     // The backend gapless-transitioned into a track the user has since
     // removed from the frontend queue. Polls keep reporting it every 250ms;
-    // reconciling would credit the visible track once per poll, forever.
+    // reconciliation is impossible there and must not fire at all.
     applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: 999 }));
     await Promise.resolve();
     applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: 999 }));
     await Promise.resolve();
 
-    expect(incrementedIds()).toEqual([]);
+    expect(mockInvoke).not.toHaveBeenCalledWith('queue_next_track', expect.anything());
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
 
@@ -826,7 +937,6 @@ describe('manual track change vs backend poll events — race protection', () =>
     applyPlayerStateEvent(pollEvent({ is_playing: false, current_track_id: tracks[1].id }));
     await Promise.resolve();
 
-    expect(incrementedIds()).toEqual([]);
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
 
@@ -869,81 +979,5 @@ describe('manual track change vs backend poll events — race protection', () =>
       nextId: tracks[2].id,
       durationSecs: tracks[2].duration_secs,
     });
-  });
-
-  it('replays a repeat-one transition dropped during a manual change, exactly once', async () => {
-    const tracks = createMockTracks(2);
-    await startPlayingTrack(tracks[0], tracks);
-    player.repeatMode = 'repeat-one';
-    mockInvoke.mockClear();
-
-    let resolvePlay!: (value?: unknown) => void;
-    mockInvoke.mockImplementation((...args: unknown[]) =>
-      args[0] === 'play_track'
-        ? new Promise((res) => {
-            resolvePlay = res;
-          })
-        : Promise.resolve(undefined),
-    );
-
-    const nextInFlight = handleNext(); // repeat-one: manual restart of track 0
-
-    // The loop-completed transition carries the same track id, so the
-    // id-mismatch reconciliation can never see it once it is dropped here.
-    applyPlayerStateEvent(
-      pollEvent({ is_playing: true, gapless_transitioned: true, current_track_id: tracks[0].id }),
-    );
-    await Promise.resolve();
-    expect(incrementedIds()).toEqual([]);
-
-    resolvePlay();
-    await nextInFlight;
-
-    // A later steady-state poll replays the remembered transition once
-    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
-    await vi.waitFor(() => {
-      expect(incrementedIds()).toEqual([tracks[0].id]);
-    });
-
-    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
-    await Promise.resolve();
-    expect(incrementedIds()).toEqual([tracks[0].id]);
-  });
-
-  it('discards a pending repeat-one transition when the user moves to another track', async () => {
-    const tracks = createMockTracks(2);
-    await startPlayingTrack(tracks[0], tracks);
-    player.repeatMode = 'repeat-one';
-    mockInvoke.mockClear();
-
-    let resolvePlay!: (value?: unknown) => void;
-    mockInvoke.mockImplementation((...args: unknown[]) =>
-      args[0] === 'play_track'
-        ? new Promise((res) => {
-            resolvePlay = res;
-          })
-        : Promise.resolve(undefined),
-    );
-    const nextInFlight = handleNext();
-    applyPlayerStateEvent(
-      pollEvent({ is_playing: true, gapless_transitioned: true, current_track_id: tracks[0].id }),
-    );
-    resolvePlay();
-    await nextInFlight;
-
-    // The user switches away before any steady poll replays the transition
-    mockInvoke.mockImplementation(() => Promise.resolve(undefined));
-    player.repeatMode = 'off';
-    await startPlayingTrack(tracks[1], tracks);
-    mockInvoke.mockClear();
-
-    // Polls now describe track 1 — the stale pending transition must be
-    // dropped silently instead of crediting whatever is shown now
-    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
-    await Promise.resolve();
-    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[1].id }));
-    await Promise.resolve();
-
-    expect(incrementedIds()).toEqual([]);
   });
 });

@@ -83,5 +83,7 @@ pub fn get_player_state(player: State<SharedPlayer>) -> Result<PlayerState, AppE
         track_ended: p.has_track_ended(),
         gapless_queued: p.is_gapless_queued(),
         gapless_transitioned: false,
+        completion_seq: p.completion_seq(),
+        last_completed_track_id: p.last_completed_track_id(),
     })
 }

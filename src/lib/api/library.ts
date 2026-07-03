@@ -83,10 +83,6 @@ export async function stopWatching(folder: string): Promise<void> {
   return invoke('stop_watching', { folder });
 }
 
-export async function incrementPlayCount(trackId: number): Promise<void> {
-  return invoke('increment_play_count', { trackId });
-}
-
 export async function getMostPlayedTracks(limit?: number): Promise<Track[]> {
   return invoke('get_most_played_tracks', { limit: limit ?? 50 });
 }

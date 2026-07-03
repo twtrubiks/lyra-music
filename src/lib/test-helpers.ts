@@ -40,6 +40,8 @@ export function createMockPlayerState(overrides: Partial<PlayerState> = {}): Pla
     track_ended: false,
     gapless_queued: false,
     gapless_transitioned: false,
+    completion_seq: 0,
+    last_completed_track_id: null,
     ...overrides,
   };
 }

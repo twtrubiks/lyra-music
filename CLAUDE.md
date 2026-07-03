@@ -73,7 +73,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - `models/` — Serde 結構體：Track、Playlist、PlayerState、ArtistSummary、AlbumSummary
 - `error.rs` — `AppError` 列舉（thiserror）
 - `tray.rs` — 系統匣整合
-- `lib.rs` — 應用程式初始化：DB 設定、音訊播放器、資料夾監控、系統匣、播放器輪詢執行緒
+- `lib.rs` — 應用程式初始化：DB 設定、音訊播放器、資料夾監控、系統匣、播放器輪詢執行緒（250ms；**play_count 在此入帳**——完成偵測與 DB 寫入同執行緒同鎖，前端僅透過 level-triggered 的 `completion_seq` 鏡像顯示，不再經 IPC 計數）
 
 ## 關鍵慣例
 

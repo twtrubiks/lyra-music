@@ -58,6 +58,10 @@ export interface PlayerState {
   track_ended: boolean;
   gapless_queued: boolean;
   gapless_transitioned: boolean;
+  /** Monotonic count of completed tracks — level-triggered, survives dropped polls. */
+  completion_seq: number;
+  /** Track credited by the most recent completion_seq bump. */
+  last_completed_track_id: number | null;
 }
 
 export interface ArtistSummary {

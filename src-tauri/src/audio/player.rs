@@ -21,6 +21,8 @@ pub struct AudioPlayer {
     next_duration_secs: f64,
     gapless_queued: bool,
     cumulative_duration: f64,
+    completion_seq: u64,
+    last_completed_track_id: Option<i64>,
 }
 
 impl AudioPlayer {
@@ -44,6 +46,8 @@ impl AudioPlayer {
             next_duration_secs: 0.0,
             gapless_queued: false,
             cumulative_duration: 0.0,
+            completion_seq: 0,
+            last_completed_track_id: None,
         })
     }
 
@@ -216,6 +220,30 @@ impl AudioPlayer {
 
     pub fn acknowledge_track_ended(&mut self) {
         self.track_loaded = false;
+        // A natural end is a completion. has_track_ended() already requires
+        // track_loaded (only set by a successful load), so a track whose
+        // file failed to load can never be credited here.
+        self.record_completion();
+    }
+
+    /// Record that the current track played to completion. The play count
+    /// is credited from this sequence in the polling thread — detection and
+    /// crediting stay in one thread under one lock, so exactly-once needs no
+    /// cross-IPC guards. Level-triggered: unlike the one-shot ended/
+    /// transitioned flags, the fields persist in every later state snapshot.
+    fn record_completion(&mut self) {
+        if let Some(id) = self.current_track_id {
+            self.completion_seq += 1;
+            self.last_completed_track_id = Some(id);
+        }
+    }
+
+    pub fn completion_seq(&self) -> u64 {
+        self.completion_seq
+    }
+
+    pub fn last_completed_track_id(&self) -> Option<i64> {
+        self.last_completed_track_id
     }
 
     pub fn queue_next(
@@ -250,6 +278,9 @@ impl AudioPlayer {
         if !self.gapless_queued {
             return;
         }
+        // The outgoing track finished playing — record its completion
+        // before current_track_id is swapped to the queued next.
+        self.record_completion();
         self.cumulative_duration = 0.0;
         self.current_file_path = self.next_file_path.take();
         self.current_track_id = self.next_track_id.take();

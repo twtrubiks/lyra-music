@@ -4,7 +4,7 @@ import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getNextIndex, getPrevIndex, generateShuffledIndices } from '$lib/logic/playmode';
 import * as playbackApi from '$lib/api/playback';
 import * as playlistApi from '$lib/api/playlist';
-import { getTrackCover, incrementPlayCount } from '$lib/api/library';
+import { getTrackCover } from '$lib/api/library';
 import {
   resolveResumeTarget,
   maybeSavePlaybackPosition,
@@ -17,17 +17,11 @@ const player = getPlayerState();
 const library = getLibraryState();
 
 /**
- * True once the current track has actually started playing on the backend.
- * Guards play-count increments: a track whose file failed to load must not
- * be credited when a (possibly stale) track_ended event arrives.
- */
-let _currentTrackStarted = false;
-
-/**
  * Mutex between event-driven advances (autoAdvance / gapless transition).
  * Backend poll events arriving while any track change is in flight are
  * ignored — otherwise they would treat the in-flight track as "just
- * finished", miscounting plays and reloading it.
+ * finished" and reload it. Play counts are unaffected either way: they are
+ * credited in the backend and mirrored via completion_seq below.
  */
 let _advanceInProgress = false;
 
@@ -46,14 +40,21 @@ let _manualChangesInFlight = 0;
 let _changeEpoch = 0;
 
 /**
- * A repeat-one gapless transition dropped by the in-flight guards. Its track
- * id equals the current one, so the id-mismatch reconciliation in
- * applyPlayerStateEvent can never detect it; it is remembered here and
- * replayed on a later poll once the guards clear. Cleared without replaying
- * when the backend moves to a different track — dropping it can at most miss
- * one play count, never miscredit one.
+ * Last completion_seq processed from backend state events. Play counts are
+ * credited by the backend polling thread — completion detection and the DB
+ * write happen in one thread under one lock, so exactly-once holds by
+ * construction. The frontend only mirrors the +1 into its local track
+ * copies when the sequence advances. Level-triggered: the seq persists in
+ * every later poll, so a dropped cycle can never lose a completion. null
+ * until the first event — that first snapshot is a baseline, not a
+ * completion (its plays were credited before this page load).
  */
-let _pendingSameTrackTransition: number | null = null;
+let _lastCompletionSeq: number | null = null;
+
+/** Forget the completion-seq baseline (test isolation). */
+export function resetCompletionTracking(): void {
+  _lastCompletionSeq = null;
+}
 
 /**
  * Set when the queue finished naturally and the saved playlist position was
@@ -73,12 +74,10 @@ async function playTrackAtIndex(index: number): Promise<void> {
   player.currentTrack = track;
   player.positionSecs = 0;
   player.durationSecs = track.duration_secs;
-  _currentTrackStarted = false;
   try {
     await playbackApi.playTrack(track.file_path, track.id, track.duration_secs);
     if (epoch !== _changeEpoch) return; // superseded by a newer track change
     player.isPlaying = true;
-    _currentTrackStarted = true;
     tryQueueNext();
   } catch (err) {
     if (epoch === _changeEpoch) {
@@ -153,20 +152,8 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
   if (_advanceInProgress || _manualChangesInFlight > 0) return;
   _advanceInProgress = true;
   try {
-    const finishedTrack = player.currentTrack;
-    if (finishedTrack && _currentTrackStarted) {
-      incrementPlayCount(finishedTrack.id).catch((err) =>
-        warnNonCritical('Increment play count', err),
-      );
-      const newCount = finishedTrack.play_count + 1;
-      const qIdx = player.playQueue.findIndex((t) => t.id === finishedTrack.id);
-      if (qIdx >= 0) {
-        player.playQueue[qIdx] = { ...player.playQueue[qIdx], play_count: newCount };
-      }
-      library.allTracks = library.allTracks.map((t) =>
-        t.id === finishedTrack.id ? { ...t, play_count: newCount } : t,
-      );
-    }
+    // Play count for the finished track is credited by the backend polling
+    // thread and mirrored locally via completion_seq — nothing to count here.
 
     // The gapless next was queued from getNextIndex, so prefer that index:
     // when the same track appears more than once in the queue, findIndex
@@ -186,9 +173,6 @@ export async function handleGaplessTransition(newTrackId: number): Promise<void>
     if (newIdx >= 0) {
       player.currentIndex = newIdx;
       player.currentTrack = player.playQueue[newIdx];
-      // The backend only emits gapless_transitioned after a successful
-      // queue_next, so the new track is genuinely playing
-      _currentTrackStarted = true;
       player.positionSecs = 0;
       player.durationSecs = player.playQueue[newIdx].duration_secs;
       try {
@@ -211,22 +195,6 @@ export async function autoAdvance(): Promise<void> {
   if (_advanceInProgress || _manualChangesInFlight > 0) return;
   _advanceInProgress = true;
   try {
-    const finishedTrack = player.currentTrack;
-    if (finishedTrack && _currentTrackStarted) {
-      incrementPlayCount(finishedTrack.id).catch((err) =>
-        warnNonCritical('Increment play count', err),
-      );
-      // Optimistic update: playQueue + library.allTracks
-      const newCount = finishedTrack.play_count + 1;
-      const qIdx = player.playQueue.findIndex((t) => t.id === finishedTrack.id);
-      if (qIdx >= 0) {
-        player.playQueue[qIdx] = { ...player.playQueue[qIdx], play_count: newCount };
-      }
-      library.allTracks = library.allTracks.map((t) =>
-        t.id === finishedTrack.id ? { ...t, play_count: newCount } : t,
-      );
-    }
-
     const nextIdx = getNextIndex(
       player.currentIndex,
       player.playQueue.length,
@@ -303,6 +271,20 @@ export async function resumePlaylistPlayback(playlistId: number, tracks: Track[]
   }
 }
 
+/** Mirror a backend-credited play count into the local track copies. */
+function applyLocalPlayCount(trackId: number): void {
+  const qIdx = player.playQueue.findIndex((t) => t.id === trackId);
+  if (qIdx >= 0) {
+    player.playQueue[qIdx] = {
+      ...player.playQueue[qIdx],
+      play_count: player.playQueue[qIdx].play_count + 1,
+    };
+  }
+  library.allTracks = library.allTracks.map((t) =>
+    t.id === trackId ? { ...t, play_count: t.play_count + 1 } : t,
+  );
+}
+
 /**
  * Apply a backend `player-state-changed` poll event to frontend state and
  * dispatch end-of-track handling.
@@ -314,6 +296,18 @@ export function applyPlayerStateEvent(state: PlayerState): void {
     player.durationSecs = state.duration_secs;
   }
   player.volume = state.volume;
+  // Mirror backend-credited play counts. Runs before and independent of the
+  // in-flight guards below: it is idempotent by sequence and names the
+  // credited track explicitly, so a concurrent manual change can neither
+  // drop nor double a count.
+  if (_lastCompletionSeq === null) {
+    _lastCompletionSeq = state.completion_seq;
+  } else if (state.completion_seq > _lastCompletionSeq) {
+    _lastCompletionSeq = state.completion_seq;
+    if (state.last_completed_track_id != null) {
+      applyLocalPlayCount(state.last_completed_track_id);
+    }
+  }
   if (
     player.queueSourcePlaylistId != null &&
     player.currentTrack != null &&
@@ -330,15 +324,10 @@ export function applyPlayerStateEvent(state: PlayerState): void {
     );
   }
   if (state.gapless_transitioned && state.current_track_id != null) {
-    if (
-      (_advanceInProgress || _manualChangesInFlight > 0) &&
-      player.repeatMode === 'repeat-one' &&
-      state.current_track_id === player.currentTrack?.id
-    ) {
-      // The guards below will drop this one-shot event, and the same-id
-      // reconciliation can't recover it — remember it for a later poll.
-      _pendingSameTrackTransition = state.current_track_id;
-    }
+    // If the in-flight guards drop a repeat-one transition (same track id,
+    // invisible to the id-mismatch reconciliation below), the only cost is
+    // one seam: the loop replays via track_ended on a later poll. The play
+    // count is already safe — it travels in completion_seq above.
     void handleGaplessTransition(state.current_track_id);
   } else if (state.track_ended && state.current_track_id === player.currentTrack?.id) {
     // Identity check: only advance when the event describes the track the
@@ -359,25 +348,10 @@ export function applyPlayerStateEvent(state: PlayerState): void {
     // one. Reconcile from the steady-state current_track_id instead; the
     // same in-flight guards keep ordinary manual changes safe, and polls
     // repeat every 250ms so a dropped cycle self-heals on the next one.
-    // The queue-membership check keeps this from re-firing forever (and
-    // re-crediting play counts) when the backend plays a track the user has
-    // since removed from the queue — reconciliation is impossible there.
+    // The queue-membership check keeps this from re-firing forever when the
+    // backend plays a track the user has since removed from the queue —
+    // reconciliation is impossible there.
     void handleGaplessTransition(state.current_track_id);
-  } else if (_pendingSameTrackTransition != null) {
-    if (
-      state.is_playing &&
-      state.current_track_id === _pendingSameTrackTransition &&
-      state.current_track_id === player.currentTrack?.id &&
-      !_advanceInProgress &&
-      _manualChangesInFlight === 0
-    ) {
-      const pendingId = _pendingSameTrackTransition;
-      _pendingSameTrackTransition = null;
-      void handleGaplessTransition(pendingId);
-    } else if (state.current_track_id !== _pendingSameTrackTransition) {
-      // The backend moved elsewhere (manual change, stop): stale, discard.
-      _pendingSameTrackTransition = null;
-    }
   }
 }
 

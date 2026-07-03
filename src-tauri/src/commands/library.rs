@@ -392,12 +392,6 @@ pub fn get_tracks_by_album(
 }
 
 #[tauri::command]
-pub fn increment_play_count(track_id: i64, db: State<DbState>) -> Result<(), AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    library_repo::increment_play_count(&conn, track_id)
-}
-
-#[tauri::command]
 pub fn get_most_played_tracks(
     limit: Option<i64>,
     db: State<DbState>,

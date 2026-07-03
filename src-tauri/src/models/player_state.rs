@@ -11,4 +11,11 @@ pub struct PlayerState {
     pub track_ended: bool,
     pub gapless_queued: bool,
     pub gapless_transitioned: bool,
+    /// Monotonically increasing count of completed tracks. Level-triggered:
+    /// unlike the one-shot `track_ended`/`gapless_transitioned` flags, it
+    /// persists in every later snapshot, so a consumer that misses a poll
+    /// cycle can still detect the completion by comparing sequences.
+    pub completion_seq: u64,
+    /// Track credited by the most recent completion (`completion_seq` bump).
+    pub last_completed_track_id: Option<i64>,
 }
