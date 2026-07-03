@@ -4,6 +4,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use notify::event::{ModifyKind, RenameMode};
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, Manager};
@@ -170,7 +171,6 @@ fn process_event_batch(
     db: &Arc<Mutex<Connection>>,
     app_handle: &AppHandle,
 ) -> (bool, Vec<i64>) {
-    let mut changed = false;
     let mut removed_track_ids: Vec<i64> = Vec::new();
 
     let conn = match db.lock() {
@@ -180,6 +180,11 @@ fn process_event_batch(
             return (false, Vec::new());
         }
     };
+
+    // Renames first: once the row is repointed, the stray From/To events
+    // from the same rename are harmless in the loop below — Remove misses
+    // the old path and Import upserts the new one via ON CONFLICT.
+    let mut changed = apply_rename_events(&conn, events, &mut removed_track_ids);
 
     for event in events {
         for path in &event.paths {
@@ -210,6 +215,62 @@ fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i
         }
         removed_track_ids.push(track_id);
     }
+}
+
+/// Handle rename events before per-path processing. notify's inotify backend
+/// pairs `MOVED_FROM`/`MOVED_TO` by cookie into a single Both event carrying
+/// `[old, new]` — repoint the DB row(s) instead of delete + re-import so
+/// `play_count` and playlist membership survive same-filesystem moves. A
+/// directory rename arrives as one Both event for the dir path only (no
+/// per-child events), so children are repointed by prefix.
+fn apply_rename_events(
+    conn: &Connection,
+    events: &[notify::Event],
+    removed_track_ids: &mut Vec<i64>,
+) -> bool {
+    let mut changed = false;
+
+    for event in events {
+        if !matches!(
+            event.kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+        ) {
+            continue;
+        }
+        let [from, to] = event.paths.as_slice() else {
+            continue;
+        };
+        let (Some(from_str), Some(to_str)) = (from.to_str(), to.to_str()) else {
+            continue;
+        };
+
+        if to.is_dir() {
+            match library_repo::update_track_paths_by_prefix(conn, from_str, to_str) {
+                Ok(n) if n > 0 => changed = true,
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("[lyra] watcher: failed to rename folder {from_str}: {e}");
+                }
+            }
+        } else if folder_scanner::is_supported_audio_file(to_str) {
+            // Untracked source falls through: the To/Import path in the
+            // main loop imports the destination as a new track.
+            if let Ok(Some(_)) = library_repo::get_track_id_by_path(conn, from_str) {
+                // The move may have overwritten a different tracked file
+                // at the destination — drop that stale row first so the
+                // path UPDATE below doesn't hit the UNIQUE constraint.
+                remove_track(conn, to_str, removed_track_ids);
+                match library_repo::update_track_path(conn, from_str, to_str) {
+                    Ok(_) => changed = true,
+                    Err(e) => {
+                        eprintln!("[lyra] watcher: failed to rename {from_str}: {e}");
+                    }
+                }
+            }
+        }
+    }
+
+    changed
 }
 
 #[cfg(test)]
@@ -295,6 +356,160 @@ mod tests {
             classify_path_event(EventKind::Access(AccessKind::Read), &path),
             PathAction::Ignore
         );
+    }
+
+    // ---- rename (RenameMode::Both) handling ----
+
+    use crate::models::track::Track;
+    use crate::storage::{db, playlist_repo};
+
+    fn test_conn() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        db::run_migrations(&conn).unwrap();
+        conn
+    }
+
+    fn insert_track_at(conn: &Connection, path: &Path) -> i64 {
+        let track = Track {
+            id: 0,
+            file_path: path.to_str().unwrap().to_string(),
+            title: "T".to_string(),
+            artist: "A".to_string(),
+            album: "B".to_string(),
+            album_artist: None,
+            duration_secs: 1.0,
+            cover_art: None,
+            cover_art_path: None,
+            file_size_bytes: 1,
+            play_count: 0,
+            last_played_at: None,
+        };
+        library_repo::insert_track(conn, &track).unwrap()
+    }
+
+    fn rename_event(from: &Path, to: &Path) -> notify::Event {
+        notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+            .add_path(from.to_path_buf())
+            .add_path(to.to_path_buf())
+    }
+
+    /// A same-filesystem move arrives as one Both event with `[old, new]` —
+    /// the row must be repointed, keeping id, `play_count` and playlist
+    /// membership, instead of delete + re-import.
+    #[test]
+    fn rename_both_event_repoints_track() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.mp3");
+        let new = dir.path().join("new.mp3");
+        std::fs::write(&new, b"x").unwrap(); // file already at destination when the batch runs
+
+        let conn = test_conn();
+        let id = insert_track_at(&conn, &old);
+        library_repo::increment_play_count(&conn, id).unwrap();
+        let pl = playlist_repo::create_playlist(&conn, "pl").unwrap();
+        playlist_repo::add_to_playlist(&conn, pl, id).unwrap();
+
+        let mut removed = Vec::new();
+        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+
+        assert!(changed);
+        assert!(removed.is_empty());
+        assert_eq!(
+            library_repo::get_track_id_by_path(&conn, new.to_str().unwrap()).unwrap(),
+            Some(id)
+        );
+        assert_eq!(
+            library_repo::get_track_id_by_path(&conn, old.to_str().unwrap()).unwrap(),
+            None
+        );
+        let track = library_repo::get_track_by_id(&conn, id).unwrap().unwrap();
+        assert_eq!(track.play_count, 1);
+        let pl_tracks = playlist_repo::get_playlist_tracks(&conn, pl).unwrap();
+        assert_eq!(pl_tracks.len(), 1);
+        assert_eq!(pl_tracks[0].id, id);
+    }
+
+    /// inotify reports a directory rename as a single Both event for the dir
+    /// path — no per-child events fire, so children must be repointed by
+    /// prefix or their rows go stale.
+    #[test]
+    fn rename_both_event_directory_repoints_children() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("Album A");
+        let new_dir = dir.path().join("Album B");
+        std::fs::create_dir(&new_dir).unwrap(); // dir already renamed on disk
+
+        let conn = test_conn();
+        let child_id = insert_track_at(&conn, &old_dir.join("01.mp3"));
+        let other_id = insert_track_at(&conn, &dir.path().join("Other").join("02.mp3"));
+
+        let mut removed = Vec::new();
+        let changed = apply_rename_events(&conn, &[rename_event(&old_dir, &new_dir)], &mut removed);
+
+        assert!(changed);
+        assert!(removed.is_empty());
+        assert_eq!(
+            library_repo::get_track_id_by_path(&conn, new_dir.join("01.mp3").to_str().unwrap())
+                .unwrap(),
+            Some(child_id)
+        );
+        assert_eq!(
+            library_repo::get_track_id_by_path(
+                &conn,
+                dir.path().join("Other").join("02.mp3").to_str().unwrap()
+            )
+            .unwrap(),
+            Some(other_id)
+        );
+    }
+
+    /// A move that overwrites a different tracked file must drop the stale
+    /// destination row (reported via removed ids) so the path UPDATE does
+    /// not hit the UNIQUE constraint.
+    #[test]
+    fn rename_both_event_removes_displaced_destination_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.mp3");
+        let new = dir.path().join("new.mp3");
+        std::fs::write(&new, b"x").unwrap();
+
+        let conn = test_conn();
+        let moved_id = insert_track_at(&conn, &old);
+        library_repo::increment_play_count(&conn, moved_id).unwrap();
+        let displaced_id = insert_track_at(&conn, &new);
+
+        let mut removed = Vec::new();
+        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+
+        assert!(changed);
+        assert_eq!(removed, vec![displaced_id]);
+        assert_eq!(
+            library_repo::get_track_id_by_path(&conn, new.to_str().unwrap()).unwrap(),
+            Some(moved_id)
+        );
+        let track = library_repo::get_track_by_id(&conn, moved_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(track.play_count, 1);
+    }
+
+    /// Renaming an untracked file is not ours to handle — the To/Import path
+    /// in the main loop imports the destination as a new track.
+    #[test]
+    fn rename_both_event_untracked_source_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.mp3");
+        let new = dir.path().join("new.mp3");
+        std::fs::write(&new, b"x").unwrap();
+
+        let conn = test_conn();
+        let mut removed = Vec::new();
+        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+
+        assert!(!changed);
+        assert!(removed.is_empty());
+        assert!(library_repo::get_all_tracks(&conn).unwrap().is_empty());
     }
 }
 

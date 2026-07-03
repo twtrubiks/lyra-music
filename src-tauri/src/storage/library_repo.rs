@@ -332,6 +332,37 @@ pub fn get_track_id_by_path(conn: &Connection, file_path: &str) -> Result<Option
     }
 }
 
+/// Repoint a tracked file to a new path after a rename/move, keeping the row
+/// — and with it id, `play_count`, `last_played_at` and playlist membership.
+/// Returns the number of rows updated (0 when `old_path` is not tracked).
+pub fn update_track_path(
+    conn: &Connection,
+    old_path: &str,
+    new_path: &str,
+) -> Result<usize, AppError> {
+    Ok(conn.execute(
+        "UPDATE tracks SET file_path = ?2 WHERE file_path = ?1",
+        params![old_path, new_path],
+    )?)
+}
+
+/// Repoint every track under a renamed directory to the new prefix.
+/// Matches via substr instead of LIKE so `%`/`_` in paths stay literal, and
+/// requires the trailing `/` so `/music/AlbumA2` is not caught by
+/// `/music/AlbumA`.
+pub fn update_track_paths_by_prefix(
+    conn: &Connection,
+    old_dir: &str,
+    new_dir: &str,
+) -> Result<usize, AppError> {
+    Ok(conn.execute(
+        "UPDATE tracks
+         SET file_path = ?2 || substr(file_path, length(?1) + 1)
+         WHERE substr(file_path, 1, length(?1) + 1) = ?1 || '/'",
+        params![old_dir, new_dir],
+    )?)
+}
+
 pub fn delete_track_by_path(
     conn: &Connection,
     file_path: &str,
