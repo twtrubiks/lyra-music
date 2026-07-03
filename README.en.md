@@ -55,7 +55,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 Other features:
 - Artist / Album browse views (grid covers, search filtering, detail views)
 - Track metadata editing (title, artist, album written back to file)
-- Real-time folder watching (add/modify/delete automatically syncs music library)
+- Real-time folder watching (add/modify/delete automatically syncs music library; moves/renames preserve play stats and playlist membership)
 - Column header sorting (preferences persisted), play count tracking (Most Played ranking view)
 - Recursive music library scanning with automatic metadata reading and cover art caching
 - Playback modes (loop/repeat-one/shuffle), instant search filtering, multi-select operations, context menu, drag-and-drop import
