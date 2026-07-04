@@ -28,6 +28,7 @@ base64 = "0.22"
 thiserror = "2"
 trash = "5"
 notify = "8"
+ureq = "3"
 
 [features]
 audio-tests = []

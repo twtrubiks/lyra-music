@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, State};
 use crate::DbState;
 use crate::WatcherState;
 use crate::error::AppError;
-use crate::metadata::{reader, writer};
+use crate::metadata::{lyrics_online, reader, writer};
 use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::{FailedFile, ImportResult, Track, TrackDetails};
 use crate::scanner::folder_scanner;
@@ -375,6 +375,37 @@ pub fn get_track_lyrics(id: i64, db: State<DbState>) -> Result<Option<String>, A
     };
     // File I/O (sidecar read, tag parsing) runs without the DB lock held.
     Ok(reader::read_lyrics(&file_path))
+}
+
+/// User-triggered online lyrics lookup (LRCLIB). Synced hits are cached as a
+/// sidecar `.lrc`; the network call and file I/O run without the DB lock held.
+#[tauri::command(async)]
+pub fn fetch_lyrics_online(id: i64, db: State<DbState>) -> Result<Option<String>, AppError> {
+    let track = {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::get_track_by_id(&conn, id)?
+            .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?
+    };
+    // "Unknown Artist" is the reader's placeholder for a missing tag — an
+    // LRCLIB query built from it can only mismatch.
+    if track.artist.trim().is_empty() || track.artist == "Unknown Artist" {
+        return Err(AppError::Generic(
+            "track has no artist tag; cannot search online".into(),
+        ));
+    }
+    match lyrics_online::fetch(
+        &track.artist,
+        &track.title,
+        &track.album,
+        track.duration_secs,
+    )? {
+        Some(lyrics_online::FetchedLyrics::Synced(text)) => {
+            lyrics_online::save_sidecar_if_absent(&track.file_path, &text);
+            Ok(Some(text))
+        }
+        Some(lyrics_online::FetchedLyrics::Plain(text)) => Ok(Some(text)),
+        None => Ok(None),
+    }
 }
 
 #[tauri::command(async)]

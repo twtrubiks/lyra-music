@@ -14,6 +14,8 @@ pub enum AppError {
     MetadataWrite(String),
     #[error("Watcher error: {0}")]
     Watcher(String),
+    #[error("Network error: {0}")]
+    Network(String),
     #[error("Lock poisoned")]
     LockPoisoned,
     #[error("{0}")]

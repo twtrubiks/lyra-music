@@ -9,17 +9,26 @@
 
   let lyrics = $state<ParsedLyrics | null>(null);
   let loading = $state(false);
+  let onlineStatus = $state<'idle' | 'searching' | 'notfound' | 'error'>('idle');
   let userScrolling = $state(false);
   let container = $state<HTMLElement>();
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 
   const trackId = $derived(player.currentTrack?.id ?? null);
 
+  // "Unknown Artist" mirrors the backend reader's missing-tag placeholder —
+  // an LRCLIB query built from it can only mismatch, so don't offer search.
+  const searchableOnline = $derived.by(() => {
+    const artist = player.currentTrack?.artist ?? '';
+    return artist.trim() !== '' && artist !== 'Unknown Artist';
+  });
+
   // Fetch lyrics on track change. A late response for a previous track must
   // not overwrite the current one — guard on the id captured at request time.
   $effect(() => {
     const id = trackId;
     lyrics = null;
+    onlineStatus = 'idle';
     if (id === null) {
       loading = false;
       return;
@@ -65,6 +74,31 @@
 
   $effect(() => () => clearTimeout(scrollTimer));
 
+  // Manual online lookup (LRCLIB) — same late-response guard as the local
+  // fetch above. A hit that parses to nothing counts as not found.
+  function searchOnline() {
+    const id = trackId;
+    if (id === null || onlineStatus === 'searching') return;
+    onlineStatus = 'searching';
+    libraryApi
+      .fetchLyricsOnline(id)
+      .then((raw) => {
+        if (trackId !== id) return;
+        const parsed = raw === null ? null : parseLyrics(raw);
+        if (parsed === null) {
+          onlineStatus = 'notfound';
+          return;
+        }
+        lyrics = parsed;
+        onlineStatus = 'idle';
+      })
+      .catch((err) => {
+        if (trackId !== id) return;
+        onlineStatus = 'error';
+        warnNonCritical('Fetch lyrics online', err);
+      });
+  }
+
   function pauseAutoScroll() {
     userScrolling = true;
     clearTimeout(scrollTimer);
@@ -87,7 +121,21 @@
   {:else if loading}
     <p class="empty">載入歌詞中…</p>
   {:else if !lyrics}
-    <p class="empty">找不到歌詞</p>
+    <div class="empty not-found">
+      <p>找不到歌詞</p>
+      {#if !searchableOnline}
+        <p class="hint">曲目缺少演出者標籤，無法線上搜尋</p>
+      {:else if onlineStatus === 'searching'}
+        <p class="hint">線上搜尋中…</p>
+      {:else}
+        <button class="search-online" onclick={searchOnline}>線上搜尋歌詞</button>
+        {#if onlineStatus === 'notfound'}
+          <p class="hint">線上也找不到這首歌的歌詞</p>
+        {:else if onlineStatus === 'error'}
+          <p class="hint">線上搜尋失敗，請檢查網路連線</p>
+        {/if}
+      {/if}
+    </div>
   {:else if lyrics.synced}
     <div class="lines">
       {#each lyrics.lines as line, i (i)}
@@ -151,5 +199,30 @@
     height: 100%;
     color: #666;
     font-size: 16px;
+  }
+
+  .not-found {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .search-online {
+    padding: 6px 18px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: transparent;
+    color: #aaa;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .search-online:hover {
+    border-color: #777;
+    color: #fff;
+  }
+
+  .hint {
+    color: #555;
+    font-size: 13px;
   }
 </style>

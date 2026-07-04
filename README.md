@@ -38,6 +38,7 @@ Lyra 的設計原則：
 | 元資料解析 | lofty 0.24 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
 | 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
 | 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
+| 線上歌詞 | ureq 3 (rustls) | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar |
 | 測試 | Vitest + cargo test | 前端 19 個測試檔、後端 16 個整合測試 |
 
 ## 主要功能
@@ -50,10 +51,11 @@ Lyra 的設計原則：
 
 **Mini Player + System Tray** -- 按 `m` 切換為 420x80 精簡視窗（always-on-top）。系統匣支援 Play/Pause、上一首、下一首、顯示視窗、退出。關閉視窗時自動最小化到系統匣。
 
-**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 41 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
+**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 42 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
 
 其他功能：
 - 時間同步滾動歌詞（同名 `.lrc` sidecar 檔優先，fallback 到內嵌歌詞標籤；純文字歌詞以靜態顯示）
+- 線上歌詞搜尋（LRCLIB，手動觸發——本地找不到歌詞時可一鍵線上搜尋，同步歌詞自動快取為 `.lrc` sidecar，不覆蓋既有檔案）
 - 藝人 / 專輯瀏覽視圖（網格封面、搜尋過濾、詳情視圖）
 - 曲目元資料編輯（標題、藝人、專輯寫回檔案）
 - 資料夾即時監視（新增/修改/刪除自動同步音樂庫；搬移/改名保留播放統計與清單歸屬）
@@ -135,7 +137,7 @@ src-tauri/                        # 後端 (Rust)
     scanner/                      # 資料夾掃描與檔案監視 (walkdir, notify)
     metadata/                     # 元資料讀寫與封面快取 (lofty)
     storage/                      # SQLite 資料庫 (schema v5, WAL mode)
-    commands/                     # Tauri command handlers (41 個 IPC 介面)
+    commands/                     # Tauri command handlers (42 個 IPC 介面)
     models/                       # 資料結構定義 (track, playlist, player_state)
   tests/                          # 16 個整合測試
 ```

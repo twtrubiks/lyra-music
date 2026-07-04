@@ -38,6 +38,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | Metadata Parsing | lofty 0.24 | Read/write ID3/Vorbis/MP4 tags and cover art |
 | File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
 | Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
+| Online Lyrics | ureq 3 (rustls) | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar |
 | Testing | Vitest + cargo test | 19 frontend test files, 16 backend integration tests |
 
 ## Key Features
@@ -50,10 +51,11 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 
 **Mini Player + System Tray** -- Press `m` to switch to a compact 420x80 window (always-on-top). System tray supports Play/Pause, previous, next, show window, and quit. Closing the window automatically minimizes to the system tray.
 
-**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 41 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
+**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 42 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
 
 Other features:
 - Time-synced scrolling lyrics (sidecar `.lrc` file takes priority, falls back to embedded lyrics tags; plain-text lyrics shown statically)
+- Online lyrics search (LRCLIB, manually triggered -- one click searches online when no local lyrics exist; synced hits are cached as a `.lrc` sidecar without overwriting existing files)
 - Artist / Album browse views (grid covers, search filtering, detail views)
 - Track metadata editing (title, artist, album written back to file)
 - Real-time folder watching (add/modify/delete automatically syncs music library; moves/renames preserve play stats and playlist membership)
@@ -135,7 +137,7 @@ src-tauri/                        # Backend (Rust)
     scanner/                      # Folder scanning & file watching (walkdir, notify)
     metadata/                     # Metadata read/write & cover art caching (lofty)
     storage/                      # SQLite database (schema v5, WAL mode)
-    commands/                     # Tauri command handlers (41 IPC interfaces)
+    commands/                     # Tauri command handlers (42 IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
   tests/                          # 16 integration tests
 ```
