@@ -12,6 +12,7 @@ let shuffleEnabled = $state(false);
 let repeatMode = $state<RepeatMode>('off');
 let shuffledIndices = $state<number[]>([]);
 let miniMode = $state(false);
+let showLyrics = $state(false);
 
 /** Playlist the current queue was started from; null when playing from the library/browse views. */
 let queueSourcePlaylistId = $state<number | null>(null);
@@ -92,6 +93,12 @@ export function getPlayerState() {
     },
     set miniMode(v: boolean) {
       miniMode = v;
+    },
+    get showLyrics() {
+      return showLyrics;
+    },
+    set showLyrics(v: boolean) {
+      showLyrics = v;
     },
     get queueSourcePlaylistId() {
       return queueSourcePlaylistId;

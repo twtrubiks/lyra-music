@@ -134,30 +134,35 @@ pub fn create_test_wav_with_id3(
     )
 }
 
+fn syncsafe(n: u32) -> [u8; 4] {
+    [
+        ((n >> 21) & 0x7F) as u8,
+        ((n >> 14) & 0x7F) as u8,
+        ((n >> 7) & 0x7F) as u8,
+        (n & 0x7F) as u8,
+    ]
+}
+
+/// Build one ID3v2.4 frame (header + body) from a raw frame body.
+fn raw_frame(id: &[u8; 4], body: &[u8]) -> Vec<u8> {
+    let mut frame = Vec::with_capacity(10 + body.len());
+    frame.extend_from_slice(id);
+    frame.extend_from_slice(&syncsafe(body.len() as u32));
+    frame.extend_from_slice(&[0, 0]); // frame flags
+    frame.extend_from_slice(body);
+    frame
+}
+
 /// Create a test WAV with an embedded ID3v2.4 chunk containing the given text frames.
 pub fn create_test_wav_with_id3_frames(
     dir: &std::path::Path,
     name: &str,
     frames_spec: &[([u8; 4], &str)],
 ) -> std::path::PathBuf {
-    fn syncsafe(n: u32) -> [u8; 4] {
-        [
-            ((n >> 21) & 0x7F) as u8,
-            ((n >> 14) & 0x7F) as u8,
-            ((n >> 7) & 0x7F) as u8,
-            (n & 0x7F) as u8,
-        ]
-    }
-
     fn text_frame(id: &[u8; 4], text: &str) -> Vec<u8> {
         let mut body = vec![3u8]; // text encoding: UTF-8
         body.extend_from_slice(text.as_bytes());
-        let mut frame = Vec::with_capacity(10 + body.len());
-        frame.extend_from_slice(id);
-        frame.extend_from_slice(&syncsafe(body.len() as u32));
-        frame.extend_from_slice(&[0, 0]); // frame flags
-        frame.extend_from_slice(&body);
-        frame
+        raw_frame(id, &body)
     }
 
     let path = create_test_wav(dir, name);
@@ -167,12 +172,36 @@ pub fn create_test_wav_with_id3_frames(
         frames.extend(text_frame(id, text));
     }
 
+    append_id3_chunk(&path, &frames);
+    path
+}
+
+/// Create a test WAV with an embedded ID3v2.4 USLT (unsynchronized lyrics) frame.
+pub fn create_test_wav_with_uslt(
+    dir: &std::path::Path,
+    name: &str,
+    lyrics: &str,
+) -> std::path::PathBuf {
+    let path = create_test_wav(dir, name);
+
+    let mut body = vec![3u8]; // text encoding: UTF-8
+    body.extend_from_slice(b"eng"); // language
+    body.push(0); // empty content descriptor, terminated
+    body.extend_from_slice(lyrics.as_bytes());
+    let frames = raw_frame(b"USLT", &body);
+
+    append_id3_chunk(&path, &frames);
+    path
+}
+
+/// Wrap ID3v2.4 frames in a tag and append it to a WAV file as an `ID3 ` RIFF chunk.
+fn append_id3_chunk(path: &std::path::Path, frames: &[u8]) {
     let mut tag = Vec::with_capacity(10 + frames.len());
     tag.extend_from_slice(b"ID3\x04\x00\x00"); // ID3v2.4 header, no flags
     tag.extend_from_slice(&syncsafe(frames.len() as u32));
-    tag.extend_from_slice(&frames);
+    tag.extend_from_slice(frames);
 
-    let mut buf = std::fs::read(&path).expect("failed to read test wav");
+    let mut buf = std::fs::read(path).expect("failed to read test wav");
     buf.extend_from_slice(b"ID3 ");
     buf.extend_from_slice(&(tag.len() as u32).to_le_bytes());
     buf.extend_from_slice(&tag);
@@ -181,6 +210,5 @@ pub fn create_test_wav_with_id3_frames(
     }
     let riff_size = (buf.len() - 8) as u32;
     buf[4..8].copy_from_slice(&riff_size.to_le_bytes());
-    std::fs::write(&path, &buf).expect("failed to write test wav with id3");
-    path
+    std::fs::write(path, &buf).expect("failed to write test wav with id3");
 }

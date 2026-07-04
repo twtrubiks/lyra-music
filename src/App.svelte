@@ -3,6 +3,7 @@
   import LibraryView from '$lib/components/Library/LibraryView.svelte';
   import PlaylistPanel from '$lib/components/Playlist/PlaylistPanel.svelte';
   import PlayerBar from '$lib/components/Player/PlayerBar.svelte';
+  import LyricsPanel from '$lib/components/Player/LyricsPanel.svelte';
   import ArtistListView from '$lib/components/Browse/ArtistListView.svelte';
   import ArtistDetailView from '$lib/components/Browse/ArtistDetailView.svelte';
   import AlbumListView from '$lib/components/Browse/AlbumListView.svelte';
@@ -344,6 +345,10 @@
     {:else}
       <PlaylistPanel />
     {/if}
+
+    {#if player.showLyrics && !player.miniMode}
+      <LyricsPanel />
+    {/if}
   </div>
 
   <div class="player-area">
@@ -414,6 +419,7 @@
   .main-area {
     grid-area: main;
     overflow: hidden;
+    position: relative;
   }
 
   .player-area {

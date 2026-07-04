@@ -150,6 +150,37 @@ pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails
     })
 }
 
+/// Read lyrics for an audio file: a sidecar `.lrc` (same name, `.lrc`
+/// extension) takes priority; falls back to the embedded lyrics tag (USLT
+/// etc.). Returns `None` when neither exists. A sidecar that is not valid
+/// UTF-8 falls through to the embedded tag instead of surfacing as mojibake.
+pub fn read_lyrics(file_path: &str) -> Option<String> {
+    let path = Path::new(file_path);
+
+    let sidecar = path.with_extension("lrc");
+    if let Ok(bytes) = fs::read(&sidecar) {
+        match String::from_utf8(bytes) {
+            Ok(text) if !text.trim().is_empty() => return Some(text),
+            Ok(_) => {}
+            Err(_) => eprintln!(
+                "[lyra] sidecar lyrics not valid UTF-8, ignoring: {}",
+                sidecar.display()
+            ),
+        }
+    }
+
+    let tagged_file = read_tagged_file(path).ok()?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
+    // ID3v2 USLT maps to UnsyncLyrics; Vorbis/MP4 lyrics map to Lyrics.
+    tag.get_string(ItemKey::UnsyncLyrics)
+        .or_else(|| tag.get_string(ItemKey::Lyrics))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
+
 /// Extract raw cover art bytes and MIME type from an audio file.
 pub fn extract_cover_art_bytes(file_path: &str) -> Option<(Vec<u8>, String)> {
     let tagged_file = read_tagged_file(Path::new(file_path)).ok()?;

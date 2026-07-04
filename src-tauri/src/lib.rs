@@ -177,6 +177,7 @@ pub fn run() {
             commands::library::trash_tracks,
             commands::library::remove_tracks,
             commands::library::get_track_details,
+            commands::library::get_track_lyrics,
             commands::library::import_paths,
             commands::library::update_track_metadata,
             commands::library::get_all_artists,

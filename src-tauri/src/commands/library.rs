@@ -364,6 +364,18 @@ pub fn update_track_metadata(
 }
 
 #[tauri::command]
+pub fn get_track_lyrics(id: i64, db: State<DbState>) -> Result<Option<String>, AppError> {
+    let file_path = {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        let track = library_repo::get_track_by_id(&conn, id)?
+            .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?;
+        track.file_path
+    };
+    // File I/O (sidecar read, tag parsing) runs without the DB lock held.
+    Ok(reader::read_lyrics(&file_path))
+}
+
+#[tauri::command]
 pub fn get_all_artists(db: State<DbState>) -> Result<Vec<ArtistSummary>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_all_artists(&conn)

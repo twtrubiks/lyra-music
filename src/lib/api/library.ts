@@ -42,6 +42,10 @@ export async function getTrackDetails(id: number): Promise<TrackDetails> {
   return invoke('get_track_details', { id });
 }
 
+export async function getTrackLyrics(id: number): Promise<string | null> {
+  return invoke('get_track_lyrics', { id });
+}
+
 export async function importPaths(paths: string[]): Promise<ImportResult> {
   return invoke('import_paths', { paths });
 }

@@ -6,7 +6,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-import { getTracksByAlbum, getAllAlbums } from './library';
+import { getTracksByAlbum, getAllAlbums, getTrackLyrics } from './library';
 
 describe('getTracksByAlbum', () => {
   it('passes album and artist to invoke', async () => {
@@ -28,5 +28,16 @@ describe('getAllAlbums', () => {
     await getAllAlbums();
 
     expect(mockInvoke).toHaveBeenCalledWith('get_all_albums');
+  });
+});
+
+describe('getTrackLyrics', () => {
+  it('passes track id to invoke', async () => {
+    mockInvoke.mockResolvedValueOnce(null);
+
+    const result = await getTrackLyrics(42);
+
+    expect(mockInvoke).toHaveBeenCalledWith('get_track_lyrics', { id: 42 });
+    expect(result).toBeNull();
   });
 });
