@@ -12,6 +12,7 @@ import {
   moveFocusUp,
   extendSelectionDown,
   extendSelectionUp,
+  matchesIdSequence,
 } from './selection';
 import { createMockTracks } from '$lib/test-helpers';
 
@@ -535,5 +536,38 @@ describe('extendSelectionUp', () => {
     expect(s.selectedIds.size).toBe(2);
     expect(s.selectedIds.has(tracks[1].id)).toBe(true);
     expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+});
+
+// ============================================================
+// matchesIdSequence
+// ============================================================
+
+describe('matchesIdSequence', () => {
+  it('matches when ids are identical in the same order', () => {
+    expect(matchesIdSequence([1, 2, 3], createMockTracks(3))).toBe(true);
+  });
+
+  it('matches a rebuilt array with the same rows (play-count mirror)', () => {
+    const rebuilt = tracks.map((t) => ({ ...t, play_count: t.play_count + 1 }));
+    expect(
+      matchesIdSequence(
+        tracks.map((t) => t.id),
+        rebuilt,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match when a track was added or removed', () => {
+    expect(matchesIdSequence([1, 2, 3], createMockTracks(4))).toBe(false);
+    expect(matchesIdSequence([1, 2, 3, 4], createMockTracks(3))).toBe(false);
+  });
+
+  it('does not match when order changed (sort)', () => {
+    expect(matchesIdSequence([3, 2, 1], createMockTracks(3))).toBe(false);
+  });
+
+  it('matches two empty lists', () => {
+    expect(matchesIdSequence([], [])).toBe(true);
   });
 });

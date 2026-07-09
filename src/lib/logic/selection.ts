@@ -179,3 +179,17 @@ export function getSelectedTracks<T extends { id: number }>(
 ): T[] {
   return tracks.filter((t) => selection.selectedIds.has(t.id));
 }
+
+/**
+ * True when `tracks` lists exactly the ids in `ids`, in the same order.
+ * Distinguishes a meaningful listing change (search, playlist switch, sort)
+ * from a benign array rebuild (play-count mirror, library-changed refetch
+ * with an unchanged listing) that must not reset an in-progress selection.
+ */
+export function matchesIdSequence(ids: number[], tracks: { id: number }[]): boolean {
+  if (ids.length !== tracks.length) return false;
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] !== tracks[i].id) return false;
+  }
+  return true;
+}

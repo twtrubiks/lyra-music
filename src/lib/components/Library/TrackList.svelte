@@ -18,6 +18,7 @@
     moveFocusUp,
     extendSelectionDown,
     extendSelectionUp,
+    matchesIdSequence,
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
@@ -80,13 +81,17 @@
   // Selection state
   let selection = $state<SelectionState>(createEmptySelection());
 
-  // Reset selection when tracks array reference changes (search filter, playlist switch)
-  let prevTracksRef: Track[] | undefined;
+  // Reset selection when the listing meaningfully changes (search filter,
+  // playlist switch, sort). Compared by id sequence, not array reference —
+  // benign rebuilds (play-count mirror, library-changed refetch with an
+  // unchanged listing) produce a new array with the same rows and must not
+  // wipe an in-progress selection.
+  let prevTrackIds: number[] | undefined;
   $effect(() => {
-    if (prevTracksRef !== undefined && prevTracksRef !== tracks) {
+    if (prevTrackIds !== undefined && !matchesIdSequence(prevTrackIds, tracks)) {
       selection = createEmptySelection();
     }
-    prevTracksRef = tracks;
+    prevTrackIds = tracks.map((t) => t.id);
   });
 
   // Context menu state
