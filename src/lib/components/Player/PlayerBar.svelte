@@ -4,6 +4,7 @@
   import ProgressBar from './ProgressBar.svelte';
   import VolumeControl from './VolumeControl.svelte';
   import { getPlayerState } from '$lib/state/playerState.svelte';
+  import { getLyricsState } from '$lib/state/lyricsState.svelte';
   import * as playbackApi from '$lib/api/playback';
   import { getNextIndex, getPrevIndex } from '$lib/logic/playmode';
   import {
@@ -19,6 +20,15 @@
   import type { PlayerState } from '$lib/types';
 
   const player = getPlayerState();
+  const lyricsState = getLyricsState();
+
+  const lyricsTitle = $derived(
+    lyricsState.availability === 'synced'
+      ? 'Lyrics（同步歌詞）'
+      : lyricsState.availability === 'plain'
+        ? 'Lyrics（純文字歌詞）'
+        : 'Lyrics',
+  );
 
   const canNext = $derived(
     player.playQueue.length > 0 &&
@@ -164,16 +174,19 @@
     <VolumeControl volume={player.volume} onchange={handleVolumeChange} />
 
     <button
-      class="mode-btn"
+      class="mode-btn lyrics-btn"
       class:active={player.showLyrics}
       onclick={() => (player.showLyrics = !player.showLyrics)}
-      title="Lyrics"
+      title={lyricsTitle}
     >
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
         <path
           d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"
         />
       </svg>
+      {#if lyricsState.availability !== 'none'}
+        <span class="lyrics-dot" class:synced={lyricsState.availability === 'synced'}></span>
+      {/if}
     </button>
   {/if}
 
@@ -255,6 +268,25 @@
 
   .mode-btn.active {
     color: #e94560;
+  }
+
+  .lyrics-btn {
+    position: relative;
+  }
+
+  /* 目前曲目有歌詞時的指示點：灰＝純文字，紅＝同步歌詞 */
+  .lyrics-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #888;
+  }
+
+  .lyrics-dot.synced {
+    background: #e94560;
   }
 
   .player-bar.mini {

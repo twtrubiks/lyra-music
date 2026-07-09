@@ -9,7 +9,8 @@ export type KeyAction =
   | 'shuffle'
   | 'repeat'
   | 'mini-toggle'
-  | 'mini-exit'
+  | 'lyrics-toggle'
+  | 'dismiss'
   | 'focus-search'
   | 'show-shortcuts'
   | null;
@@ -45,11 +46,22 @@ export function mapKeyToAction(e: { key: string; ctrlKey: boolean; metaKey: bool
       return 'repeat';
     case 'm':
       return 'mini-toggle';
+    case 'l':
+      return 'lyrics-toggle';
     case 'Escape':
-      return 'mini-exit';
+      // 依序關閉最上層的東西：歌詞面板 → 迷你模式（由 App 決定）
+      return 'dismiss';
     case '?':
       return 'show-shortcuts';
     default:
       return null;
   }
+}
+
+/**
+ * Escape 的優先序：一般模式下先關歌詞面板，否則退出迷你模式。
+ * 迷你模式下面板不會渲染，即使 showLyrics 殘留為 true 也直接退迷你。
+ */
+export function resolveDismissTarget(miniMode: boolean, showLyrics: boolean): 'lyrics' | 'mini' {
+  return !miniMode && showLyrics ? 'lyrics' : 'mini';
 }

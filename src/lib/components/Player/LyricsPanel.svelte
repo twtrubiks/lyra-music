@@ -1,51 +1,27 @@
 <script lang="ts">
   import { getPlayerState } from '$lib/state/playerState.svelte';
-  import * as libraryApi from '$lib/api/library';
-  import { parseLyrics, currentLineIndex } from '$lib/logic/lrc';
-  import type { ParsedLyrics } from '$lib/logic/lrc';
-  import { warnNonCritical } from '$lib/logic/error-handler';
+  import { getLyricsState } from '$lib/state/lyricsState.svelte';
+  import { searchLyricsOnline } from '$lib/logic/lyrics-actions';
+  import { currentLineIndex } from '$lib/logic/lrc';
 
   const player = getPlayerState();
 
-  let lyrics = $state<ParsedLyrics | null>(null);
-  let loading = $state(false);
-  let onlineStatus = $state<'idle' | 'searching' | 'notfound' | 'error'>('idle');
+  // Lyrics are loaded eagerly on track change (App.svelte → lyrics-actions),
+  // so opening the panel shows content immediately.
+  const lyricsState = getLyricsState();
+  const lyrics = $derived(lyricsState.lyrics);
+  const loading = $derived(lyricsState.loading);
+  const onlineStatus = $derived(lyricsState.onlineStatus);
+
   let userScrolling = $state(false);
   let container = $state<HTMLElement>();
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const trackId = $derived(player.currentTrack?.id ?? null);
 
   // "Unknown Artist" mirrors the backend reader's missing-tag placeholder —
   // an LRCLIB query built from it can only mismatch, so don't offer search.
   const searchableOnline = $derived.by(() => {
     const artist = player.currentTrack?.artist ?? '';
     return artist.trim() !== '' && artist !== 'Unknown Artist';
-  });
-
-  // Fetch lyrics on track change. A late response for a previous track must
-  // not overwrite the current one — guard on the id captured at request time.
-  $effect(() => {
-    const id = trackId;
-    lyrics = null;
-    onlineStatus = 'idle';
-    if (id === null) {
-      loading = false;
-      return;
-    }
-    loading = true;
-    libraryApi
-      .getTrackLyrics(id)
-      .then((raw) => {
-        if (trackId !== id) return;
-        lyrics = raw === null ? null : parseLyrics(raw);
-        loading = false;
-      })
-      .catch((err) => {
-        if (trackId !== id) return;
-        loading = false;
-        warnNonCritical('Load lyrics', err);
-      });
   });
 
   const activeIndex = $derived(
@@ -73,33 +49,6 @@
   });
 
   $effect(() => () => clearTimeout(scrollTimer));
-
-  // Manual online lookup (LRCLIB) — same late-response guard as the local
-  // fetch above. A hit that parses to nothing counts as not found; so does a
-  // plain result when local lyrics are already shown, because the button then
-  // promises an upgrade to synced — never swap plain for plain.
-  function searchOnline() {
-    const id = trackId;
-    if (id === null || onlineStatus === 'searching') return;
-    onlineStatus = 'searching';
-    libraryApi
-      .fetchLyricsOnline(id)
-      .then((raw) => {
-        if (trackId !== id) return;
-        const parsed = raw === null ? null : parseLyrics(raw);
-        if (parsed === null || (lyrics !== null && !parsed.synced)) {
-          onlineStatus = 'notfound';
-          return;
-        }
-        lyrics = parsed;
-        onlineStatus = 'idle';
-      })
-      .catch((err) => {
-        if (trackId !== id) return;
-        onlineStatus = 'error';
-        warnNonCritical('Fetch lyrics online', err);
-      });
-  }
 
   function pauseAutoScroll() {
     userScrolling = true;
@@ -134,7 +83,7 @@
       {:else if onlineStatus === 'searching'}
         <p class="hint">線上搜尋中…</p>
       {:else}
-        <button class="search-online" onclick={searchOnline}>線上搜尋歌詞</button>
+        <button class="search-online" onclick={searchLyricsOnline}>線上搜尋歌詞</button>
         {#if onlineStatus === 'notfound'}
           <p class="hint">線上也找不到這首歌的歌詞</p>
         {:else if onlineStatus === 'error'}
@@ -157,7 +106,7 @@
           {#if onlineStatus === 'searching'}
             <p class="hint">線上搜尋中…</p>
           {:else}
-            <button class="search-online" onclick={searchOnline}>搜尋同步歌詞</button>
+            <button class="search-online" onclick={searchLyricsOnline}>搜尋同步歌詞</button>
             {#if onlineStatus === 'notfound'}
               <p class="hint">線上沒有這首歌的同步歌詞</p>
             {:else if onlineStatus === 'error'}

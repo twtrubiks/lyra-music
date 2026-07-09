@@ -13,7 +13,7 @@
   import { getPlayerState } from '$lib/state/playerState.svelte';
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
   import KeyboardShortcutsDialog from '$lib/components/Help/KeyboardShortcutsDialog.svelte';
-  import { mapKeyToAction } from '$lib/logic/keyboard';
+  import { mapKeyToAction, resolveDismissTarget } from '$lib/logic/keyboard';
   import { warnNonCritical, notifyCritical, notifyImportResult } from '$lib/logic/error-handler';
   import { pushError } from '$lib/state/errorState.svelte';
   import * as playbackApi from '$lib/api/playback';
@@ -27,6 +27,7 @@
     cycleRepeat,
     handleTracksRemovedBatch,
   } from '$lib/logic/playback-actions';
+  import { loadLyricsForTrack } from '$lib/logic/lyrics-actions';
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
 
@@ -108,6 +109,13 @@
       // Window API not available (dev mode)
     }
   }
+
+  // Preload lyrics on track change so the PlayerBar can indicate availability
+  // before the lyrics panel is opened (also removes the panel's loading flash).
+  const currentTrackId = $derived(player.currentTrack?.id ?? null);
+  $effect(() => {
+    void loadLyricsForTrack(currentTrackId);
+  });
 
   // Sync Tauri window size whenever miniMode changes (from keyboard, button, etc.)
   let prevMiniMode = player.miniMode;
@@ -302,8 +310,16 @@
       case 'mini-toggle':
         player.miniMode = !player.miniMode;
         break;
-      case 'mini-exit':
-        player.miniMode = false;
+      case 'lyrics-toggle':
+        // 迷你模式下面板不會渲染，toggle 只會累積隱形狀態
+        if (!player.miniMode) player.showLyrics = !player.showLyrics;
+        break;
+      case 'dismiss':
+        if (resolveDismissTarget(player.miniMode, player.showLyrics) === 'lyrics') {
+          player.showLyrics = false;
+        } else {
+          player.miniMode = false;
+        }
         break;
       case 'focus-search':
         (document.querySelector('.search-box input') as HTMLElement)?.focus();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapKeyToAction } from './keyboard';
+import { mapKeyToAction, resolveDismissTarget } from './keyboard';
 
 describe('mapKeyToAction', () => {
   const base = { ctrlKey: false, metaKey: false };
@@ -44,8 +44,12 @@ describe('mapKeyToAction', () => {
     expect(mapKeyToAction({ key: 'm', ...base })).toBe('mini-toggle');
   });
 
-  it('Escape → mini-exit', () => {
-    expect(mapKeyToAction({ key: 'Escape', ...base })).toBe('mini-exit');
+  it('l → lyrics-toggle', () => {
+    expect(mapKeyToAction({ key: 'l', ...base })).toBe('lyrics-toggle');
+  });
+
+  it('Escape → dismiss', () => {
+    expect(mapKeyToAction({ key: 'Escape', ...base })).toBe('dismiss');
   });
 
   it('Ctrl+f → focus-search', () => {
@@ -68,5 +72,20 @@ describe('mapKeyToAction', () => {
 
   it('f without modifier → null', () => {
     expect(mapKeyToAction({ key: 'f', ...base })).toBeNull();
+  });
+});
+
+describe('resolveDismissTarget', () => {
+  it('一般模式且歌詞開啟 → 先關歌詞', () => {
+    expect(resolveDismissTarget(false, true)).toBe('lyrics');
+  });
+
+  it('一般模式且歌詞關閉 → 退出迷你模式（no-op）', () => {
+    expect(resolveDismissTarget(false, false)).toBe('mini');
+  });
+
+  it('迷你模式下一律退出迷你模式（面板未渲染，即使 showLyrics 殘留為 true）', () => {
+    expect(resolveDismissTarget(true, true)).toBe('mini');
+    expect(resolveDismissTarget(true, false)).toBe('mini');
   });
 });
