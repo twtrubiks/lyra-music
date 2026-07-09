@@ -61,13 +61,20 @@ fn parse_response(body: &str) -> Result<Option<FetchedLyrics>, serde_json::Error
         .or_else(|| non_blank(resp.plain_lyrics).map(FetchedLyrics::Plain)))
 }
 
+/// Search candidates further than this from the local file's duration are
+/// rejected outright. The fallback exists for re-encode/trailing-silence
+/// drift (seconds, not tens of seconds); anything further is a different
+/// edition whose lyrics and timeline are both suspect.
+const MAX_DURATION_DIST_SECS: f64 = 15.0;
+
 /// Pick the best candidate out of a LRCLIB `/api/search` response body.
 ///
 /// Search is fuzzy, so guard against wrong lyrics: only candidates whose
 /// artist and title equal ours (trimmed, case-insensitive) qualify — that
 /// rejects medleys and "Jay Chou 周杰倫"-style alternate artist spellings.
 /// Among them, take the one closest to the local file's duration (most
-/// likely to have a matching timeline); on a tie, synced beats plain.
+/// likely to have a matching timeline) within [`MAX_DURATION_DIST_SECS`];
+/// on a tie, synced beats plain.
 fn pick_search_match(
     body: &str,
     artist: &str,
@@ -91,12 +98,16 @@ fn pick_search_match(
             continue;
         };
         // Unknown local duration (0) treats every candidate as equally
-        // close, so synced-preference and list order decide.
+        // close, so synced-preference and list order decide. A candidate
+        // missing its duration gets f64::MAX and falls to the cap below.
         let dist = if duration_secs > 0.0 {
             (item.duration.unwrap_or(f64::MAX) - duration_secs).abs()
         } else {
             0.0
         };
+        if dist > MAX_DURATION_DIST_SECS {
+            continue;
+        }
         let rank = match lyrics {
             FetchedLyrics::Synced(_) => 0_u8,
             FetchedLyrics::Plain(_) => 1,
@@ -117,8 +128,8 @@ fn pick_search_match(
 ///
 /// Two-stage lookup: `/api/get` first (exact match; duration tolerance is
 /// only ±2s, so re-encoded rips with trailing silence routinely miss), then
-/// fall back to `/api/search` and pick the closest-duration candidate whose
-/// artist and title match exactly (see [`pick_search_match`]).
+/// fall back to `/api/search` and pick the closest-duration candidate (within
+/// ±15s) whose artist and title match exactly (see [`pick_search_match`]).
 pub fn fetch(
     artist: &str,
     title: &str,
@@ -336,7 +347,7 @@ mod tests {
         let body = format!(
             "[{},{}]",
             search_item("周杰倫", "回到過去", 299.0, "  \n", ""),
-            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] usable", ""),
+            search_item("周杰倫", "回到過去", 290.0, "[00:01.00] usable", ""),
         );
         let got = pick_search_match(&body, "周杰倫", "回到過去", 299.0)
             .unwrap()
@@ -355,6 +366,31 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(matches!(got, FetchedLyrics::Synced(_)));
+    }
+
+    #[test]
+    fn search_rejects_sole_candidate_beyond_duration_cap() {
+        // A 231s radio edit against a 299s local rip: the synced timeline
+        // would drift by a minute — not-found beats wrong lyrics.
+        let body = format!(
+            "[{}]",
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] radio edit", ""),
+        );
+        assert!(
+            pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn search_rejects_candidate_without_duration_when_local_known() {
+        let body = r#"[{"artistName":"周杰倫","trackName":"回到過去","duration":null,"syncedLyrics":"[00:01.00] hi","plainLyrics":null}]"#;
+        assert!(
+            pick_search_match(body, "周杰倫", "回到過去", 299.0)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
