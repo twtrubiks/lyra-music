@@ -81,9 +81,11 @@ fn insert_chunk(
 }
 
 /// Import audio files into the library in chunks: the expensive file I/O
-/// (metadata parsing, cover extraction) runs without the DB lock so playback
-/// commands and the watcher stay responsive during large scans; the lock is
-/// taken only briefly per chunk to insert. Each chunk commits its own
+/// (metadata parsing, cover extraction) runs without the DB lock so the
+/// watcher and other DB commands stay responsive during large scans; the
+/// lock is taken only briefly per chunk to insert. Playback commands never
+/// touch the DB lock, and every DB/file-I/O command is `(async)` so none of
+/// this work occupies the main thread. Each chunk commits its own
 /// transaction — `insert_track` upserts on `file_path`, so an aborted import
 /// can simply be re-run. A chunk whose transaction fails is reported through
 /// `failed_files` instead of aborting: earlier chunks are already committed,
@@ -130,7 +132,7 @@ pub fn import_audio_files(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn scan_folder(
     folder_path: String,
     db: State<DbState>,
@@ -160,7 +162,7 @@ pub fn scan_folder(
     Ok(result)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_paths(
     paths: Vec<String>,
     db: State<DbState>,
@@ -186,13 +188,13 @@ pub fn import_paths(
     Ok(import_audio_files(&db.0, &app_data_dir, &audio_files))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_all_tracks(db: State<DbState>) -> Result<Vec<Track>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_all_tracks(&conn)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_track_cover(id: i64, db: State<DbState>) -> Result<Option<String>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let cover_path = library_repo::get_track_cover_path(&conn, id)?;
@@ -203,13 +205,13 @@ pub fn get_track_cover(id: i64, db: State<DbState>) -> Result<Option<String>, Ap
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_tracks(query: String, db: State<DbState>) -> Result<Vec<Track>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::search_tracks(&conn, &query)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     if let Ok(Some(cover_path)) = library_repo::get_track_cover_path(&conn, id) {
@@ -218,7 +220,7 @@ pub fn remove_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     library_repo::delete_track(&conn, id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trash_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let track = library_repo::get_track_by_id(&conn, id)?
@@ -231,7 +233,7 @@ pub fn trash_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
     library_repo::delete_track(&conn, id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
@@ -277,7 +279,7 @@ pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResul
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
@@ -315,7 +317,7 @@ pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResu
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_track_details(id: i64, db: State<DbState>) -> Result<TrackDetails, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     let track = library_repo::get_track_by_id(&conn, id)?
@@ -323,7 +325,7 @@ pub fn get_track_details(id: i64, db: State<DbState>) -> Result<TrackDetails, Ap
     reader::read_track_details(&track.file_path, &track)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_track_metadata(
     id: i64,
     title: Option<String>,
@@ -363,7 +365,7 @@ pub fn update_track_metadata(
     Ok(updated)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_track_lyrics(id: i64, db: State<DbState>) -> Result<Option<String>, AppError> {
     let file_path = {
         let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
@@ -375,25 +377,25 @@ pub fn get_track_lyrics(id: i64, db: State<DbState>) -> Result<Option<String>, A
     Ok(reader::read_lyrics(&file_path))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_all_artists(db: State<DbState>) -> Result<Vec<ArtistSummary>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_all_artists(&conn)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_all_albums(db: State<DbState>) -> Result<Vec<AlbumSummary>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_all_albums(&conn)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_tracks_by_artist(artist: String, db: State<DbState>) -> Result<Vec<Track>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_tracks_by_artist(&conn, &artist)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_tracks_by_album(
     album: String,
     artist: String,
@@ -403,7 +405,7 @@ pub fn get_tracks_by_album(
     library_repo::get_tracks_by_album(&conn, &album, &artist)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_most_played_tracks(
     limit: Option<i64>,
     db: State<DbState>,
@@ -412,7 +414,7 @@ pub fn get_most_played_tracks(
     library_repo::get_most_played_tracks(&conn, limit.unwrap_or(50))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_watching(
     folder: String,
     db: State<DbState>,
@@ -429,7 +431,7 @@ pub fn start_watching(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_watching(
     folder: String,
     db: State<DbState>,
@@ -446,7 +448,7 @@ pub fn stop_watching(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_watched_folders(db: State<DbState>) -> Result<Vec<String>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_all_scan_folders(&conn)

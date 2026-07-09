@@ -65,10 +65,10 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 
 **後端**（`src-tauri/src/`）：
 
-- `commands/` — Tauri command handler（playback、library、playlist）
+- `commands/` — Tauri command handler（playback、library、playlist）。library/playlist 指令一律標 `#[tauri::command(async)]`（見「已知問題」的主執行緒說明）；playback 指令刻意留同步（不碰 DB 鎖、需 FIFO 保序）
 - `storage/` — Repository 模式：`library_repo.rs`（Track CRUD）、`playlist_repo.rs`（Playlist CRUD）、`db.rs`（schema + migrations）
 - `audio/player.rs` — rodio sink 封裝，支援無縫播放（pre-decode + 排入同一 sink）
-- `scanner/` — `folder_scanner.rs`（walkdir 掃描）、`watcher.rs`（notify 即時監控）
+- `scanner/` — `folder_scanner.rs`（walkdir 掃描）、`watcher.rs`（notify 即時監控；事件經 2 秒 debounce 合批，一批至多發一次無 payload 的 `library-changed`，前端全量重抓；刪除走 `tracks-removed` 帶 track ids。刻意不做增量 payload——重抓已被合批且不佔主執行緒，桌面音樂庫規模下不值得引入事件契約與前端 merge 邏輯）
 - `metadata/` — `reader.rs`（lofty 讀取；含歌詞：sidecar `.lrc` 優先、fallback 內嵌標籤）、`writer.rs`（標籤寫入）
 - `models/` — Serde 結構體：Track、Playlist、PlayerState、ArtistSummary、AlbumSummary
 - `error.rs` — `AppError` 列舉（thiserror）
@@ -125,3 +125,4 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - **watcher 與搬移/改名**：同檔案系統的搬移/改名由 notify 的 rename cookie 配對成 `RenameMode::Both` 事件（`watcher.rs` 的 `apply_rename_events`），直接 UPDATE `file_path` 保留 play_count 與播放清單歸屬；目錄改名以前綴 UPDATE 子曲目（inotify 不發子檔案事件）。跨檔案系統搬移（copy+delete，無 cookie）仍是 delete + re-import，歷史不保留。
 - **封面 asset protocol scope 耦合**：專輯牆封面經 `convertFileSrc` 直接載檔，`tauri.conf.json` 的 assetProtocol scope（`$APPDATA/covers/**`）與 `metadata/reader.rs` `save_cover_art` 的 `covers` 目錄名稱耦合——改目錄名必須同步改 scope，否則封面會靜默載不出來。
 - **lofty 歌詞 ItemKey**：ID3 的 USLT frame 對映到 `ItemKey::UnsyncLyrics`，不是 `ItemKey::Lyrics`（後者對映 Vorbis `LYRICS`/MP4 `©lyr`）。`read_lyrics` 兩個都查才同時支援 MP3 與 FLAC。sidecar `.lrc` 僅支援 UTF-8，非 UTF-8（GBK/Big5 常見）會跳過並 fallback 內嵌標籤，不會顯示亂碼。
+- **Tauri 同步指令跑主執行緒**：不帶 `async` 的 `#[tauri::command]` 在主執行緒執行——慢指令（全表查詢、掃描匯入）會阻塞所有其他 IPC 與事件派送，DB 鎖切得再細也救不了。因此所有碰 DB／檔案 I/O 的指令必須標 `#[tauri::command(async)]`（丟到 thread pool，簽章不變）；playback 指令刻意留同步——不碰 DB 鎖，且主執行緒 FIFO 天然保序（play → queue_next 不會重排）。
