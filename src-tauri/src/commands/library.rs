@@ -10,6 +10,7 @@ use crate::error::AppError;
 use crate::metadata::{lyrics_online, reader, writer};
 use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::{FailedFile, ImportResult, Track, TrackDetails};
+use crate::models::watched_folder::WatchedFolder;
 use crate::scanner::folder_scanner;
 use crate::storage::library_repo;
 
@@ -488,7 +489,10 @@ pub fn stop_watching(
 }
 
 #[tauri::command(async)]
-pub fn get_watched_folders(db: State<DbState>) -> Result<Vec<String>, AppError> {
+pub fn get_watched_folders(db: State<DbState>) -> Result<Vec<WatchedFolder>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    library_repo::get_all_scan_folders(&conn)
+    let folders = library_repo::get_all_scan_folders(&conn)?;
+    drop(conn);
+
+    Ok(folders.into_iter().map(WatchedFolder::from_path).collect())
 }

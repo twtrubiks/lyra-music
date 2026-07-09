@@ -64,6 +64,12 @@ export interface PlayerState {
   last_completed_track_id: number | null;
 }
 
+export interface WatchedFolder {
+  path: string;
+  /** Whether the path is currently a directory on disk — false usually means an unmounted drive or a deleted folder. */
+  exists: boolean;
+}
+
 export interface ArtistSummary {
   name: string;
   track_count: number;
