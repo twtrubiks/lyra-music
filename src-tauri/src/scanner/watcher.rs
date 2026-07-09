@@ -9,6 +9,7 @@ use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::commands::library::import_audio_files;
 use crate::error::AppError;
 use crate::metadata::reader;
 use crate::scanner::folder_scanner;
@@ -26,6 +27,10 @@ pub struct FolderWatcher {
 
 impl FolderWatcher {
     pub fn new(db: Arc<Mutex<Connection>>, app_handle: AppHandle) -> Result<Self, AppError> {
+        let app_data_dir = app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::Generic(format!("failed to get app data dir: {e}")))?;
         let (cmd_tx, cmd_rx) = mpsc::channel::<WatcherCommand>();
         let (event_tx, event_rx) = mpsc::channel();
 
@@ -83,7 +88,7 @@ impl FolderWatcher {
                         last_event_time = None;
 
                         let (changed, removed_track_ids) =
-                            process_event_batch(&events, &db_clone, &app_handle_clone);
+                            process_event_batch(&events, &db_clone, &app_data_dir);
 
                         if changed {
                             let _ = app_handle_clone.emit("library-changed", ());
@@ -166,43 +171,75 @@ fn classify_path_event(kind: EventKind, path: &Path) -> PathAction {
     }
 }
 
-fn process_event_batch(
-    events: &[notify::Event],
-    db: &Arc<Mutex<Connection>>,
-    app_handle: &AppHandle,
-) -> (bool, Vec<i64>) {
-    let mut removed_track_ids: Vec<i64> = Vec::new();
-
-    let conn = match db.lock() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to acquire database lock: {e}");
-            return (false, Vec::new());
-        }
-    };
-
-    // Renames first: once the row is repointed, the stray From/To events
-    // from the same rename are harmless in the loop below — Remove misses
-    // the old path and Import upserts the new one via ON CONFLICT.
-    let mut changed = apply_rename_events(&conn, events, &mut removed_track_ids);
-
+/// Classify a batch's paths into import and remove lists. Pure filesystem
+/// checks — no DB access. Imports are deduped: a new file fires Create plus
+/// several Modify events within one batch, and each duplicate would cost a
+/// full metadata parse.
+fn collect_batch_actions(events: &[notify::Event]) -> (Vec<String>, Vec<String>) {
+    let mut import_paths: Vec<String> = Vec::new();
+    let mut import_seen: HashSet<&str> = HashSet::new();
+    let mut remove_paths: Vec<String> = Vec::new();
     for event in events {
         for path in &event.paths {
             let Some(path_str) = path.to_str() else {
                 continue;
             };
             match classify_path_event(event.kind, path) {
-                PathAction::Import => match process_new_file(&conn, app_handle, path_str) {
-                    Ok(()) => changed = true,
-                    Err(e) => eprintln!("[lyra] watcher: failed to import {path_str}: {e}"),
-                },
-                PathAction::Remove => {
-                    remove_track(&conn, path_str, &mut removed_track_ids);
-                    changed = true;
+                PathAction::Import => {
+                    if import_seen.insert(path_str) {
+                        import_paths.push(path_str.to_string());
+                    }
                 }
+                PathAction::Remove => remove_paths.push(path_str.to_string()),
                 PathAction::Ignore => {}
             }
         }
+    }
+    (import_paths, remove_paths)
+}
+
+/// Process one debounced batch of filesystem events. Returns whether the
+/// library changed and the ids of removed tracks — the two event triggers.
+///
+/// The DB lock is held only for pure DB work (renames, removals, the
+/// per-chunk inserts inside `import_audio_files`). The expensive per-file
+/// I/O — metadata parsing and cover extraction — runs without the lock, so
+/// other DB commands stay responsive while a large batch (e.g. an album
+/// dropped into a watched folder) lands.
+pub fn process_event_batch(
+    events: &[notify::Event],
+    db: &Arc<Mutex<Connection>>,
+    app_data_dir: &Path,
+) -> (bool, Vec<i64>) {
+    let mut removed_track_ids: Vec<i64> = Vec::new();
+
+    let (import_paths, remove_paths) = collect_batch_actions(events);
+
+    // Renames and removals are pure DB work — one short lock for both.
+    // Renames first: once the row is repointed, the stray From/To events
+    // from the same rename are harmless — Remove misses the old path and
+    // Import upserts the new one via ON CONFLICT.
+    let mut changed = {
+        let conn = match db.lock() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Failed to acquire database lock: {e}");
+                return (false, Vec::new());
+            }
+        };
+        let mut changed = apply_rename_events(&conn, events, &mut removed_track_ids);
+        for path_str in &remove_paths {
+            remove_track(&conn, path_str, &mut removed_track_ids);
+            changed = true;
+        }
+        changed
+    };
+
+    if !import_paths.is_empty() {
+        // Heavy file I/O runs without the DB lock; import_audio_files locks
+        // briefly per chunk to insert and logs failed files itself.
+        let result = import_audio_files(db, app_data_dir, &import_paths);
+        changed |= !result.tracks.is_empty();
     }
 
     (changed, removed_track_ids)
@@ -358,6 +395,26 @@ mod tests {
         );
     }
 
+    /// A new file typically fires Create plus several Modify events within
+    /// one debounce batch — the path must appear once in the import list,
+    /// or each duplicate costs a full metadata parse.
+    #[test]
+    fn collect_batch_actions_dedups_import_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("song.mp3");
+        std::fs::write(&path, b"x").unwrap();
+        let events = [
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(path.clone()),
+            notify::Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path.clone()),
+            notify::Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path.clone()),
+        ];
+
+        let (imports, removes) = collect_batch_actions(&events);
+
+        assert_eq!(imports, vec![path.to_str().unwrap().to_string()]);
+        assert!(removes.is_empty());
+    }
+
     // ---- rename (RenameMode::Both) handling ----
 
     use crate::models::track::Track;
@@ -511,27 +568,4 @@ mod tests {
         assert!(removed.is_empty());
         assert!(library_repo::get_all_tracks(&conn).unwrap().is_empty());
     }
-}
-
-fn process_new_file(
-    conn: &Connection,
-    app_handle: &AppHandle,
-    file_path: &str,
-) -> Result<(), AppError> {
-    let mut track = reader::read_metadata(file_path)?;
-    let id = library_repo::insert_track(conn, &track)?;
-    track.id = id;
-
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Generic(format!("failed to get app data dir: {e}")))?;
-
-    if let Some((data, mime)) = reader::extract_cover_art_bytes(file_path) {
-        if let Ok(cover_path) = reader::save_cover_art(&app_data_dir, id, &data, &mime) {
-            let _ = library_repo::update_cover_art_path(conn, id, &cover_path);
-        }
-    }
-
-    Ok(())
 }
