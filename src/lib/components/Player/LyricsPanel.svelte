@@ -75,7 +75,9 @@
   $effect(() => () => clearTimeout(scrollTimer));
 
   // Manual online lookup (LRCLIB) — same late-response guard as the local
-  // fetch above. A hit that parses to nothing counts as not found.
+  // fetch above. A hit that parses to nothing counts as not found; so does a
+  // plain result when local lyrics are already shown, because the button then
+  // promises an upgrade to synced — never swap plain for plain.
   function searchOnline() {
     const id = trackId;
     if (id === null || onlineStatus === 'searching') return;
@@ -85,7 +87,7 @@
       .then((raw) => {
         if (trackId !== id) return;
         const parsed = raw === null ? null : parseLyrics(raw);
-        if (parsed === null) {
+        if (parsed === null || (lyrics !== null && !parsed.synced)) {
           onlineStatus = 'notfound';
           return;
         }
@@ -146,6 +148,20 @@
     </div>
   {:else}
     <div class="lines">
+      {#if searchableOnline}
+        <div class="upgrade">
+          {#if onlineStatus === 'searching'}
+            <p class="hint">線上搜尋中…</p>
+          {:else}
+            <button class="search-online" onclick={searchOnline}>搜尋同步歌詞</button>
+            {#if onlineStatus === 'notfound'}
+              <p class="hint">線上沒有這首歌的同步歌詞</p>
+            {:else if onlineStatus === 'error'}
+              <p class="hint">線上搜尋失敗，請檢查網路連線</p>
+            {/if}
+          {/if}
+        </div>
+      {/if}
       {#each lyrics.lines as line, i (i)}
         <p class="line static">{line}</p>
       {/each}
@@ -204,6 +220,14 @@
   .not-found {
     flex-direction: column;
     gap: 14px;
+  }
+
+  .upgrade {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 28px;
   }
 
   .search-online {
