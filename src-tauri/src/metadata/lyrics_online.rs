@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::error::AppError;
 
 const LRCLIB_GET_URL: &str = "https://lrclib.net/api/get";
+const LRCLIB_SEARCH_URL: &str = "https://lrclib.net/api/search";
 /// LRCLIB asks clients to identify themselves via User-Agent.
 const USER_AGENT: &str = concat!(
     "Lyra Music v",
@@ -31,21 +32,93 @@ struct LrclibGetResponse {
     plain_lyrics: Option<String>,
 }
 
+/// One entry of a LRCLIB `/api/search` response. Missing fields default to
+/// empty/None so a partial entry simply never matches.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LrclibSearchItem {
+    #[serde(default)]
+    artist_name: String,
+    #[serde(default)]
+    track_name: String,
+    #[serde(default)]
+    duration: Option<f64>,
+    synced_lyrics: Option<String>,
+    plain_lyrics: Option<String>,
+}
+
+fn non_blank(s: Option<String>) -> Option<String> {
+    s.filter(|text| !text.trim().is_empty())
+}
+
 /// Pick usable lyrics out of a LRCLIB `/api/get` response body: synced wins
 /// over plain, and blank strings count as absent (instrumental tracks report
 /// null/empty lyrics fields).
 fn parse_response(body: &str) -> Result<Option<FetchedLyrics>, serde_json::Error> {
     let resp: LrclibGetResponse = serde_json::from_str(body)?;
-    let non_blank = |s: Option<String>| s.filter(|text| !text.trim().is_empty());
     Ok(non_blank(resp.synced_lyrics)
         .map(FetchedLyrics::Synced)
         .or_else(|| non_blank(resp.plain_lyrics).map(FetchedLyrics::Plain)))
 }
 
+/// Pick the best candidate out of a LRCLIB `/api/search` response body.
+///
+/// Search is fuzzy, so guard against wrong lyrics: only candidates whose
+/// artist and title equal ours (trimmed, case-insensitive) qualify — that
+/// rejects medleys and "Jay Chou 周杰倫"-style alternate artist spellings.
+/// Among them, take the one closest to the local file's duration (most
+/// likely to have a matching timeline); on a tie, synced beats plain.
+fn pick_search_match(
+    body: &str,
+    artist: &str,
+    title: &str,
+    duration_secs: f64,
+) -> Result<Option<FetchedLyrics>, serde_json::Error> {
+    let items: Vec<LrclibSearchItem> = serde_json::from_str(body)?;
+    let normalize = |s: &str| s.trim().to_lowercase();
+
+    let mut best: Option<(f64, u8, FetchedLyrics)> = None;
+    for item in items {
+        if normalize(&item.artist_name) != normalize(artist)
+            || normalize(&item.track_name) != normalize(title)
+        {
+            continue;
+        }
+        let Some(lyrics) = non_blank(item.synced_lyrics)
+            .map(FetchedLyrics::Synced)
+            .or_else(|| non_blank(item.plain_lyrics).map(FetchedLyrics::Plain))
+        else {
+            continue;
+        };
+        // Unknown local duration (0) treats every candidate as equally
+        // close, so synced-preference and list order decide.
+        let dist = if duration_secs > 0.0 {
+            (item.duration.unwrap_or(f64::MAX) - duration_secs).abs()
+        } else {
+            0.0
+        };
+        let rank = match lyrics {
+            FetchedLyrics::Synced(_) => 0_u8,
+            FetchedLyrics::Plain(_) => 1,
+        };
+        if best
+            .as_ref()
+            .is_none_or(|(b_dist, b_rank, _)| (dist, rank) < (*b_dist, *b_rank))
+        {
+            best = Some((dist, rank, lyrics));
+        }
+    }
+    Ok(best.map(|(_, _, lyrics)| lyrics))
+}
+
 /// Query LRCLIB for a track's lyrics. `Ok(None)` means LRCLIB has no entry
 /// for the track; `Err` means the lookup itself failed (offline, timeout,
-/// unexpected response). Album and duration narrow the match when known —
-/// LRCLIB matches duration with a ±2s tolerance.
+/// unexpected response).
+///
+/// Two-stage lookup: `/api/get` first (exact match; duration tolerance is
+/// only ±2s, so re-encoded rips with trailing silence routinely miss), then
+/// fall back to `/api/search` and pick the closest-duration candidate whose
+/// artist and title match exactly (see [`pick_search_match`]).
 pub fn fetch(
     artist: &str,
     title: &str,
@@ -59,6 +132,20 @@ pub fn fetch(
         .build()
         .into();
 
+    if let Some(lyrics) = fetch_exact(&agent, artist, title, album, duration_secs)? {
+        return Ok(Some(lyrics));
+    }
+    fetch_search_fallback(&agent, artist, title, duration_secs)
+}
+
+/// Exact-match lookup via `/api/get`. `Ok(None)` on 404.
+fn fetch_exact(
+    agent: &ureq::Agent,
+    artist: &str,
+    title: &str,
+    album: &str,
+    duration_secs: f64,
+) -> Result<Option<FetchedLyrics>, AppError> {
     let mut request = agent
         .get(LRCLIB_GET_URL)
         .query("artist_name", artist)
@@ -83,6 +170,31 @@ pub fn fetch(
         .read_to_string()
         .map_err(|e| AppError::Network(e.to_string()))?;
     parse_response(&body).map_err(|e| AppError::Network(format!("unexpected LRCLIB response: {e}")))
+}
+
+/// Fuzzy lookup via `/api/search`, filtered down by [`pick_search_match`].
+fn fetch_search_fallback(
+    agent: &ureq::Agent,
+    artist: &str,
+    title: &str,
+    duration_secs: f64,
+) -> Result<Option<FetchedLyrics>, AppError> {
+    let mut response = agent
+        .get(LRCLIB_SEARCH_URL)
+        .query("artist_name", artist)
+        .query("track_name", title)
+        .call()
+        .map_err(|e| AppError::Network(e.to_string()))?;
+    let status = response.status().as_u16();
+    if status != 200 {
+        return Err(AppError::Network(format!("LRCLIB returned HTTP {status}")));
+    }
+    let body = response
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| AppError::Network(e.to_string()))?;
+    pick_search_match(&body, artist, title, duration_secs)
+        .map_err(|e| AppError::Network(format!("unexpected LRCLIB response: {e}")))
 }
 
 /// Cache synced lyrics as a sidecar `.lrc` next to the audio file so the next
@@ -153,6 +265,124 @@ mod tests {
         assert!(parse_response("<html>not json</html>").is_err());
     }
 
+    fn search_item(artist: &str, title: &str, duration: f64, synced: &str, plain: &str) -> String {
+        format!(
+            r#"{{"artistName":{},"trackName":{},"duration":{duration},"syncedLyrics":{},"plainLyrics":{}}}"#,
+            serde_json::to_string(artist).unwrap(),
+            serde_json::to_string(title).unwrap(),
+            serde_json::to_string(synced).unwrap(),
+            serde_json::to_string(plain).unwrap(),
+        )
+    }
+
+    #[test]
+    fn search_picks_closest_duration_match() {
+        // Local file is 299s: the 305s edition beats the 231s original.
+        let body = format!(
+            "[{},{}]",
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] short version", ""),
+            search_item("周杰倫", "回到過去", 305.77, "[00:01.00] long version", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] long version");
+    }
+
+    #[test]
+    fn search_rejects_mismatched_artist_and_title() {
+        // Medleys and different-artist covers must not be picked even when
+        // they are the only candidates.
+        let body = format!(
+            "[{},{}]",
+            search_item(
+                "周杰倫",
+                "星晴+回到過去+最後的戰役",
+                763.0,
+                "[00:01.00] medley",
+                ""
+            ),
+            search_item(
+                "Jay Chou 周杰倫",
+                "回到過去",
+                231.0,
+                "[00:01.00] alt artist",
+                ""
+            ),
+        );
+        assert!(
+            pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn search_matching_ignores_case_and_whitespace() {
+        let body = format!(
+            "[{}]",
+            search_item("Jay Chou", "Yellow", 266.0, "", "words")
+        );
+        let got = pick_search_match(&body, " jay chou ", "YELLOW", 266.0)
+            .unwrap()
+            .unwrap();
+        assert!(matches!(got, FetchedLyrics::Plain(_)));
+    }
+
+    #[test]
+    fn search_skips_candidates_without_usable_lyrics() {
+        // Closest-duration candidate has blank lyrics — fall through to the
+        // next usable one instead of returning nothing.
+        let body = format!(
+            "[{},{}]",
+            search_item("周杰倫", "回到過去", 299.0, "  \n", ""),
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] usable", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] usable");
+    }
+
+    #[test]
+    fn search_prefers_synced_on_duration_tie() {
+        let body = format!(
+            "[{},{}]",
+            search_item("周杰倫", "回到過去", 231.0, "", "plain only"),
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] synced", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 231.0)
+            .unwrap()
+            .unwrap();
+        assert!(matches!(got, FetchedLyrics::Synced(_)));
+    }
+
+    #[test]
+    fn search_with_unknown_local_duration_still_matches() {
+        let body = format!(
+            "[{}]",
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] hi", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 0.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] hi");
+    }
+
+    #[test]
+    fn search_empty_results_returns_none() {
+        assert!(
+            pick_search_match("[]", "周杰倫", "回到過去", 299.0)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn search_rejects_malformed_json() {
+        assert!(pick_search_match("<html>not json</html>", "a", "t", 0.0).is_err());
+    }
+
     #[test]
     fn sidecar_written_next_to_audio_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -174,6 +404,17 @@ mod tests {
         assert!(matches!(got, Some(FetchedLyrics::Synced(_))));
         let miss = fetch("NoSuchArtistZzz", "NoSuchSongZzz", "", 0.0).unwrap();
         assert!(miss.is_none());
+    }
+
+    /// Repro of the duration-mismatch miss: a 299s local rip of a track whose
+    /// LRCLIB editions run 231–306s — `/api/get` 404s (±2s tolerance), only
+    /// the search fallback finds it. Run manually with
+    /// `cargo test --lib lyrics_online -- --ignored`.
+    #[test]
+    #[ignore = "requires network"]
+    fn fetch_falls_back_to_search_on_duration_mismatch() {
+        let got = fetch("周杰倫", "回到過去", "八度空間", 299.0).unwrap();
+        assert!(matches!(got, Some(FetchedLyrics::Synced(_))));
     }
 
     #[test]
