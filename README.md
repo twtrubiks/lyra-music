@@ -10,6 +10,8 @@
 
 ![Mini Player 模式](docs/images/mini-player.png)
 
+![主介面 - 歌詞顯示](docs/images/main-player-lyrics.png)
+
 ## 為什麼是 Lyra Music？
 
 Lyra 的設計原則：
@@ -39,7 +41,7 @@ Lyra 的設計原則：
 | 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
 | 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
 | 線上歌詞 | ureq 3 (rustls) | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar |
-| 測試 | Vitest + cargo test | 前端 19 個測試檔、後端 16 個整合測試 |
+| 測試 | Vitest + cargo test | 前端 22 個測試檔、後端 19 個整合測試 |
 
 ## 主要功能
 
@@ -54,14 +56,34 @@ Lyra 的設計原則：
 **Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 42 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
 
 其他功能：
-- 時間同步滾動歌詞（同名 `.lrc` sidecar 檔優先，fallback 到內嵌歌詞標籤；純文字歌詞以靜態顯示）
-- 線上歌詞搜尋（LRCLIB，手動觸發——本地找不到歌詞時可一鍵線上搜尋，同步歌詞自動快取為 `.lrc` sidecar，不覆蓋既有檔案）
+- 時間同步滾動歌詞與線上歌詞搜尋（LRCLIB）——取得方式見[歌詞](#歌詞)
 - 藝人 / 專輯瀏覽視圖（網格封面、搜尋過濾、詳情視圖）
 - 曲目元資料編輯（標題、藝人、專輯寫回檔案）
-- 資料夾即時監視（新增/修改/刪除自動同步音樂庫；搬移/改名保留播放統計與清單歸屬）
+- 資料夾即時監視（新增/修改/刪除自動同步音樂庫；搬移/改名保留播放統計與清單歸屬；可檢視與移除監控資料夾，移除不影響已匯入曲目，不存在的路徑會標示警示）
 - 欄標題排序（偏好持久化）、播放計數追蹤（Most Played 排行視圖）
 - 音樂庫遞迴掃描，自動讀取 metadata 與封面快取
 - 播放模式（循環/單曲/隨機）、即時搜尋過濾、多選操作、右鍵選單、拖放匯入
+
+## 歌詞
+
+播放歌曲後按 `l`（或點播放列的 Lyrics 鈕）開啟歌詞面板。歌詞來源依優先順序：
+
+1. **同名 `.lrc` 檔（sidecar）**——與音檔同目錄、同檔名，UTF-8 編碼：
+
+   ```text
+   ~/Music/
+   ├── 周杰倫 - 晴天.mp3
+   └── 周杰倫 - 晴天.lrc
+   ```
+
+2. **內嵌歌詞標籤**——音檔本身的歌詞標籤（如 MP3 的 USLT、FLAC 的 LYRICS）。
+3. **線上搜尋（LRCLIB）**——前兩者都沒有時，歌詞面板會出現「線上搜尋歌詞」按鈕；純文字歌詞也可點「搜尋同步歌詞」升級為同步版。搜到的同步歌詞自動存成同名 `.lrc`（不覆蓋既有檔案），之後離線也能使用。
+
+注意事項：
+
+- 線上搜尋以「演出者＋標題＋時長」比對，標籤缺失或不正確都會找不到——可**右鍵曲目 →「屬性」→「編輯」**修正標題／演出者／專輯（寫回檔案）後再搜；缺演出者標籤時不會顯示搜尋按鈕。
+- `.lrc` 僅支援 UTF-8，其他編碼（GBK/Big5）會被忽略並 fallback 到內嵌標籤。
+- 同步歌詞隨播放進度滾動；純文字歌詞為靜態顯示。Lyrics 鈕上的指示點：灰＝純文字、紅＝同步歌詞。
 
 ## 前置需求
 
@@ -89,9 +111,9 @@ npm run tauri build   # 正式建置
 ## 測試
 
 ```bash
-npm run test                    # 前端單元測試 (Vitest, 19 個測試檔)
+npm run test                    # 前端單元測試 (Vitest, 22 個測試檔)
 npm run check                   # 類型檢查
-cd src-tauri && cargo test      # 後端整合測試 (16 個測試檔，音訊測試預設跳過)
+cd src-tauri && cargo test      # 後端整合測試 (19 個測試檔，音訊測試預設跳過)
 cd src-tauri && cargo test --features audio-tests  # 含音訊測試 (需音訊裝置)
 npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -146,8 +168,8 @@ src-tauri/                        # 後端 (Rust)
     audio/                        # 音訊引擎 (rodio sink, gapless queue)
     scanner/                      # 資料夾掃描與檔案監視 (walkdir, notify)
     metadata/                     # 元資料讀寫與封面快取 (lofty)
-    storage/                      # SQLite 資料庫 (schema v5, WAL mode)
+    storage/                      # SQLite 資料庫 (schema v8, WAL mode)
     commands/                     # Tauri command handlers (42 個 IPC 介面)
     models/                       # 資料結構定義 (track, playlist, player_state)
-  tests/                          # 16 個整合測試
+  tests/                          # 19 個整合測試
 ```

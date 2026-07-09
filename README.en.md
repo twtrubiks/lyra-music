@@ -10,6 +10,8 @@ A desktop music player built with Tauri 2 + Svelte 5 + Rust. Fully local offline
 
 ![Mini Player Mode](docs/images/mini-player.png)
 
+![Main Interface - Lyrics](docs/images/main-player-lyrics.png)
+
 ## Why Lyra Music?
 
 Lyra's design principles:
@@ -39,7 +41,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
 | Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
 | Online Lyrics | ureq 3 (rustls) | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar |
-| Testing | Vitest + cargo test | 19 frontend test files, 16 backend integration tests |
+| Testing | Vitest + cargo test | 22 frontend test files, 19 backend integration tests |
 
 ## Key Features
 
@@ -54,14 +56,34 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 **Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 42 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
 
 Other features:
-- Time-synced scrolling lyrics (sidecar `.lrc` file takes priority, falls back to embedded lyrics tags; plain-text lyrics shown statically)
-- Online lyrics search (LRCLIB, manually triggered -- one click searches online when no local lyrics exist; synced hits are cached as a `.lrc` sidecar without overwriting existing files)
+- Time-synced scrolling lyrics and online lyrics search (LRCLIB) -- see [Lyrics](#lyrics) for how to get them
 - Artist / Album browse views (grid covers, search filtering, detail views)
 - Track metadata editing (title, artist, album written back to file)
-- Real-time folder watching (add/modify/delete automatically syncs music library; moves/renames preserve play stats and playlist membership)
+- Real-time folder watching (add/modify/delete automatically syncs music library; moves/renames preserve play stats and playlist membership; watched folders can be viewed and removed without affecting imported tracks, with missing paths flagged)
 - Column header sorting (preferences persisted), play count tracking (Most Played ranking view)
 - Recursive music library scanning with automatic metadata reading and cover art caching
 - Playback modes (loop/repeat-one/shuffle), instant search filtering, multi-select operations, context menu, drag-and-drop import
+
+## Lyrics
+
+Press `l` while a track is playing (or click the Lyrics button on the player bar) to open the lyrics panel. Lyrics sources, in priority order:
+
+1. **Sidecar `.lrc` file** -- same directory and filename as the audio file, UTF-8 encoded:
+
+   ```text
+   ~/Music/
+   ├── Artist - Song.mp3
+   └── Artist - Song.lrc
+   ```
+
+2. **Embedded lyrics tags** -- lyrics stored in the file itself (e.g. USLT for MP3, LYRICS for FLAC).
+3. **Online search (LRCLIB)** -- when neither exists, the lyrics panel shows an online search button; plain-text lyrics can also be upgraded to a synced version. Synced hits are automatically saved as a sidecar `.lrc` (never overwriting existing files), so they work offline afterwards.
+
+Notes:
+
+- Online search matches by artist + title + duration, so missing or incorrect tags yield no results -- **right-click the track -> "Properties" -> "Edit"** to fix the title/artist/album (written back to file), then search again; the search button is hidden when the artist tag is missing.
+- `.lrc` files must be UTF-8; other encodings (GBK/Big5) are ignored, falling back to embedded tags.
+- Synced lyrics scroll with playback; plain-text lyrics are shown statically. The dot on the Lyrics button: gray = plain text, red = synced.
 
 ## Prerequisites
 
@@ -89,9 +111,9 @@ Build artifacts are located in `src-tauri/target/release/bundle/`, supporting de
 ## Testing
 
 ```bash
-npm run test                    # Frontend unit tests (Vitest, 19 test files)
+npm run test                    # Frontend unit tests (Vitest, 22 test files)
 npm run check                   # Type checking
-cd src-tauri && cargo test      # Backend integration tests (16 test files, audio tests skipped by default)
+cd src-tauri && cargo test      # Backend integration tests (19 test files, audio tests skipped by default)
 cd src-tauri && cargo test --features audio-tests  # With audio tests (requires audio device)
 npm run quality                 # Code quality checks (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -146,8 +168,8 @@ src-tauri/                        # Backend (Rust)
     audio/                        # Audio engine (rodio sink, gapless queue)
     scanner/                      # Folder scanning & file watching (walkdir, notify)
     metadata/                     # Metadata read/write & cover art caching (lofty)
-    storage/                      # SQLite database (schema v5, WAL mode)
+    storage/                      # SQLite database (schema v8, WAL mode)
     commands/                     # Tauri command handlers (42 IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
-  tests/                          # 16 integration tests
+  tests/                          # 19 integration tests
 ```
