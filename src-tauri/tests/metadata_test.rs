@@ -1,6 +1,7 @@
 mod common;
 
 use lyra_music_lib::metadata::reader;
+use lyra_music_lib::metadata::writer;
 use lyra_music_lib::models::track::Track;
 
 #[test]
@@ -44,6 +45,35 @@ fn test_read_metadata_invalid_timestamp_preserves_tags() {
     let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
     assert_eq!(track.title, "日本語タイトル");
     assert_eq!(track.artist, "テストアーティスト");
+}
+
+#[test]
+fn test_write_metadata_invalid_timestamp_still_writes() {
+    // Regression: the writer read the file with lofty's default BestAttempt
+    // mode, so a file with a non-digit TDRC frame (importable and playable
+    // via the Relaxed reader) could never have its tags edited — the write
+    // failed at the initial read. The writer must read in Relaxed mode too.
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = common::create_test_wav_with_id3(
+        dir.path(),
+        "japanese_date_edit.wav",
+        "Old Title",
+        "Old Artist",
+        "H17.10.26",
+    );
+
+    writer::write_metadata(
+        path.to_str().unwrap(),
+        Some("New Title"),
+        Some("New Artist"),
+        Some("New Album"),
+    )
+    .expect("write_metadata must succeed on a file with an invalid timestamp frame");
+
+    let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
+    assert_eq!(track.title, "New Title");
+    assert_eq!(track.artist, "New Artist");
+    assert_eq!(track.album, "New Album");
 }
 
 #[test]

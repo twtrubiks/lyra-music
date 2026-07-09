@@ -4,6 +4,7 @@ use lofty::tag::{Accessor, TagExt};
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::metadata::reader::read_tagged_file;
 
 pub fn write_metadata(
     file_path: &str,
@@ -12,7 +13,7 @@ pub fn write_metadata(
     album: Option<&str>,
 ) -> Result<(), AppError> {
     let path = Path::new(file_path);
-    let mut tagged_file = lofty::read_from_path(path)
+    let mut tagged_file = read_tagged_file(path)
         .map_err(|e| AppError::MetadataWrite(format!("Failed to read file: {e}")))?;
 
     let has_primary = tagged_file.primary_tag_mut().is_some();

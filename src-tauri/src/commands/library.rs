@@ -319,9 +319,12 @@ pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResu
 
 #[tauri::command(async)]
 pub fn get_track_details(id: i64, db: State<DbState>) -> Result<TrackDetails, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let track = library_repo::get_track_by_id(&conn, id)?
-        .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?;
+    let track = {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::get_track_by_id(&conn, id)?
+            .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?
+    };
+    // File I/O (tag parsing) runs without the DB lock held.
     reader::read_track_details(&track.file_path, &track)
 }
 
@@ -333,14 +336,18 @@ pub fn update_track_metadata(
     album: Option<String>,
     db: State<DbState>,
 ) -> Result<Track, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let track = library_repo::get_track_by_id(&conn, id)?
-        .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?;
+    let track = {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::get_track_by_id(&conn, id)?
+            .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?
+    };
 
     let new_title = title.unwrap_or(track.title.clone());
     let new_artist = artist.unwrap_or(track.artist.clone());
     let new_album = album.unwrap_or(track.album.clone());
 
+    // The tag rewrite can shift the whole audio payload (seconds on large
+    // files), so it must run without the DB lock held.
     writer::write_metadata(
         &track.file_path,
         Some(&new_title),
@@ -348,6 +355,7 @@ pub fn update_track_metadata(
         Some(&new_album),
     )?;
 
+    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     // The file tags above are already written; a DB failure here leaves the
     // two stores inconsistent, so the error must say what actually happened.
     library_repo::update_track_metadata(&conn, id, &new_title, &new_artist, &new_album).map_err(

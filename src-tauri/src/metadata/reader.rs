@@ -15,7 +15,8 @@ use crate::models::track::{Track, TrackDetails};
 /// Read a tagged file in Relaxed mode: invalid tag items (e.g. `ID3v2` timestamp
 /// frames with non-digit characters, common in Japanese rips) are skipped
 /// instead of failing the whole read like the default `BestAttempt` mode does.
-fn read_tagged_file(path: &Path) -> lofty::error::Result<TaggedFile> {
+/// Shared with the writer so tag editing works on every file the reader accepts.
+pub(crate) fn read_tagged_file(path: &Path) -> lofty::error::Result<TaggedFile> {
     let options = ParseOptions::new().parsing_mode(ParsingMode::Relaxed);
     Probe::open(path)?.options(options).read()
 }
