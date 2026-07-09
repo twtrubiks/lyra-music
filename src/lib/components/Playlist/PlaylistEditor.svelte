@@ -10,6 +10,7 @@
   import { startPlayingTrack, resumePlaylistPlayback } from '$lib/logic/playback-actions';
   import { optimisticTrash, optimisticPlaylistRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
 
   let {
     playlistId,
@@ -101,6 +102,14 @@
     void playlistId;
     loadTracks();
   });
+
+  // This local list is not derived from library.allTracks — reload when the
+  // watcher lands disk changes, or it keeps ghost rows and stale paths.
+  $effect(() =>
+    watchLibraryChanged(() => {
+      void loadTracks();
+    }),
+  );
 </script>
 
 <div class="playlist-editor">

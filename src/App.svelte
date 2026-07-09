@@ -28,6 +28,8 @@
     handleTracksRemovedBatch,
   } from '$lib/logic/playback-actions';
   import { loadLyricsForTrack } from '$lib/logic/lyrics-actions';
+  import { updateExistingTracks, updateCurrentTrack } from '$lib/logic/library-sync';
+  import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
 
@@ -158,26 +160,23 @@
     };
   });
 
-  // Auto-refresh library on backend file-watcher changes
-  $effect(() => {
-    let unlisten: (() => void) | undefined;
-    (async () => {
-      try {
-        unlisten = await listen('library-changed', async () => {
-          try {
-            library.allTracks = await libraryApi.getAllTracks();
-          } catch (err) {
-            warnNonCritical('Auto-refresh library', err);
-          }
-        });
-      } catch (err) {
-        warnNonCritical('Listen library-changed', err);
-      }
-    })();
-    return () => {
-      unlisten?.();
-    };
-  });
+  // Auto-refresh library on backend file-watcher changes. The play queue and
+  // current track must follow the refetch — a disk rename changes file_path,
+  // and the next play / gapless preload would otherwise use the stale path.
+  $effect(() =>
+    watchLibraryChanged(() => {
+      void (async () => {
+        try {
+          const fresh = await libraryApi.getAllTracks();
+          library.allTracks = fresh;
+          player.playQueue = updateExistingTracks(player.playQueue, fresh);
+          player.currentTrack = updateCurrentTrack(player.currentTrack, fresh);
+        } catch (err) {
+          warnNonCritical('Auto-refresh library', err);
+        }
+      })();
+    }),
+  );
 
   // Handle tracks removed by watcher (file deleted from disk)
   $effect(() => {

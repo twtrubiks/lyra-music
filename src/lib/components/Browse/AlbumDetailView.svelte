@@ -10,6 +10,7 @@
   import { startPlayingTrack } from '$lib/logic/playback-actions';
   import { optimisticRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
 
   let { albumName, artistName }: { albumName: string; artistName: string } = $props();
 
@@ -75,20 +76,32 @@
     }
   }
 
-  $effect(() => {
-    (async () => {
-      try {
-        tracks = await libraryApi.getTracksByAlbum(albumName, artistName);
-        if (tracks.length > 0) {
-          coverArt = await libraryApi.getTrackCover(tracks[0].id);
-        }
-      } catch (err) {
-        notifyCritical('Load album tracks', err);
-      } finally {
-        isLoading = false;
+  async function loadTracks() {
+    try {
+      tracks = await libraryApi.getTracksByAlbum(albumName, artistName);
+      if (tracks.length > 0) {
+        coverArt = await libraryApi.getTrackCover(tracks[0].id);
       }
-    })();
+    } catch (err) {
+      notifyCritical('Load album tracks', err);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  $effect(() => {
+    void albumName;
+    void artistName;
+    void loadTracks();
   });
+
+  // This local list is not derived from library.allTracks — reload when the
+  // watcher lands disk changes, or it keeps ghost rows and stale paths.
+  $effect(() =>
+    watchLibraryChanged(() => {
+      void loadTracks();
+    }),
+  );
 </script>
 
 <div class="album-detail-view">

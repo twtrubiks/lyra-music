@@ -9,6 +9,7 @@
   import { startPlayingTrack } from '$lib/logic/playback-actions';
   import { optimisticTrash, optimisticRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
 
   const player = getPlayerState();
   const library = getLibraryState();
@@ -75,18 +76,27 @@
     }
   }
 
+  async function loadTracks() {
+    try {
+      tracks = await libraryApi.getMostPlayedTracks(50);
+    } catch (err) {
+      notifyCritical('Load most played', err);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   $effect(() => {
-    (async () => {
-      isLoading = true;
-      try {
-        tracks = await libraryApi.getMostPlayedTracks(50);
-      } catch (err) {
-        notifyCritical('Load most played', err);
-      } finally {
-        isLoading = false;
-      }
-    })();
+    void loadTracks();
   });
+
+  // This local list is not derived from library.allTracks — reload when the
+  // watcher lands disk changes, or it keeps ghost rows and stale paths.
+  $effect(() =>
+    watchLibraryChanged(() => {
+      void loadTracks();
+    }),
+  );
 </script>
 
 <div class="most-played-view">

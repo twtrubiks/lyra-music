@@ -68,7 +68,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - `commands/` — Tauri command handler（playback、library、playlist）。library/playlist 指令一律標 `#[tauri::command(async)]`（見「已知問題」的主執行緒說明）；playback 指令刻意留同步（不碰 DB 鎖、需 FIFO 保序）。碰檔案 I/O 的指令採短鎖模式：短鎖取資料 → 放鎖做檔案 I/O → 需要時再上鎖寫 DB（`get_track_lyrics`、`update_track_metadata` 為範例）
 - `storage/` — Repository 模式：`library_repo.rs`（Track CRUD）、`playlist_repo.rs`（Playlist CRUD）、`db.rs`（schema + migrations）
 - `audio/player.rs` — rodio sink 封裝，支援無縫播放（pre-decode + 排入同一 sink）
-- `scanner/` — `folder_scanner.rs`（walkdir 掃描）、`watcher.rs`（notify 即時監控；事件經 2 秒 debounce 合批，一批至多發一次無 payload 的 `library-changed`，前端全量重抓；刪除走 `tracks-removed` 帶 track ids。匯入先去重同檔重複事件後重用 `import_audio_files`（鎖外解析、分塊短鎖插入），不持 DB 鎖做檔案 I/O。刻意不做增量 payload——重抓已被合批且不佔主執行緒，桌面音樂庫規模下不值得引入事件契約與前端 merge 邏輯）
+- `scanner/` — `folder_scanner.rs`（walkdir 掃描）、`watcher.rs`（notify 即時監控；事件經 2 秒 debounce 合批，一批至多發一次無 payload 的 `library-changed`，前端全量重抓——App 重抓 `allTracks` 後以 `updateExistingTracks`/`updateCurrentTrack` 同步播放佇列與 currentTrack 的 `file_path`（改名後 Next／無縫預載才不用舊路徑），持本地清單的詳細檢視經 `watchLibraryChanged` 重載自癒（幽靈列、舊路徑、外部標籤變更）；刪除走 `tracks-removed` 帶 track ids，App 集中清理佇列與播放清單。匯入先去重同檔重複事件後重用 `import_audio_files`（鎖外解析、分塊短鎖插入），不持 DB 鎖做檔案 I/O。刻意不做增量 payload——重抓已被合批且不佔主執行緒，桌面音樂庫規模下不值得引入事件契約與前端 merge 邏輯）
 - `metadata/` — `reader.rs`（lofty 讀取；含歌詞：sidecar `.lrc` 優先、fallback 內嵌標籤）、`writer.rs`（標籤寫入）、`lyrics_online.rs`（LRCLIB 線上歌詞查詢，僅使用者手動觸發；兩段式：`/api/get` 精確匹配優先——duration 容差僅 ±2 秒，重轉檔/尾端靜音必漏——404 後 fallback `/api/search`，僅接受 artist/title 正規化後完全相等的候選（排除 medley 與異寫）、在 ±15 秒內取時長最接近本地檔者（更遠視為不同版本，寧可回報找不到）；同步歌詞以 `create_new` 快取為 sidecar，不覆蓋既有檔）
 - `models/` — Serde 結構體：Track、Playlist、PlayerState、ArtistSummary、AlbumSummary
 - `error.rs` — `AppError` 列舉（thiserror）

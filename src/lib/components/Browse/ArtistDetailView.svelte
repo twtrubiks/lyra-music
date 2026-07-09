@@ -10,6 +10,7 @@
   import { startPlayingTrack } from '$lib/logic/playback-actions';
   import { optimisticRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
 
   let { artistName }: { artistName: string } = $props();
 
@@ -74,17 +75,28 @@
     }
   }
 
+  async function loadTracks() {
+    try {
+      tracks = await libraryApi.getTracksByArtist(artistName);
+    } catch (err) {
+      notifyCritical('Load artist tracks', err);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   $effect(() => {
-    (async () => {
-      try {
-        tracks = await libraryApi.getTracksByArtist(artistName);
-      } catch (err) {
-        notifyCritical('Load artist tracks', err);
-      } finally {
-        isLoading = false;
-      }
-    })();
+    void artistName;
+    void loadTracks();
   });
+
+  // This local list is not derived from library.allTracks — reload when the
+  // watcher lands disk changes, or it keeps ghost rows and stale paths.
+  $effect(() =>
+    watchLibraryChanged(() => {
+      void loadTracks();
+    }),
+  );
 </script>
 
 <div class="artist-detail-view">
