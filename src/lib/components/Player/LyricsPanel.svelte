@@ -110,6 +110,9 @@
   }
 </script>
 
+<!-- mousedown covers scrollbar drags, which fire neither wheel nor touchmove;
+     a stray click merely pauses auto-scroll for 3s. -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="lyrics-panel"
   role="region"
@@ -117,6 +120,7 @@
   bind:this={container}
   onwheel={pauseAutoScroll}
   ontouchmove={pauseAutoScroll}
+  onmousedown={pauseAutoScroll}
 >
   {#if !player.currentTrack}
     <p class="empty">目前沒有播放曲目</p>
