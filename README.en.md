@@ -108,9 +108,11 @@ All shortcuts are disabled when an input field is focused.
 | `n` / `p` | Next / Previous track |
 | `s` | Toggle shuffle |
 | `r` | Toggle repeat mode (off / repeat-all / repeat-one) |
-| `m` / `Escape` | Toggle / Exit Mini Player |
+| `m` | Toggle Mini Player |
+| `l` | Toggle lyrics panel |
+| `Escape` | Close lyrics panel / Exit Mini Player |
 | `Ctrl+F` / `Cmd+F` | Focus search box |
-| `Ctrl+A` / `Cmd+A` | Select all tracks |
+| `?` | Show keyboard shortcuts help |
 
 **When track list is focused:**
 
@@ -118,8 +120,16 @@ All shortcuts are disabled when an input field is focused.
 |-----|--------|
 | `ArrowUp` / `ArrowDown` | Previous / Next track |
 | `Shift+ArrowUp` / `Shift+ArrowDown` | Extend selection up / down |
+| `Ctrl+A` / `Cmd+A` | Select all tracks |
 | `Enter` | Play focused track |
 | `Home` / `End` | Jump to first / last track |
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move selected tracks up / down (within a playlist) |
+
+**In playlist view:**
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move the current playlist up / down in the sidebar |
 
 ## Project Structure
 

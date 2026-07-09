@@ -40,6 +40,7 @@ export function getShortcutCategories(): ShortcutCategory[] {
         { keys: ['↓'], description: '下一首曲目' },
         { keys: ['Shift', '↑'], description: '向上擴展選取' },
         { keys: ['Shift', '↓'], description: '向下擴展選取' },
+        { keys: [mod, 'A'], description: '全選曲目' },
         { keys: ['Enter'], description: '播放聚焦曲目' },
         { keys: ['Home'], description: '跳到第一首' },
         { keys: ['End'], description: '跳到最後一首' },

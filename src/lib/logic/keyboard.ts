@@ -25,6 +25,12 @@ export function mapKeyToAction(e: { key: string; ctrlKey: boolean; metaKey: bool
     return 'focus-search';
   }
 
+  // 其他帶 Ctrl/Cmd 的組合鍵屬於各自的 context（如列表重排 Ctrl+Shift+↑），
+  // 不得誤觸發下方的單鍵動作（音量、換曲等）
+  if (e.ctrlKey || e.metaKey) {
+    return null;
+  }
+
   switch (e.key) {
     case ' ':
       return 'play-pause';

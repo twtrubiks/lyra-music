@@ -203,6 +203,8 @@
     }
     if (onreorder && e.ctrlKey && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
+      // 不冒泡到 window——Sidebar 用同一組合鍵重排播放清單本身
+      e.stopPropagation();
       const direction = e.key === 'ArrowUp' ? 'up' : 'down';
       const newOrder = moveByKeyboard(tracks, selection.selectedIds, direction);
       if (newOrder) onreorder(newOrder);

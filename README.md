@@ -108,9 +108,11 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 | `n` / `p` | 下一首 / 上一首 |
 | `s` | 切換隨機播放 |
 | `r` | 切換循環模式（off / repeat-all / repeat-one） |
-| `m` / `Escape` | 切換 / 退出 Mini Player |
+| `m` | 切換 Mini Player |
+| `l` | 切換歌詞面板 |
+| `Escape` | 關閉歌詞面板 / 退出 Mini Player |
 | `Ctrl+F` / `Cmd+F` | 聚焦搜尋框 |
-| `Ctrl+A` / `Cmd+A` | 全選曲目 |
+| `?` | 顯示快捷鍵說明 |
 
 **曲目列表聚焦時：**
 
@@ -118,8 +120,16 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 |------|------|
 | `ArrowUp` / `ArrowDown` | 上一首 / 下一首曲目 |
 | `Shift+ArrowUp` / `Shift+ArrowDown` | 向上 / 向下擴展選取 |
+| `Ctrl+A` / `Cmd+A` | 全選曲目 |
 | `Enter` | 播放聚焦曲目 |
 | `Home` / `End` | 跳到第一首 / 最後一首 |
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 上移 / 下移選取曲目（播放清單內） |
+
+**播放清單檢視中：**
+
+| 按鍵 | 動作 |
+|------|------|
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 在側邊欄上移 / 下移目前播放清單 |
 
 ## 專案結構
 

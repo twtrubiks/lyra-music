@@ -73,6 +73,13 @@ describe('mapKeyToAction', () => {
   it('f without modifier → null', () => {
     expect(mapKeyToAction({ key: 'f', ...base })).toBeNull();
   });
+
+  it('帶 Ctrl/Cmd 的組合鍵不觸發單鍵動作（如 Ctrl+Shift+↑ 列表重排不得調音量）', () => {
+    expect(mapKeyToAction({ key: 'ArrowUp', ctrlKey: true, metaKey: false })).toBeNull();
+    expect(mapKeyToAction({ key: 'ArrowDown', ctrlKey: true, metaKey: false })).toBeNull();
+    expect(mapKeyToAction({ key: 'n', ctrlKey: true, metaKey: false })).toBeNull();
+    expect(mapKeyToAction({ key: 'ArrowUp', ctrlKey: false, metaKey: true })).toBeNull();
+  });
 });
 
 describe('resolveDismissTarget', () => {
