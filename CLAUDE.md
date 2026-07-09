@@ -69,7 +69,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - `storage/` — Repository 模式：`library_repo.rs`（Track CRUD）、`playlist_repo.rs`（Playlist CRUD）、`db.rs`（schema + migrations）
 - `audio/player.rs` — rodio sink 封裝，支援無縫播放（pre-decode + 排入同一 sink）
 - `scanner/` — `folder_scanner.rs`（walkdir 掃描）、`watcher.rs`（notify 即時監控；事件經 2 秒 debounce 合批，一批至多發一次無 payload 的 `library-changed`，前端全量重抓——App 重抓 `allTracks` 後以 `updateExistingTracks`/`updateCurrentTrack` 同步播放佇列與 currentTrack 的 `file_path`（改名後 Next／無縫預載才不用舊路徑），持本地清單的詳細檢視經 `watchLibraryChanged` 重載自癒（幽靈列、舊路徑、外部標籤變更）；刪除走 `tracks-removed` 帶 track ids，App 集中清理佇列與播放清單。匯入先去重同檔重複事件後重用 `import_audio_files`（鎖外解析、分塊短鎖插入），不持 DB 鎖做檔案 I/O。刻意不做增量 payload——重抓已被合批且不佔主執行緒，桌面音樂庫規模下不值得引入事件契約與前端 merge 邏輯）
-- `metadata/` — `reader.rs`（lofty 讀取；含歌詞：sidecar `.lrc` 優先、fallback 內嵌標籤）、`writer.rs`（標籤寫入）、`lyrics_online.rs`（LRCLIB 線上歌詞查詢，僅使用者手動觸發；兩段式：`/api/get` 精確匹配優先——duration 容差僅 ±2 秒，重轉檔/尾端靜音必漏——404 後 fallback `/api/search`，僅接受 artist/title 正規化後完全相等的候選（排除 medley 與異寫）、在 ±15 秒內取時長最接近本地檔者（更遠視為不同版本，寧可回報找不到）；同步歌詞以 `create_new` 快取為 sidecar，不覆蓋既有檔）
+- `metadata/` — `reader.rs`（lofty 讀取；含歌詞：sidecar `.lrc` 優先、fallback 內嵌標籤）、`writer.rs`（標籤寫入）、`lyrics_online.rs`（LRCLIB 線上歌詞查詢，僅使用者手動觸發；兩段式：`/api/get` 精確匹配優先——duration 容差僅 ±2 秒，重轉檔/尾端靜音必漏——404 後 fallback `/api/search`，title 正規化後須完全相等（排除 medley），artist 採雙向包含比對——接受「Jay Chou 周杰倫」式裝飾異寫（部分曲目在 LRCLIB 上只有這種寫法），拒絕不同歌手，兩側須非空（`contains("")` 恆真）——並在 ±15 秒內取時長最接近本地檔者（更遠視為不同版本，寧可回報找不到）；同步歌詞以 `create_new` 快取為 sidecar，不覆蓋既有檔）
 - `models/` — Serde 結構體：Track、Playlist、PlayerState、ArtistSummary、AlbumSummary
 - `error.rs` — `AppError` 列舉（thiserror）
 - `tray.rs` — 系統匣整合

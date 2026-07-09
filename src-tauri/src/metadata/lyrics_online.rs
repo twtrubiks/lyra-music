@@ -69,10 +69,12 @@ const MAX_DURATION_DIST_SECS: f64 = 15.0;
 
 /// Pick the best candidate out of a LRCLIB `/api/search` response body.
 ///
-/// Search is fuzzy, so guard against wrong lyrics: only candidates whose
-/// artist and title equal ours (trimmed, case-insensitive) qualify — that
-/// rejects medleys and "Jay Chou 周杰倫"-style alternate artist spellings.
-/// Among them, take the one closest to the local file's duration (most
+/// Search is fuzzy, so guard against wrong lyrics: a candidate's title must
+/// equal ours (trimmed, case-insensitive) — that rejects medleys — and its
+/// artist must contain ours or vice versa, which accepts "Jay Chou 周杰倫"-
+/// style decorated spellings of the same artist (some tracks have no
+/// plainly-spelled entry at all) while rejecting different artists. Among
+/// qualifiers, take the one closest to the local file's duration (most
 /// likely to have a matching timeline) within [`MAX_DURATION_DIST_SECS`];
 /// on a tie, synced beats plain.
 fn pick_search_match(
@@ -83,12 +85,18 @@ fn pick_search_match(
 ) -> Result<Option<FetchedLyrics>, serde_json::Error> {
     let items: Vec<LrclibSearchItem> = serde_json::from_str(body)?;
     let normalize = |s: &str| s.trim().to_lowercase();
+    let our_artist = normalize(artist);
+    let our_title = normalize(title);
 
     let mut best: Option<(f64, u8, FetchedLyrics)> = None;
     for item in items {
-        if normalize(&item.artist_name) != normalize(artist)
-            || normalize(&item.track_name) != normalize(title)
-        {
+        let cand_artist = normalize(&item.artist_name);
+        // Both sides must be non-blank: `contains("")` is always true, so a
+        // candidate missing its artist would otherwise pass the gate.
+        let same_artist = !our_artist.is_empty()
+            && !cand_artist.is_empty()
+            && (cand_artist.contains(&our_artist) || our_artist.contains(&cand_artist));
+        if !same_artist || normalize(&item.track_name) != our_title {
             continue;
         }
         let Some(lyrics) = non_blank(item.synced_lyrics)
@@ -129,7 +137,8 @@ fn pick_search_match(
 /// Two-stage lookup: `/api/get` first (exact match; duration tolerance is
 /// only ±2s, so re-encoded rips with trailing silence routinely miss), then
 /// fall back to `/api/search` and pick the closest-duration candidate (within
-/// ±15s) whose artist and title match exactly (see [`pick_search_match`]).
+/// ±15s) whose title matches exactly and whose artist matches by containment
+/// (see [`pick_search_match`]).
 pub fn fetch(
     artist: &str,
     title: &str,
@@ -303,7 +312,8 @@ mod tests {
     #[test]
     fn search_rejects_mismatched_artist_and_title() {
         // Medleys and different-artist covers must not be picked even when
-        // they are the only candidates.
+        // they are the only candidates — the cover here is in duration
+        // tolerance, so only the artist gate rejects it.
         let body = format!(
             "[{},{}]",
             search_item(
@@ -313,16 +323,51 @@ mod tests {
                 "[00:01.00] medley",
                 ""
             ),
-            search_item(
-                "Jay Chou 周杰倫",
-                "回到過去",
-                231.0,
-                "[00:01.00] alt artist",
-                ""
-            ),
+            search_item("林俊傑", "回到過去", 299.0, "[00:01.00] cover", ""),
         );
         assert!(
             pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn search_accepts_artist_spelling_containing_ours() {
+        // LRCLIB credits its only single-track "退後" entries to
+        // "Jay Chou 周杰倫"-style decorated artists, never plain "周杰倫" —
+        // same artist, not a mismatch. The medley is still rejected by title.
+        let body = format!(
+            "[{},{}]",
+            search_item("周杰倫", "楓+退後+擱淺", 119.2, "[00:01.00] medley", ""),
+            search_item("Jay Chou 周杰倫", "退後", 261.0, "[00:01.00] tui hou", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "退後", 261.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] tui hou");
+    }
+
+    #[test]
+    fn search_accepts_artist_spelling_contained_in_ours() {
+        // Reverse direction: the local tag carries the decoration.
+        let body = format!(
+            "[{}]",
+            search_item("鄧紫棋", "光年之外", 235.0, "[00:01.00] hi", "")
+        );
+        let got = pick_search_match(&body, "G.E.M. 鄧紫棋", "光年之外", 235.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] hi");
+    }
+
+    #[test]
+    fn search_rejects_blank_candidate_artist() {
+        // `contains("")` is always true — a candidate missing its artist
+        // must not slip through the containment gate.
+        let body = format!("[{}]", search_item("", "退後", 261.0, "[00:01.00] hi", ""));
+        assert!(
+            pick_search_match(&body, "周杰倫", "退後", 261.0)
                 .unwrap()
                 .is_none()
         );
@@ -450,6 +495,18 @@ mod tests {
     #[ignore = "requires network"]
     fn fetch_falls_back_to_search_on_duration_mismatch() {
         let got = fetch("周杰倫", "回到過去", "八度空間", 299.0).unwrap();
+        assert!(matches!(got, Some(FetchedLyrics::Synced(_))));
+    }
+
+    /// Repro of the artist-spelling miss: LRCLIB's single-track "退後"
+    /// entries all credit decorated artists ("Jay Chou 周杰倫"), never plain
+    /// "周杰倫" — `/api/get` 404s and only the containment match in the
+    /// search fallback finds them. Run manually with
+    /// `cargo test --lib lyrics_online -- --ignored`.
+    #[test]
+    #[ignore = "requires network"]
+    fn fetch_finds_decorated_artist_spelling_via_search() {
+        let got = fetch("周杰倫", "退後", "依然范特西", 261.0).unwrap();
         assert!(matches!(got, Some(FetchedLyrics::Synced(_))));
     }
 
