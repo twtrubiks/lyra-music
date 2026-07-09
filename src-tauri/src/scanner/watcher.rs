@@ -58,12 +58,9 @@ impl FolderWatcher {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
                         WatcherCommand::Watch(path) => {
-                            let p = PathBuf::from(&path);
-                            if watched_paths.insert(p.clone()) {
-                                if let Err(e) = watcher.watch(&p, RecursiveMode::Recursive) {
-                                    eprintln!("Failed to watch {path}: {e}");
-                                }
-                            }
+                            watch_path(&mut watched_paths, &path, |p| {
+                                watcher.watch(p, RecursiveMode::Recursive)
+                            });
                         }
                         WatcherCommand::Unwatch(path) => {
                             let p = PathBuf::from(&path);
@@ -122,6 +119,27 @@ impl FolderWatcher {
 impl Drop for FolderWatcher {
     fn drop(&mut self) {
         let _ = self.cmd_tx.send(WatcherCommand::Shutdown);
+    }
+}
+
+/// Record `path` as watched only after `watch_fn` succeeds. A failed attempt
+/// (e.g. folder on an unmounted USB drive) leaves the path out of
+/// `watched_paths`, so a later watch attempt is retried instead of being
+/// deduplicated away until restart.
+#[allow(clippy::implicit_hasher)]
+pub fn watch_path<F>(watched_paths: &mut HashSet<PathBuf>, path: &str, watch_fn: F)
+where
+    F: FnOnce(&Path) -> Result<(), notify::Error>,
+{
+    let p = PathBuf::from(path);
+    if watched_paths.contains(&p) {
+        return;
+    }
+    match watch_fn(&p) {
+        Ok(()) => {
+            watched_paths.insert(p);
+        }
+        Err(e) => eprintln!("Failed to watch {path}: {e}"),
     }
 }
 
