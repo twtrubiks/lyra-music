@@ -133,7 +133,7 @@
     margin: 0 0 4px;
     font-size: 13px;
     font-weight: 600;
-    color: #e94560;
+    color: #e2603a;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }

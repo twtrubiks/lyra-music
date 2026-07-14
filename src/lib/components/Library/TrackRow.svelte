@@ -58,35 +58,35 @@
   }
 
   .track-row:hover td {
-    background: rgb(233 69 96 / 10%);
+    background: rgb(226 96 58 / 10%);
   }
 
   .track-row.active td {
-    background: rgb(233 69 96 / 20%);
+    background: rgb(226 96 58 / 20%);
   }
 
   .track-row.active {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .track-row.selected td {
-    background: rgb(233 69 96 / 15%);
+    background: rgb(226 96 58 / 15%);
   }
 
   .track-row.selected:hover td {
-    background: rgb(233 69 96 / 20%);
+    background: rgb(226 96 58 / 20%);
   }
 
   .track-row.active.selected td {
-    background: rgb(233 69 96 / 25%);
+    background: rgb(226 96 58 / 25%);
   }
 
   .track-row.active.selected {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .track-row.focused {
-    outline: 1px solid rgb(233 69 96 / 40%);
+    outline: 1px solid rgb(226 96 58 / 40%);
     outline-offset: -1px;
   }
 

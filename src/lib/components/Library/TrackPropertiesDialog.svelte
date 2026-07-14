@@ -284,7 +284,7 @@
   }
 
   .edit-input:focus {
-    border-color: #e94560;
+    border-color: #e2603a;
   }
 
   .dialog-actions {
@@ -313,7 +313,7 @@
   }
 
   .btn-primary {
-    background: #e94560;
+    background: #e2603a;
     color: #fff;
   }
 

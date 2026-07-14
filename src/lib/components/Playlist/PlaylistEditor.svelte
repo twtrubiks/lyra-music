@@ -179,7 +179,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    background: #e94560;
+    background: #e2603a;
     border: none;
     border-radius: 16px;
     color: #fff;
@@ -190,7 +190,7 @@
   }
 
   .play-all-btn:hover:not(:disabled) {
-    background: #ff6b81;
+    background: #f8865b;
   }
 
   .play-all-btn:disabled {

@@ -472,9 +472,9 @@
     align-items: center;
     gap: 12px;
     padding: 48px;
-    border: 2px dashed #e94560;
+    border: 2px dashed #e2603a;
     border-radius: 16px;
-    color: #e94560;
+    color: #e2603a;
   }
 
   .drop-title {

@@ -29,7 +29,7 @@
     height: 44px;
     border-radius: 50%;
     border: none;
-    background: #e94560;
+    background: #e2603a;
     color: #fff;
     display: flex;
     align-items: center;
@@ -42,7 +42,7 @@
   }
 
   .play-btn:hover:not(:disabled) {
-    background: #ff6b81;
+    background: #f8865b;
     transform: scale(1.05);
   }
 

@@ -250,16 +250,63 @@
 
 <aside class="sidebar">
   <div class="brand">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <g stroke="#e94560" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="6.5" y1="4.5" x2="17.5" y2="4.5" />
-        <path d="M6.5,4.5 C5.5,9 8,15 9.5,18.5" />
-        <path d="M17.5,4.5 C18.5,9 16,15 14.5,18.5" />
-        <path d="M9.5,18.5 Q12,21.5 14.5,18.5" />
-      </g>
-      <circle cx="12" cy="8.5" r="1.5" fill="#ff6b81" />
-      <circle cx="12" cy="12" r="1.2" fill="#ff6b81" />
-      <circle cx="12" cy="15.5" r="1.2" fill="#ff6b81" />
+    <svg viewBox="-54 -52 108 120" width="22" height="22" fill="none" aria-hidden="true">
+      <rect x="-26" y="52" width="52" height="9" rx="4.5" fill="#e2603a" />
+      <line
+        x1="-27"
+        y1="2"
+        x2="-20"
+        y2="51"
+        stroke="#e2603a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
+      <line
+        x1="-13"
+        y1="-14"
+        x2="-10"
+        y2="51"
+        stroke="#e2603a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
+      <line
+        x1="13"
+        y1="-14"
+        x2="10"
+        y2="51"
+        stroke="#e2603a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
+      <line
+        x1="27"
+        y1="2"
+        x2="20"
+        y2="51"
+        stroke="#e2603a"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity="0.5"
+      />
+      <path d="M -8,2 L 15,20 L -8,38 Z" fill="#e2603a" />
+      <path
+        d="M -18,55 C -40,55 -44,28 -41,4 C -38,-18 -28,-33 -16,-41"
+        fill="none"
+        stroke="#e2603a"
+        stroke-width="7.5"
+        stroke-linecap="round"
+      />
+      <path
+        d="M 18,55 C 40,55 44,28 41,4 C 38,-18 28,-33 16,-41"
+        fill="none"
+        stroke="#e2603a"
+        stroke-width="7.5"
+        stroke-linecap="round"
+      />
     </svg>
     <span class="brand-name">Lyra Music</span>
   </div>
@@ -445,7 +492,7 @@
   .brand-name {
     font-size: 18px;
     font-weight: 700;
-    color: #e94560;
+    color: #e2603a;
   }
 
   .nav {
@@ -468,13 +515,13 @@
   }
 
   .nav-item:hover {
-    background: rgb(233 69 96 / 10%);
+    background: rgb(226 96 58 / 10%);
     color: #eee;
   }
 
   .nav-item.active {
-    background: rgb(233 69 96 / 15%);
-    color: #e94560;
+    background: rgb(226 96 58 / 15%);
+    color: #e2603a;
   }
 
   .section-label {
@@ -506,8 +553,8 @@
   }
 
   .add-btn:hover {
-    border-color: #e94560;
-    color: #e94560;
+    border-color: #e2603a;
+    color: #e2603a;
   }
 
   .new-playlist-input {
@@ -528,12 +575,12 @@
   }
 
   .new-playlist-input input:focus {
-    border-color: #e94560;
+    border-color: #e2603a;
   }
 
   .confirm-btn {
     padding: 4px 8px;
-    background: #e94560;
+    background: #e2603a;
     border: none;
     border-radius: 4px;
     color: #fff;
@@ -557,13 +604,13 @@
   }
 
   .playlist-item.active .playlist-btn {
-    background: rgb(233 69 96 / 15%);
-    color: #e94560;
+    background: rgb(226 96 58 / 15%);
+    color: #e2603a;
   }
 
   .playlist-item.drag-over {
-    background: rgb(233 69 96 / 25%);
-    outline: 2px dashed #e94560;
+    background: rgb(226 96 58 / 25%);
+    outline: 2px dashed #e2603a;
     outline-offset: -2px;
   }
 
@@ -584,7 +631,7 @@
   .rename-input input {
     width: 100%;
     background: #16213e;
-    border: 1px solid #e94560;
+    border: 1px solid #e2603a;
     border-radius: 4px;
     padding: 4px 8px;
     color: #eee;
@@ -613,7 +660,7 @@
   }
 
   .delete-btn:hover {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .bottom-actions {
@@ -640,8 +687,8 @@
   }
 
   .shortcuts-btn:hover {
-    border-color: #e94560;
-    color: #e94560;
+    border-color: #e2603a;
+    color: #e2603a;
   }
 
   .context-menu {
@@ -671,16 +718,16 @@
   }
 
   .menu-item:hover {
-    background: rgb(233 69 96 / 20%);
+    background: rgb(226 96 58 / 20%);
     color: #fff;
   }
 
   .menu-item-danger {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .menu-item-danger:hover {
-    background: rgb(233 69 96 / 30%);
+    background: rgb(226 96 58 / 30%);
     color: #ff6b84;
   }
 

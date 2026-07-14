@@ -148,7 +148,7 @@
   }
 
   .artist-row:hover {
-    background: rgb(233 69 96 / 10%);
+    background: rgb(226 96 58 / 10%);
   }
 
   .artist-icon {

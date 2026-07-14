@@ -84,8 +84,8 @@
     border-radius: 2px;
     background: linear-gradient(
       to right,
-      #e94560 0%,
-      #e94560 var(--progress),
+      #e2603a 0%,
+      #e2603a var(--progress),
       #333 var(--progress),
       #333 100%
     );
@@ -98,7 +98,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #e94560;
+    background: #e2603a;
     border: 2px solid #fff;
     cursor: pointer;
     transition: transform 0.1s;
@@ -112,7 +112,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #e94560;
+    background: #e2603a;
     border: 2px solid #fff;
     cursor: pointer;
   }

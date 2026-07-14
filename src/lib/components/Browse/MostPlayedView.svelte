@@ -153,7 +153,7 @@
   }
 
   .header-icon {
-    color: #e94560;
+    color: #e2603a;
   }
 
   h2 {

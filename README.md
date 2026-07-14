@@ -1,6 +1,18 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Lyra Music" width="140" />
+</p>
+
 # Lyra Music
 
 [English](README.en.md) | 繁體中文
+
+[![CI](https://github.com/twtrubiks/lyra-music/actions/workflows/ci.yml/badge.svg)](https://github.com/twtrubiks/lyra-music/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/twtrubiks/lyra-music)](https://github.com/twtrubiks/lyra-music/releases)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](https://tauri.app/)
+[![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00.svg)](https://svelte.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
+[![Rust](https://img.shields.io/badge/Rust-dea584.svg)](https://www.rust-lang.org/)
+[![rodio](https://img.shields.io/badge/rodio-0.22-e2603a.svg)](https://github.com/RustAudio/rodio)
 
 基於 Tauri 2 + Svelte 5 + Rust 的桌面音樂播放器。純本地離線播放，不依賴任何網路服務。
 
@@ -173,3 +185,23 @@ src-tauri/                        # 後端 (Rust)
     models/                       # 資料結構定義 (track, playlist, player_state)
   tests/                          # 19 個整合測試
 ```
+
+## Donation
+
+文章都是我自己研究內化後原創，如果有幫助到您，也想鼓勵我的話，歡迎請我喝一杯咖啡 :laughing:
+
+綠界科技ECPAY ( 不需註冊會員 )
+
+![alt tag](https://payment.ecpay.com.tw/Upload/QRCode/201906/QRCode_672351b8-5ab3-42dd-9c7c-c24c3e6a10a0.png)
+
+[贊助者付款](http://bit.ly/2F7Jrha)
+
+歐付寶 ( 需註冊會員 )
+
+![alt tag](https://i.imgur.com/LRct9xa.png)
+
+[贊助者付款](https://payment.opay.tw/Broadcaster/Donate/9E47FDEF85ABE383A0F5FC6A218606F8)
+
+## 贊助名單
+
+[贊助名單](https://github.com/twtrubiks/Thank-you-for-donate)

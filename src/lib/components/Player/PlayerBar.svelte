@@ -267,7 +267,7 @@
   }
 
   .mode-btn.active {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .lyrics-btn {
@@ -286,7 +286,7 @@
   }
 
   .lyrics-dot.synced {
-    background: #e94560;
+    background: #e2603a;
   }
 
   .player-bar.mini {

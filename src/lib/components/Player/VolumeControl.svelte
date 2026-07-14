@@ -64,8 +64,8 @@
     border-radius: 2px;
     background: linear-gradient(
       to right,
-      #e94560 0%,
-      #e94560 var(--pct),
+      #e2603a 0%,
+      #e2603a var(--pct),
       #333 var(--pct),
       #333 100%
     );

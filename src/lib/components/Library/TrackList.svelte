@@ -572,7 +572,7 @@
   }
 
   .th-sorted {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .th-label {
@@ -592,7 +592,7 @@
 
   .resize-handle:hover,
   .resize-handle.active {
-    background: rgb(233 69 96 / 50%);
+    background: rgb(226 96 58 / 50%);
   }
 
   .empty {
@@ -649,16 +649,16 @@
   }
 
   .menu-item:hover {
-    background: rgb(233 69 96 / 20%);
+    background: rgb(226 96 58 / 20%);
     color: #fff;
   }
 
   .menu-item-danger {
-    color: #e94560;
+    color: #e2603a;
   }
 
   .menu-item-danger:hover {
-    background: rgb(233 69 96 / 30%);
+    background: rgb(226 96 58 / 30%);
     color: #ff6b84;
   }
 

@@ -91,8 +91,8 @@
   }
 
   .folder-btn:hover:not(:disabled) {
-    border-color: #e94560;
-    color: #e94560;
+    border-color: #e2603a;
+    color: #e2603a;
   }
 
   .folder-btn:disabled {
@@ -113,7 +113,7 @@
   }
 
   .manage-btn:hover {
-    border-color: #e94560;
-    color: #e94560;
+    border-color: #e2603a;
+    color: #e2603a;
   }
 </style>
