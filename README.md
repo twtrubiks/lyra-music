@@ -180,7 +180,7 @@ src-tauri/                        # 後端 (Rust)
     audio/                        # 音訊引擎 (rodio sink, gapless queue)
     scanner/                      # 資料夾掃描與檔案監視 (walkdir, notify)
     metadata/                     # 元資料讀寫與封面快取 (lofty)
-    storage/                      # SQLite 資料庫 (schema v8, WAL mode)
+    storage/                      # SQLite 資料庫 (schema v9, WAL mode)
     commands/                     # Tauri command handlers (42 個 IPC 介面)
     models/                       # 資料結構定義 (track, playlist, player_state)
   tests/                          # 19 個整合測試

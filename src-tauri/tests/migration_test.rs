@@ -11,6 +11,16 @@ fn schema_version(conn: &Connection) -> i64 {
     .unwrap()
 }
 
+fn index_names(conn: &Connection, table: &str) -> Vec<String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA index_list({table})"))
+        .unwrap();
+    stmt.query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
 fn column_names(conn: &Connection, table: &str) -> Vec<String> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table})"))
@@ -72,7 +82,7 @@ fn fresh_db_migrates_to_latest_version() {
     let conn = Connection::open_in_memory().unwrap();
     db::run_migrations(&conn).unwrap();
 
-    assert_eq!(schema_version(&conn), 8);
+    assert_eq!(schema_version(&conn), 9);
 
     let track_cols = column_names(&conn, "tracks");
     for col in [
@@ -88,13 +98,38 @@ fn fresh_db_migrates_to_latest_version() {
     assert!(playlist_cols.iter().any(|c| c == "sort_order"));
 }
 
+/// v9: `playlist_tracks` is keyed `(playlist_id, track_id)`, so the
+/// `track_id` FK cascade on track deletion and the `ORDER BY sort_order`
+/// playlist reads had no usable index. `idx_tracks_album_artist` became
+/// redundant with `idx_tracks_album` once v8 keyed album cards by
+/// `COALESCE(album_artist, artist)` — only the `album` prefix is usable.
+#[test]
+fn v9_adds_playlist_tracks_indexes_and_drops_redundant_album_artist_index() {
+    let conn = Connection::open_in_memory().unwrap();
+    db::run_migrations(&conn).unwrap();
+
+    let pt_indexes = index_names(&conn, "playlist_tracks");
+    for idx in [
+        "idx_playlist_tracks_track_id",
+        "idx_playlist_tracks_playlist_sort",
+    ] {
+        assert!(pt_indexes.iter().any(|i| i == idx), "missing index {idx}");
+    }
+    let track_indexes = index_names(&conn, "tracks");
+    assert!(
+        !track_indexes.iter().any(|i| i == "idx_tracks_album_artist"),
+        "redundant index idx_tracks_album_artist should be dropped"
+    );
+    assert!(track_indexes.iter().any(|i| i == "idx_tracks_album"));
+}
+
 #[test]
 fn migrations_are_idempotent() {
     let conn = Connection::open_in_memory().unwrap();
     db::run_migrations(&conn).unwrap();
     db::run_migrations(&conn).unwrap();
 
-    assert_eq!(schema_version(&conn), 8);
+    assert_eq!(schema_version(&conn), 9);
 }
 
 #[test]
@@ -111,7 +146,7 @@ fn v1_db_with_data_upgrades_and_backfills() {
 
     db::run_migrations(&conn).unwrap();
 
-    assert_eq!(schema_version(&conn), 8);
+    assert_eq!(schema_version(&conn), 9);
 
     // New columns get sane defaults on existing rows
     let (play_count, file_size): (i64, i64) = conn
@@ -137,5 +172,23 @@ fn v1_db_with_data_upgrades_and_backfills() {
     assert_eq!(
         orders,
         vec![("First".to_string(), 0), ("Second".to_string(), 1)]
+    );
+
+    // v9 indexes land on the upgrade path too, not only on a fresh DB
+    let pt_indexes = index_names(&conn, "playlist_tracks");
+    assert!(
+        pt_indexes
+            .iter()
+            .any(|i| i == "idx_playlist_tracks_track_id")
+    );
+    assert!(
+        pt_indexes
+            .iter()
+            .any(|i| i == "idx_playlist_tracks_playlist_sort")
+    );
+    assert!(
+        !index_names(&conn, "tracks")
+            .iter()
+            .any(|i| i == "idx_tracks_album_artist")
     );
 }

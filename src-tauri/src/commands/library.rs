@@ -53,32 +53,77 @@ fn read_audio_file(file_path: &str) -> Result<PreparedFile, FailedFile> {
     }
 }
 
-/// Insert one prepared chunk under a single short-lived DB lock/transaction.
+/// Insert one prepared chunk: a short lock/transaction to insert the rows,
+/// cover files written with the lock released (the file name needs the row
+/// id, so they cannot be written beforehand), then a second short
+/// lock/transaction to record the cover paths. A cover that fails to save
+/// or record is logged and its track returned without one — the rows are
+/// already committed, so failing the chunk would misreport the import.
 fn insert_chunk(
     db: &Arc<Mutex<Connection>>,
     app_data_dir: &std::path::Path,
     prepared: &[PreparedFile],
 ) -> Result<Vec<Track>, AppError> {
+    let mut inserted = {
+        let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
+        let tx = conn.unchecked_transaction()?;
+        let mut inserted = Vec::with_capacity(prepared.len());
+        for p in prepared {
+            let mut track = p.track.clone();
+            track.id = library_repo::insert_track(&tx, &track)?;
+            track.cover_art = None;
+            inserted.push(track);
+        }
+        tx.commit()?;
+        inserted
+    };
+
+    // File I/O without the DB lock. `inserted` is index-aligned with `prepared`.
+    let saved_covers: Vec<(usize, String)> = prepared
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| {
+            let (data, mime) = p.cover.as_ref()?;
+            let id = inserted[i].id;
+            match reader::save_cover_art(app_data_dir, id, data, mime) {
+                Ok(path) => Some((i, path)),
+                Err(e) => {
+                    eprintln!("[lyra] failed to save cover art for track {id}: {e}");
+                    None
+                }
+            }
+        })
+        .collect();
+
+    if !saved_covers.is_empty() {
+        match record_cover_paths(db, &inserted, &saved_covers) {
+            Ok(()) => {
+                for (i, path) in saved_covers {
+                    inserted[i].cover_art_path = Some(path);
+                }
+            }
+            Err(e) => eprintln!(
+                "[lyra] failed to record cover art paths for {} tracks: {e}",
+                saved_covers.len()
+            ),
+        }
+    }
+
+    Ok(inserted)
+}
+
+fn record_cover_paths(
+    db: &Arc<Mutex<Connection>>,
+    inserted: &[Track],
+    saved_covers: &[(usize, String)],
+) -> Result<(), AppError> {
     let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
     let tx = conn.unchecked_transaction()?;
-    let mut inserted = Vec::with_capacity(prepared.len());
-    for p in prepared {
-        let mut track = p.track.clone();
-        let id = library_repo::insert_track(&tx, &track)?;
-        track.id = id;
-
-        if let Some((data, mime)) = &p.cover {
-            if let Ok(cover_path) = reader::save_cover_art(app_data_dir, id, data, mime) {
-                library_repo::update_cover_art_path(&tx, id, &cover_path)?;
-                track.cover_art_path = Some(cover_path);
-            }
-        }
-
-        track.cover_art = None;
-        inserted.push(track);
+    for (i, path) in saved_covers {
+        library_repo::update_cover_art_path(&tx, inserted[*i].id, path)?;
     }
     tx.commit()?;
-    Ok(inserted)
+    Ok(())
 }
 
 /// Import audio files into the library in chunks: the expensive file I/O
@@ -197,13 +242,14 @@ pub fn get_all_tracks(db: State<DbState>) -> Result<Vec<Track>, AppError> {
 
 #[tauri::command(async)]
 pub fn get_track_cover(id: i64, db: State<DbState>) -> Result<Option<String>, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let cover_path = library_repo::get_track_cover_path(&conn, id)?;
-
-    match cover_path {
-        Some(path) => Ok(reader::read_cover_art_from_file(&path)),
-        None => Ok(None),
-    }
+    let cover_path = {
+        let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::get_track_cover_path(&conn, id)?
+    };
+    // File read + base64 encoding run without the DB lock held.
+    Ok(cover_path
+        .as_deref()
+        .and_then(reader::read_cover_art_from_file))
 }
 
 #[tauri::command(async)]
@@ -214,30 +260,45 @@ pub fn search_tracks(query: String, db: State<DbState>) -> Result<Vec<Track>, Ap
 
 #[tauri::command(async)]
 pub fn remove_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    if let Ok(Some(cover_path)) = library_repo::get_track_cover_path(&conn, id) {
-        reader::remove_cover_art_file(&cover_path);
-    }
-    library_repo::delete_track(&conn, id)
+    single_result(remove_tracks_batch(&db.0, &[id])?)
 }
 
 #[tauri::command(async)]
 pub fn trash_track(id: i64, db: State<DbState>) -> Result<(), AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let track = library_repo::get_track_by_id(&conn, id)?
-        .ok_or_else(|| AppError::Generic(format!("Track {id} not found")))?;
-    if let Ok(Some(cover_path)) = library_repo::get_track_cover_path(&conn, id) {
-        reader::remove_cover_art_file(&cover_path);
+    single_result(trash_tracks_batch(&db.0, &[id])?)
+}
+
+/// Collapse a one-id batch result into the single-track command contract.
+fn single_result(result: BatchTrashResult) -> Result<(), AppError> {
+    match result.failed.into_iter().next() {
+        Some(failure) => Err(AppError::Generic(failure.error)),
+        None => Ok(()),
     }
-    trash::delete(&track.file_path)
-        .map_err(|e| AppError::Generic(format!("Failed to trash file: {e}")))?;
-    library_repo::delete_track(&conn, id)
 }
 
 #[tauri::command(async)]
 pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
+    trash_tracks_batch(&db.0, &ids)
+}
+
+#[tauri::command(async)]
+pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
+    remove_tracks_batch(&db.0, &ids)
+}
+
+/// Move files to the OS trash and delete their rows. Short lock to fetch
+/// the rows, trash + cover cleanup with the lock released — a
+/// cross-filesystem trash is a copy + delete that can take seconds — then a
+/// short lock to delete the rows that were actually trashed. Failures are
+/// aggregated per id so the frontend rolls back only those tracks.
+pub fn trash_tracks_batch(
+    db: &Arc<Mutex<Connection>>,
+    ids: &[i64],
+) -> Result<BatchTrashResult, AppError> {
+    let tracks = {
+        let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
+        library_repo::get_tracks_by_ids(&conn, ids)?
+    };
 
     let mut succeeded_ids = Vec::new();
     let mut failed = Vec::new();
@@ -259,18 +320,11 @@ pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResul
         }
     }
 
-    // Mark any IDs not found in DB as failed
     let found_ids: std::collections::HashSet<i64> = tracks.iter().map(|t| t.id).collect();
-    for &id in &ids {
-        if !found_ids.contains(&id) {
-            failed.push(BatchTrashFailure {
-                id,
-                error: format!("Track {id} not found"),
-            });
-        }
-    }
+    failed.extend(not_found_failures(ids, &found_ids));
 
     if !succeeded_ids.is_empty() {
+        let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
         library_repo::delete_tracks(&conn, &succeeded_ids)?;
     }
 
@@ -280,42 +334,50 @@ pub fn trash_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResul
     })
 }
 
-#[tauri::command(async)]
-pub fn remove_tracks(ids: Vec<i64>, db: State<DbState>) -> Result<BatchTrashResult, AppError> {
-    let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
-    let tracks = library_repo::get_tracks_by_ids(&conn, &ids)?;
+/// Delete rows and their cached covers, leaving the audio files alone.
+/// Short lock to fetch + delete, cover file cleanup with the lock released.
+pub fn remove_tracks_batch(
+    db: &Arc<Mutex<Connection>>,
+    ids: &[i64],
+) -> Result<BatchTrashResult, AppError> {
+    let tracks = {
+        let conn = db.lock().map_err(|_| AppError::LockPoisoned)?;
+        let tracks = library_repo::get_tracks_by_ids(&conn, ids)?;
+        let found: Vec<i64> = tracks.iter().map(|t| t.id).collect();
+        library_repo::delete_tracks(&conn, &found)?;
+        tracks
+    };
 
     let found_ids: std::collections::HashSet<i64> = tracks.iter().map(|t| t.id).collect();
+    let succeeded_ids: Vec<i64> = ids
+        .iter()
+        .copied()
+        .filter(|id| found_ids.contains(id))
+        .collect();
+    let failed: Vec<BatchTrashFailure> = not_found_failures(ids, &found_ids).collect();
 
-    let mut succeeded_ids = Vec::new();
-    let mut failed = Vec::new();
-
-    for &id in &ids {
-        if found_ids.contains(&id) {
-            succeeded_ids.push(id);
-        } else {
-            failed.push(BatchTrashFailure {
-                id,
-                error: format!("Track {id} not found"),
-            });
-        }
-    }
-
-    // Batch clean up cover art files
     for track in &tracks {
         if let Some(ref cover_path) = track.cover_art_path {
             reader::remove_cover_art_file(cover_path);
         }
     }
 
-    if !succeeded_ids.is_empty() {
-        library_repo::delete_tracks(&conn, &succeeded_ids)?;
-    }
-
     Ok(BatchTrashResult {
         succeeded_ids,
         failed,
     })
+}
+
+fn not_found_failures<'a>(
+    ids: &'a [i64],
+    found_ids: &'a std::collections::HashSet<i64>,
+) -> impl Iterator<Item = BatchTrashFailure> + 'a {
+    ids.iter()
+        .filter(move |id| !found_ids.contains(id))
+        .map(|&id| BatchTrashFailure {
+            id,
+            error: format!("Track {id} not found"),
+        })
 }
 
 #[tauri::command(async)]

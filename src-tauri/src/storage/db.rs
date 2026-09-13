@@ -170,6 +170,27 @@ pub fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         tx.commit()?;
     }
 
+    // v9: playlist_tracks is keyed (playlist_id, track_id), so neither the
+    // track_id FK cascade on track deletion nor the ORDER BY sort_order
+    // playlist reads had a usable index (full scan / temp B-tree).
+    // idx_tracks_album_artist (album, artist) has been redundant with
+    // idx_tracks_album since v8 keyed album cards by
+    // COALESCE(album_artist, artist) — only its album prefix is usable.
+    if current_version < 9 {
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "
+            CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track_id
+                ON playlist_tracks(track_id);
+            CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist_sort
+                ON playlist_tracks(playlist_id, sort_order);
+            DROP INDEX IF EXISTS idx_tracks_album_artist;
+            INSERT INTO schema_version (version) VALUES (9);
+        ",
+        )?;
+        tx.commit()?;
+    }
+
     Ok(())
 }
 

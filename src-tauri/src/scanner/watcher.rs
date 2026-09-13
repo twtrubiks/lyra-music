@@ -238,6 +238,7 @@ pub fn process_event_batch(
     // Renames first: once the row is repointed, the stray From/To events
     // from the same rename are harmless — Remove misses the old path and
     // Import upserts the new one via ON CONFLICT.
+    let mut stale_cover_paths: Vec<String> = Vec::new();
     let mut changed = {
         let conn = match db.lock() {
             Ok(c) => c,
@@ -246,13 +247,28 @@ pub fn process_event_batch(
                 return (false, Vec::new());
             }
         };
-        let mut changed = apply_rename_events(&conn, &events, &mut removed_track_ids);
+        let mut changed = apply_rename_events(
+            &conn,
+            &events,
+            &mut removed_track_ids,
+            &mut stale_cover_paths,
+        );
         for path_str in &remove_paths {
-            remove_track(&conn, path_str, &mut removed_track_ids);
+            remove_track(
+                &conn,
+                path_str,
+                &mut removed_track_ids,
+                &mut stale_cover_paths,
+            );
             changed = true;
         }
         changed
     };
+
+    // Cached covers of removed rows are deleted with the lock released.
+    for cover_path in &stale_cover_paths {
+        reader::remove_cover_art_file(cover_path);
+    }
 
     if !import_paths.is_empty() {
         // Heavy file I/O runs without the DB lock; import_audio_files locks
@@ -264,10 +280,18 @@ pub fn process_event_batch(
     (changed, removed_track_ids)
 }
 
-fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i64>) {
+/// Delete the row for `path_str` (DB only). Its cached cover path is
+/// collected in `stale_cover_paths` for the caller to delete once the DB
+/// lock is released.
+fn remove_track(
+    conn: &Connection,
+    path_str: &str,
+    removed_track_ids: &mut Vec<i64>,
+    stale_cover_paths: &mut Vec<String>,
+) {
     if let Ok(Some(track_id)) = library_repo::get_track_id_by_path(conn, path_str) {
         if let Ok(Some(cover_path)) = library_repo::delete_track_by_path(conn, path_str) {
-            reader::remove_cover_art_file(&cover_path);
+            stale_cover_paths.push(cover_path);
         }
         removed_track_ids.push(track_id);
     }
@@ -332,6 +356,7 @@ fn apply_rename_events(
     conn: &Connection,
     events: &[notify::Event],
     removed_track_ids: &mut Vec<i64>,
+    stale_cover_paths: &mut Vec<String>,
 ) -> bool {
     let mut changed = false;
 
@@ -364,7 +389,7 @@ fn apply_rename_events(
                 // The move may have overwritten a different tracked file
                 // at the destination — drop that stale row first so the
                 // path UPDATE below doesn't hit the UNIQUE constraint.
-                remove_track(conn, to_str, removed_track_ids);
+                remove_track(conn, to_str, removed_track_ids, stale_cover_paths);
                 match library_repo::update_track_path(conn, from_str, to_str) {
                     Ok(_) => changed = true,
                     Err(e) => {
@@ -536,7 +561,12 @@ mod tests {
         playlist_repo::add_to_playlist(&conn, pl, id).unwrap();
 
         let mut removed = Vec::new();
-        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+        let changed = apply_rename_events(
+            &conn,
+            &[rename_event(&old, &new)],
+            &mut removed,
+            &mut Vec::new(),
+        );
 
         assert!(changed);
         assert!(removed.is_empty());
@@ -570,7 +600,12 @@ mod tests {
         let other_id = insert_track_at(&conn, &dir.path().join("Other").join("02.mp3"));
 
         let mut removed = Vec::new();
-        let changed = apply_rename_events(&conn, &[rename_event(&old_dir, &new_dir)], &mut removed);
+        let changed = apply_rename_events(
+            &conn,
+            &[rename_event(&old_dir, &new_dir)],
+            &mut removed,
+            &mut Vec::new(),
+        );
 
         assert!(changed);
         assert!(removed.is_empty());
@@ -605,7 +640,12 @@ mod tests {
         let displaced_id = insert_track_at(&conn, &new);
 
         let mut removed = Vec::new();
-        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+        let changed = apply_rename_events(
+            &conn,
+            &[rename_event(&old, &new)],
+            &mut removed,
+            &mut Vec::new(),
+        );
 
         assert!(changed);
         assert_eq!(removed, vec![displaced_id]);
@@ -749,7 +789,7 @@ mod tests {
             split_half(RenameMode::To, &new),
         ]);
         let mut removed = Vec::new();
-        let changed = apply_rename_events(&conn, &events, &mut removed);
+        let changed = apply_rename_events(&conn, &events, &mut removed, &mut Vec::new());
 
         assert!(changed);
         assert!(removed.is_empty());
@@ -772,7 +812,12 @@ mod tests {
 
         let conn = test_conn();
         let mut removed = Vec::new();
-        let changed = apply_rename_events(&conn, &[rename_event(&old, &new)], &mut removed);
+        let changed = apply_rename_events(
+            &conn,
+            &[rename_event(&old, &new)],
+            &mut removed,
+            &mut Vec::new(),
+        );
 
         assert!(!changed);
         assert!(removed.is_empty());

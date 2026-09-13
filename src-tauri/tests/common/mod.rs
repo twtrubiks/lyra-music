@@ -194,6 +194,25 @@ pub fn create_test_wav_with_uslt(
     path
 }
 
+/// Create a test WAV with an embedded ID3v2.4 APIC (front cover) frame holding `image`.
+pub fn create_test_wav_with_cover(
+    dir: &std::path::Path,
+    name: &str,
+    image: &[u8],
+) -> std::path::PathBuf {
+    let path = create_test_wav(dir, name);
+
+    let mut body = vec![3u8]; // text encoding: UTF-8
+    body.extend_from_slice(b"image/jpeg\0"); // MIME type, terminated
+    body.push(3); // picture type: cover (front)
+    body.push(0); // empty description, terminated
+    body.extend_from_slice(image);
+    let frames = raw_frame(b"APIC", &body);
+
+    append_id3_chunk(&path, &frames);
+    path
+}
+
 /// Wrap ID3v2.4 frames in a tag and append it to a WAV file as an `ID3 ` RIFF chunk.
 fn append_id3_chunk(path: &std::path::Path, frames: &[u8]) {
     let mut tag = Vec::with_capacity(10 + frames.len());

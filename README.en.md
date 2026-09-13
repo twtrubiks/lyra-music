@@ -180,7 +180,7 @@ src-tauri/                        # Backend (Rust)
     audio/                        # Audio engine (rodio sink, gapless queue)
     scanner/                      # Folder scanning & file watching (walkdir, notify)
     metadata/                     # Metadata read/write & cover art caching (lofty)
-    storage/                      # SQLite database (schema v8, WAL mode)
+    storage/                      # SQLite database (schema v9, WAL mode)
     commands/                     # Tauri command handlers (42 IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
   tests/                          # 19 integration tests
