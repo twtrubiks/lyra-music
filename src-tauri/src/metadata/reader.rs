@@ -231,10 +231,10 @@ pub fn save_cover_art(
 /// up); any other failure (e.g. permissions) is logged so orphaned covers are
 /// not silently left behind.
 pub fn remove_cover_art_file(cover_art_path: &str) {
-    if let Err(e) = fs::remove_file(cover_art_path) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            eprintln!("[lyra] failed to remove cover art {cover_art_path}: {e}");
-        }
+    if let Err(e) = fs::remove_file(cover_art_path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        eprintln!("[lyra] failed to remove cover art {cover_art_path}: {e}");
     }
 }
 

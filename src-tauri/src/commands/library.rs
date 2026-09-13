@@ -199,10 +199,10 @@ pub fn scan_folder(
 
     let result = import_audio_files(&db.0, &app_data_dir, &file_paths);
 
-    if let Ok(w) = watcher_state.0.lock() {
-        if let Some(ref watcher) = *w {
-            let _ = watcher.watch(&folder_path);
-        }
+    if let Ok(w) = watcher_state.0.lock()
+        && let Some(ref watcher) = *w
+    {
+        let _ = watcher.watch(&folder_path);
     }
 
     Ok(result)

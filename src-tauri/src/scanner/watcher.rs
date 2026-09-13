@@ -79,20 +79,21 @@ impl FolderWatcher {
                 }
 
                 // Process debounced events
-                if let Some(last_time) = last_event_time {
-                    if last_time.elapsed() >= debounce_duration && !pending_events.is_empty() {
-                        let events = std::mem::take(&mut pending_events);
-                        last_event_time = None;
+                if let Some(last_time) = last_event_time
+                    && last_time.elapsed() >= debounce_duration
+                    && !pending_events.is_empty()
+                {
+                    let events = std::mem::take(&mut pending_events);
+                    last_event_time = None;
 
-                        let (changed, removed_track_ids) =
-                            process_event_batch(&events, &db_clone, &app_data_dir);
+                    let (changed, removed_track_ids) =
+                        process_event_batch(&events, &db_clone, &app_data_dir);
 
-                        if changed {
-                            let _ = app_handle_clone.emit("library-changed", ());
-                        }
-                        if !removed_track_ids.is_empty() {
-                            let _ = app_handle_clone.emit("tracks-removed", removed_track_ids);
-                        }
+                    if changed {
+                        let _ = app_handle_clone.emit("library-changed", ());
+                    }
+                    if !removed_track_ids.is_empty() {
+                        let _ = app_handle_clone.emit("tracks-removed", removed_track_ids);
                     }
                 }
 

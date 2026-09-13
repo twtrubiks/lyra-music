@@ -54,14 +54,12 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
             }
         }
 
-        if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if SUPPORTED_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
-                    if let Some(abs) = path.to_str() {
-                        audio_files.push(abs.to_string());
-                    }
-                }
-            }
+        if path.is_file()
+            && let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && SUPPORTED_EXTENSIONS.contains(&ext.to_lowercase().as_str())
+            && let Some(abs) = path.to_str()
+        {
+            audio_files.push(abs.to_string());
         }
     }
 

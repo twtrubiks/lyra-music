@@ -139,10 +139,10 @@ impl AudioPlayer {
         let target = std::time::Duration::from_secs_f64(secs);
 
         // Try native seek first
-        if let Some(ref sink) = self.sink {
-            if sink.try_seek(target).is_ok() {
-                return Ok(());
-            }
+        if let Some(ref sink) = self.sink
+            && sink.try_seek(target).is_ok()
+        {
+            return Ok(());
         }
 
         // Fallback: reload file and seek forward (workaround for MP3 backward seek)
