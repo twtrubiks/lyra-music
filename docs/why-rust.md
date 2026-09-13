@@ -15,7 +15,7 @@ Tauri 的後端就是 Rust，選擇 Rust 是自然的搭配。相比 Electron（
 
 - **打包體積小很多** — 不用捆綁 Chromium
 - **記憶體佔用低** — 對音樂播放器這種長時間運行的應用很重要
-- 前後端透過 33 個 Tauri commands 做 IPC，型別安全且序列化高效
+- 前後端透過 42 個 Tauri commands 做 IPC，型別安全且序列化高效
 
 ## 4. 豐富的生態系統剛好覆蓋需求
 

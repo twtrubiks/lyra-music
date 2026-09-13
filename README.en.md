@@ -14,7 +14,7 @@ English | [繁體中文](README.md)
 [![Rust](https://img.shields.io/badge/Rust-dea584.svg)](https://www.rust-lang.org/)
 [![rodio](https://img.shields.io/badge/rodio-0.22-e2603a.svg)](https://github.com/RustAudio/rodio)
 
-A desktop music player built with Tauri 2 + Svelte 5 + Rust. Fully local offline playback with no dependency on any online services.
+A desktop music player built with Tauri 2 + Svelte 5 + Rust. Fully local playback; the core never depends on an online service. The only network feature is the user-triggered online lyrics search.
 
 ## Screenshots
 
@@ -32,7 +32,7 @@ Lyra's design principles:
 
 **Lightweight, not limited** -- Tauri 2 doesn't bundle Chromium, resulting in significantly lower memory usage compared to Electron-based solutions. Yet it retains the features most users actually need: Gapless Playback, resume playback, playlist management, metadata editing, and System Tray.
 
-**Your music stays on your machine** -- No telemetry (no background data collection or transmission), no accounts, no network requests. MIT licensed, fully transparent source code.
+**Your music stays on your machine** -- No telemetry (no background data collection or transmission), no accounts, no automatic network access. The only request ever sent is the LRCLIB lookup when you click "search lyrics online", carrying just artist, title, album and duration. MIT licensed, fully transparent source code.
 
 ## Download
 

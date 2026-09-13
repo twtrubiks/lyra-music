@@ -14,7 +14,7 @@
 [![Rust](https://img.shields.io/badge/Rust-dea584.svg)](https://www.rust-lang.org/)
 [![rodio](https://img.shields.io/badge/rodio-0.22-e2603a.svg)](https://github.com/RustAudio/rodio)
 
-基於 Tauri 2 + Svelte 5 + Rust 的桌面音樂播放器。純本地離線播放，不依賴任何網路服務。
+基於 Tauri 2 + Svelte 5 + Rust 的桌面音樂播放器。純本地播放，核心功能不依賴任何網路服務；唯一的網路功能是使用者手動觸發的線上歌詞搜尋。
 
 ## 畫面截圖
 
@@ -32,7 +32,7 @@ Lyra 的設計原則：
 
 **輕量、不是小功能** -- Tauri 2 不捆綁 Chromium，記憶體佔用遠低於 Electron 方案。但保留了多數使用者實際需要的功能：Gapless Playback、斷點續播、播放清單管理、元資料編輯、System Tray。
 
-**你的音樂留在你的機器** -- 無 telemetry（不會在背景收集或回傳任何使用資料）、無帳號、無網路請求。MIT 授權，程式碼完全透明。
+**你的音樂留在你的機器** -- 無 telemetry（不會在背景收集或回傳任何使用資料）、無帳號、不會自動連網。唯一會發出的網路請求是你手動點「線上搜尋歌詞」時對 LRCLIB 的查詢，只送出演出者、標題、專輯與時長。MIT 授權，程式碼完全透明。
 
 ## 下載
 
