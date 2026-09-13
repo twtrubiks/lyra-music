@@ -8,7 +8,7 @@
   import { getLibraryState } from '$lib/state/libraryState.svelte';
   import * as libraryApi from '$lib/api/library';
   import { startPlayingTrack } from '$lib/logic/playback-actions';
-  import { optimisticRemove } from '$lib/logic/track-actions';
+  import { optimisticRemove, optimisticTrash } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
 
@@ -34,6 +34,15 @@
 
   async function handleRemove(tracksToRemove: Track[]) {
     await optimisticRemove(tracksToRemove, {
+      getLocalTracks: () => tracks,
+      setLocalTracks: (v) => {
+        tracks = v;
+      },
+    });
+  }
+
+  async function handleTrash(tracksToTrash: Track[]) {
+    await optimisticTrash(tracksToTrash, {
       getLocalTracks: () => tracks,
       setLocalTracks: (v) => {
         tracks = v;
@@ -118,6 +127,7 @@
       currentTrackId={player.currentTrack?.id ?? null}
       onplay={handlePlay}
       onremove={handleRemove}
+      ontrash={handleTrash}
       onproperties={handleProperties}
     />
     <StatusBar {tracks} />

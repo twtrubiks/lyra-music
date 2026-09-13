@@ -91,21 +91,23 @@
     };
   });
 
-  const NORMAL_SIZE = { width: 1024, height: 680 };
-  const MINI_SIZE = { width: 420, height: 80 };
+  const MINI_SIZE = new LogicalSize(420, 80);
+  // Size to restore when leaving mini mode. Kept in logical pixels:
+  // innerSize() reports physical pixels, so feeding it back through
+  // LogicalSize would scale the window up on HiDPI displays.
+  let normalSize = new LogicalSize(1024, 680);
 
   async function syncWindowToMiniMode(mini: boolean) {
     try {
       const win = getCurrentWindow();
       if (mini) {
-        const size = await win.innerSize();
-        NORMAL_SIZE.width = size.width;
-        NORMAL_SIZE.height = size.height;
-        await win.setSize(new LogicalSize(MINI_SIZE.width, MINI_SIZE.height));
+        const [size, scaleFactor] = await Promise.all([win.innerSize(), win.scaleFactor()]);
+        normalSize = size.toLogical(scaleFactor);
+        await win.setSize(MINI_SIZE);
         await win.setAlwaysOnTop(true);
       } else {
         await win.setAlwaysOnTop(false);
-        await win.setSize(new LogicalSize(NORMAL_SIZE.width, NORMAL_SIZE.height));
+        await win.setSize(normalSize);
       }
     } catch {
       // Window API not available (dev mode)

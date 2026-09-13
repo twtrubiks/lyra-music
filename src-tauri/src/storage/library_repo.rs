@@ -349,18 +349,23 @@ pub fn update_track_path(
 
 /// Repoint every track under a renamed directory to the new prefix.
 /// Matches via substr instead of LIKE so `%`/`_` in paths stay literal, and
-/// requires the trailing `/` so `/music/AlbumA2` is not caught by
-/// `/music/AlbumA`.
+/// requires the trailing separator so `/music/AlbumA2` is not caught by
+/// `/music/AlbumA`. The separator is the platform's (`\` on Windows) —
+/// paths are stored as the OS reports them, so a hard-coded `/` would never
+/// match there and children of a renamed folder would go stale.
 pub fn update_track_paths_by_prefix(
     conn: &Connection,
     old_dir: &str,
     new_dir: &str,
 ) -> Result<usize, AppError> {
+    let sep = std::path::MAIN_SEPARATOR_STR;
+    let old_prefix = format!("{old_dir}{sep}");
+    let new_prefix = format!("{new_dir}{sep}");
     Ok(conn.execute(
         "UPDATE tracks
          SET file_path = ?2 || substr(file_path, length(?1) + 1)
-         WHERE substr(file_path, 1, length(?1) + 1) = ?1 || '/'",
-        params![old_dir, new_dir],
+         WHERE substr(file_path, 1, length(?1)) = ?1",
+        params![old_prefix, new_prefix],
     )?)
 }
 

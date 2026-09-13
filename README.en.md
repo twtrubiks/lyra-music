@@ -71,7 +71,7 @@ Other features:
 - Time-synced scrolling lyrics and online lyrics search (LRCLIB) -- see [Lyrics](#lyrics) for how to get them
 - Artist / Album browse views (grid covers, search filtering, detail views)
 - Track metadata editing (title, artist, album written back to file)
-- Real-time folder watching (add/modify/delete automatically syncs music library; moves/renames preserve play stats and playlist membership; watched folders can be viewed and removed without affecting imported tracks, with missing paths flagged)
+- Real-time folder watching (add/modify/delete automatically syncs music library; same-filesystem moves/renames preserve play stats and playlist membership on Linux and Windows — macOS FSEvents cannot pair old and new paths, so a rename there is treated as delete + re-import; watched folders can be viewed and removed without affecting imported tracks, with missing paths flagged)
 - Column header sorting (preferences persisted), play count tracking (Most Played ranking view)
 - Recursive music library scanning with automatic metadata reading and cover art caching
 - Playback modes (loop/repeat-one/shuffle), instant search filtering, multi-select operations, context menu, drag-and-drop import

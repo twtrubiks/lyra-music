@@ -231,7 +231,8 @@ pub fn process_event_batch(
 ) -> (bool, Vec<i64>) {
     let mut removed_track_ids: Vec<i64> = Vec::new();
 
-    let (import_paths, remove_paths) = collect_batch_actions(events);
+    let events = pair_split_renames(events);
+    let (import_paths, remove_paths) = collect_batch_actions(&events);
 
     // Renames and removals are pure DB work — one short lock for both.
     // Renames first: once the row is repointed, the stray From/To events
@@ -245,7 +246,7 @@ pub fn process_event_batch(
                 return (false, Vec::new());
             }
         };
-        let mut changed = apply_rename_events(&conn, events, &mut removed_track_ids);
+        let mut changed = apply_rename_events(&conn, &events, &mut removed_track_ids);
         for path_str in &remove_paths {
             remove_track(&conn, path_str, &mut removed_track_ids);
             changed = true;
@@ -272,12 +273,61 @@ fn remove_track(conn: &Connection, path_str: &str, removed_track_ids: &mut Vec<i
     }
 }
 
-/// Handle rename events before per-path processing. notify's inotify backend
-/// pairs `MOVED_FROM`/`MOVED_TO` by cookie into a single Both event carrying
-/// `[old, new]` — repoint the DB row(s) instead of delete + re-import so
-/// `play_count` and playlist membership survive same-filesystem moves. A
+/// Collapse split rename halves into synthetic Both events.
+///
+/// notify's inotify backend pairs `MOVED_FROM`/`MOVED_TO` by cookie itself
+/// and stamps every rename event with a tracker, so a From/To that still
+/// carries one is a genuinely lone half (moved out of / into the watched
+/// tree) and is left untouched. The Windows backend has no tracker: it
+/// reports the old name as `From` immediately followed by the new name as
+/// `To`, so a tracker-less From directly followed by a tracker-less To is
+/// paired into `Both [old, new]` for `apply_rename_events`. Anything else is
+/// passed through in order. `FSEvents` (macOS) reports both sides as
+/// `RenameMode::Any` with no ordering guarantee and is not paired here —
+/// renames there fall back to remove + re-import.
+fn pair_split_renames(events: &[notify::Event]) -> Vec<notify::Event> {
+    let mut out: Vec<notify::Event> = Vec::with_capacity(events.len());
+    let mut pending_from: Option<&notify::Event> = None;
+
+    for event in events {
+        if let Some(from) = pending_from.take() {
+            if is_split_half(event, RenameMode::To) {
+                out.push(
+                    notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+                        .add_path(from.paths[0].clone())
+                        .add_path(event.paths[0].clone()),
+                );
+                continue;
+            }
+            out.push(from.clone());
+        }
+        if is_split_half(event, RenameMode::From) {
+            pending_from = Some(event);
+        } else {
+            out.push(event.clone());
+        }
+    }
+    if let Some(from) = pending_from {
+        out.push(from.clone());
+    }
+
+    out
+}
+
+fn is_split_half(event: &notify::Event, mode: RenameMode) -> bool {
+    event.kind == EventKind::Modify(ModifyKind::Name(mode))
+        && event.tracker().is_none()
+        && event.paths.len() == 1
+}
+
+/// Handle rename events before per-path processing. Same-filesystem
+/// renames arrive as a single Both event carrying `[old, new]` — paired by
+/// cookie in notify's inotify backend, or by `pair_split_renames` for the
+/// Windows backend's split From/To — so repoint the DB row(s) instead of
+/// delete + re-import and `play_count` plus playlist membership survive. A
 /// directory rename arrives as one Both event for the dir path only (no
-/// per-child events), so children are repointed by prefix.
+/// per-child events on either backend), so children are repointed by
+/// prefix.
 fn apply_rename_events(
     conn: &Connection,
     events: &[notify::Event],
@@ -566,6 +616,148 @@ mod tests {
         let track = library_repo::get_track_by_id(&conn, moved_id)
             .unwrap()
             .unwrap();
+        assert_eq!(track.play_count, 1);
+    }
+
+    // ---- split rename (From + To without tracker) pairing ----
+
+    fn split_half(mode: RenameMode, path: &Path) -> notify::Event {
+        notify::Event::new(EventKind::Modify(ModifyKind::Name(mode))).add_path(path.to_path_buf())
+    }
+
+    /// Windows reports a rename as `From` (old name) immediately followed by
+    /// `To` (new name), neither carrying a tracker — they must collapse into
+    /// one Both event so the row is repointed instead of delete + re-import.
+    #[test]
+    fn split_rename_without_tracker_pairs_into_both() {
+        let old = Path::new("C:\\Music\\old.mp3");
+        let new = Path::new("C:\\Music\\new.mp3");
+        let events = [
+            split_half(RenameMode::From, old),
+            split_half(RenameMode::To, new),
+        ];
+
+        let paired = pair_split_renames(&events);
+
+        assert_eq!(paired.len(), 1);
+        assert_eq!(
+            paired[0].kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+        );
+        assert_eq!(paired[0].paths, vec![old.to_path_buf(), new.to_path_buf()]);
+    }
+
+    /// inotify stamps every rename half with its cookie; a From/To that
+    /// still carries one is a genuinely unpaired half (moved out of / into
+    /// the watched tree) and must not be glued to an unrelated event.
+    #[test]
+    fn split_rename_with_tracker_is_left_alone() {
+        let out = Path::new("/music/left.mp3");
+        let in_ = Path::new("/music/arrived.mp3");
+        let events = [
+            split_half(RenameMode::From, out).set_tracker(7),
+            split_half(RenameMode::To, in_).set_tracker(8),
+        ];
+
+        let paired = pair_split_renames(&events);
+
+        assert_eq!(paired.len(), 2);
+        assert_eq!(
+            paired[0].kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::From))
+        );
+        assert_eq!(
+            paired[1].kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::To))
+        );
+    }
+
+    /// Only an immediately following To pairs — the OS reports the two
+    /// halves back to back, so anything in between means the From is a
+    /// lone half and is kept as-is in its original position.
+    #[test]
+    fn split_rename_from_not_followed_by_to_stays_unpaired() {
+        let a = Path::new("C:\\Music\\a.mp3");
+        let b = Path::new("C:\\Music\\b.mp3");
+        let c = Path::new("C:\\Music\\c.mp3");
+        let events = [
+            split_half(RenameMode::From, a),
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(b.to_path_buf()),
+            split_half(RenameMode::To, c),
+        ];
+
+        let paired = pair_split_renames(&events);
+
+        assert_eq!(paired.len(), 3);
+        assert_eq!(
+            paired[0].kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::From))
+        );
+        assert_eq!(paired[1].kind, EventKind::Create(CreateKind::File));
+        assert_eq!(
+            paired[2].kind,
+            EventKind::Modify(ModifyKind::Name(RenameMode::To))
+        );
+    }
+
+    #[test]
+    fn split_rename_trailing_from_is_kept() {
+        let a = Path::new("C:\\Music\\a.mp3");
+        let events = [split_half(RenameMode::From, a)];
+
+        let paired = pair_split_renames(&events);
+
+        assert_eq!(paired.len(), 1);
+        assert_eq!(paired[0].paths, vec![a.to_path_buf()]);
+    }
+
+    #[test]
+    fn split_rename_consecutive_renames_pair_in_order() {
+        let a1 = Path::new("C:\\Music\\a1.mp3");
+        let a2 = Path::new("C:\\Music\\a2.mp3");
+        let b1 = Path::new("C:\\Music\\b1.mp3");
+        let b2 = Path::new("C:\\Music\\b2.mp3");
+        let events = [
+            split_half(RenameMode::From, a1),
+            split_half(RenameMode::To, a2),
+            split_half(RenameMode::From, b1),
+            split_half(RenameMode::To, b2),
+        ];
+
+        let paired = pair_split_renames(&events);
+
+        assert_eq!(paired.len(), 2);
+        assert_eq!(paired[0].paths, vec![a1.to_path_buf(), a2.to_path_buf()]);
+        assert_eq!(paired[1].paths, vec![b1.to_path_buf(), b2.to_path_buf()]);
+    }
+
+    /// End to end for a Windows-style batch: the paired event must repoint
+    /// the row exactly like an inotify Both event does.
+    #[test]
+    fn split_rename_paired_batch_repoints_track() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.mp3");
+        let new = dir.path().join("new.mp3");
+        std::fs::write(&new, b"x").unwrap();
+
+        let conn = test_conn();
+        let id = insert_track_at(&conn, &old);
+        library_repo::increment_play_count(&conn, id).unwrap();
+
+        let events = pair_split_renames(&[
+            split_half(RenameMode::From, &old),
+            split_half(RenameMode::To, &new),
+        ]);
+        let mut removed = Vec::new();
+        let changed = apply_rename_events(&conn, &events, &mut removed);
+
+        assert!(changed);
+        assert!(removed.is_empty());
+        assert_eq!(
+            library_repo::get_track_id_by_path(&conn, new.to_str().unwrap()).unwrap(),
+            Some(id)
+        );
+        let track = library_repo::get_track_by_id(&conn, id).unwrap().unwrap();
         assert_eq!(track.play_count, 1);
     }
 
