@@ -24,7 +24,7 @@ Tauri 的後端就是 Rust，選擇 Rust 是自然的搭配。相比 Electron（
 | Crate | 用途 |
 |-------|------|
 | `rodio 0.22` | 音訊解碼與播放 |
-| `lofty 0.24` | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
+| `lofty 0.25` | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
 | `rusqlite 0.39` (bundled) | SQLite，連 C library 都直接編譯進去 |
 | `notify 8` | 檔案系統監視，即時偵測資料夾變化 |
 | `walkdir 2.5` | 遞迴掃描目錄 |

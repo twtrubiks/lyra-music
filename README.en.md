@@ -49,7 +49,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | Desktop Framework | Tauri 2 | Native windows, system tray, IPC communication |
 | Backend | Rust | Audio processing, file scanning, database operations |
 | Audio Engine | rodio 0.22 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
-| Metadata Parsing | lofty 0.24 | Read/write ID3/Vorbis/MP4 tags and cover art |
+| Metadata Parsing | lofty 0.25 | Read/write ID3/Vorbis/MP4 tags and cover art |
 | File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
 | Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
 | Online Lyrics | ureq 3 (rustls) | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar |

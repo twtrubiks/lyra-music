@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-dialog = "2"
 rodio = "0.22"
-lofty = "0.24"
+lofty = "0.25"
 rusqlite = { version = "0.39", features = ["bundled"] }
 walkdir = "2.5"
 serde = { version = "1", features = ["derive"] }

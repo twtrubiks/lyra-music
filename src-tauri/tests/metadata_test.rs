@@ -76,6 +76,78 @@ fn test_write_metadata_invalid_timestamp_still_writes() {
     assert_eq!(track.album, "New Album");
 }
 
+/// Faststart M4A (`moov` before `mdat`, AAC, 0.3 s) with no `udta`/`meta` atoms at all.
+/// Generated with ffmpeg `-movflags +faststart -f mp4 -fflags +bitexact`; ffmpeg
+/// always writes a `udta`, so it was stripped afterwards and the `stco` offsets
+/// shifted back by its size.
+const FASTSTART_M4A_NO_UDTA: &[u8] = include_bytes!("fixtures/faststart_no_udta.m4a");
+
+/// Find a direct child box of `data[start..end]`; returns (box offset, box size).
+fn find_box(data: &[u8], start: usize, end: usize, kind: &[u8; 4]) -> (usize, usize) {
+    let mut pos = start;
+    while pos + 8 <= end {
+        let size = u32::from_be_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
+        // 0 (to end of file) and 1 (64-bit size) never occur in these small files
+        assert!(size >= 8, "unsupported box size {size} at {pos}");
+        if &data[pos + 4..pos + 8] == kind {
+            return (pos, size);
+        }
+        pos += size;
+    }
+    panic!("box {} not found", String::from_utf8_lossy(kind));
+}
+
+/// Bytes of the first audio sample, located the way a decoder does: `stco` gives
+/// the chunk offset and `stsz` the sample size.
+fn first_sample_bytes(data: &[u8]) -> Vec<u8> {
+    let (mut pos, mut size) = find_box(data, 0, data.len(), b"moov");
+    for kind in [b"trak", b"mdia", b"minf", b"stbl"] {
+        (pos, size) = find_box(data, pos + 8, pos + size, kind);
+    }
+    let read_u32 = |at: usize| u32::from_be_bytes(data[at..at + 4].try_into().unwrap()) as usize;
+    let (stsz, _) = find_box(data, pos + 8, pos + size, b"stsz");
+    let (stco, _) = find_box(data, pos + 8, pos + size, b"stco");
+    // stsz: header(8) + version/flags(4) + sample_size(4) + count(4) + entries
+    let sample_size = match read_u32(stsz + 12) {
+        0 => read_u32(stsz + 20),
+        fixed => fixed,
+    };
+    // stco: header(8) + version/flags(4) + count(4) + offsets
+    let chunk_offset = read_u32(stco + 16);
+    data[chunk_offset..chunk_offset + sample_size].to_vec()
+}
+
+#[test]
+fn test_write_metadata_m4a_without_tags_keeps_audio_offsets() {
+    // Regression for lofty#686 (fixed in lofty 0.25.2): writing tags to a
+    // faststart M4A that has no `udta`/`meta` creates them inside `moov`, which
+    // pushes `mdat` back — but the `stco` chunk offsets were not updated, so
+    // they pointed at the wrong bytes and the audio was corrupted.
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = dir.path().join("no_tags.m4a");
+    std::fs::write(&path, FASTSTART_M4A_NO_UDTA).unwrap();
+    let original_sample = first_sample_bytes(FASTSTART_M4A_NO_UDTA);
+
+    writer::write_metadata(
+        path.to_str().unwrap(),
+        Some("New Title"),
+        Some("New Artist"),
+        Some("New Album"),
+    )
+    .expect("write_metadata must succeed on an untagged m4a");
+
+    let written = std::fs::read(&path).unwrap();
+    assert_eq!(
+        first_sample_bytes(&written),
+        original_sample,
+        "stco must still point at the original audio data after tags are added"
+    );
+    let track = reader::read_metadata(path.to_str().unwrap()).unwrap();
+    assert_eq!(track.title, "New Title");
+    assert_eq!(track.artist, "New Artist");
+    assert_eq!(track.album, "New Album");
+}
+
 #[test]
 fn test_read_metadata_album_artist_from_tpe2() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -109,6 +181,50 @@ fn test_read_metadata_album_artist_absent_is_none() {
 fn test_read_metadata_nonexistent_file() {
     let result = reader::read_metadata("/nonexistent/file.mp3");
     assert!(result.is_err());
+}
+
+/// The OS error message for opening `path`, e.g. "No such file or directory (os error 2)".
+fn os_error_for(path: &str) -> String {
+    std::fs::metadata(path).unwrap_err().to_string()
+}
+
+// Regression: since lofty 0.25 its error `Display` is only "failed to parse
+// file" / "failed to write to file" — the actual cause lives in `source()`.
+// Import failures and tag-edit errors are shown to the user, so the cause
+// must be carried into the message.
+
+#[test]
+fn test_read_metadata_error_includes_cause() {
+    let path = "/nonexistent/file.mp3";
+    let err = reader::read_metadata(path).unwrap_err().to_string();
+    assert!(err.contains(&os_error_for(path)), "missing cause in: {err}");
+}
+
+#[test]
+fn test_write_metadata_read_error_includes_cause() {
+    let path = "/nonexistent/file.mp3";
+    let err = writer::write_metadata(path, Some("Title"), None, None)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains(&os_error_for(path)), "missing cause in: {err}");
+}
+
+#[test]
+fn test_write_metadata_save_error_includes_cause() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let path = common::create_test_wav_with_id3(dir.path(), "ro.wav", "Title", "Artist", "2020");
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_readonly(true);
+    std::fs::set_permissions(&path, perms).unwrap();
+
+    let expected = match std::fs::OpenOptions::new().write(true).open(&path) {
+        Err(e) => e.to_string(),
+        Ok(_) => return, // running as root: read-only bits are not enforced
+    };
+    let err = writer::write_metadata(path.to_str().unwrap(), Some("New"), None, None)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains(&expected), "missing cause in: {err}");
 }
 
 #[test]

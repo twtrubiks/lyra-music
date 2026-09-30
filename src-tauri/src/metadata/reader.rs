@@ -4,6 +4,7 @@ use std::path::Path;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use lofty::config::{ParseOptions, ParsingMode};
+use lofty::error::FileParseError;
 use lofty::file::{AudioFile, TaggedFile, TaggedFileExt};
 use lofty::picture::PictureType;
 use lofty::probe::Probe;
@@ -16,9 +17,23 @@ use crate::models::track::{Track, TrackDetails};
 /// frames with non-digit characters, common in Japanese rips) are skipped
 /// instead of failing the whole read like the default `BestAttempt` mode does.
 /// Shared with the writer so tag editing works on every file the reader accepts.
-pub(crate) fn read_tagged_file(path: &Path) -> lofty::error::Result<TaggedFile> {
+pub(crate) fn read_tagged_file(path: &Path) -> Result<TaggedFile, FileParseError> {
     let options = ParseOptions::new().parsing_mode(ParsingMode::Relaxed);
     Probe::open(path)?.options(options).read()
+}
+
+/// Format an error together with its `source()` chain. Since lofty 0.25 its
+/// error `Display` is only "failed to parse file" / "failed to write to file";
+/// the actual cause (missing file, permission denied, ...) is in the chain.
+pub(crate) fn error_chain(err: &dyn std::error::Error) -> String {
+    let mut message = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    message
 }
 
 pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
@@ -85,14 +100,15 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
             // Last-resort fallback for tags even Relaxed mode cannot parse:
             // skip tag reading and use only audio properties + filename.
             eprintln!(
-                "[lyra] Tag parsing failed for {file_path}: {e}; \
-                 retrying without tags"
+                "[lyra] Tag parsing failed for {file_path}: {}; \
+                 retrying without tags",
+                error_chain(&e)
             );
 
             let options = ParseOptions::new().read_tags(false);
             let tagged_file = Probe::open(path)
                 .and_then(|probe| probe.options(options).read())
-                .map_err(|e2| AppError::Metadata(e2.to_string()))?;
+                .map_err(|e2| AppError::Metadata(error_chain(&e2)))?;
 
             let duration_secs = tagged_file.properties().duration().as_secs_f64();
 
@@ -117,7 +133,7 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
 pub fn read_track_details(file_path: &str, track: &Track) -> Result<TrackDetails, AppError> {
     let path = Path::new(file_path);
 
-    let tagged_file = read_tagged_file(path).map_err(|e| AppError::Metadata(e.to_string()))?;
+    let tagged_file = read_tagged_file(path).map_err(|e| AppError::Metadata(error_chain(&e)))?;
 
     let properties = tagged_file.properties();
 

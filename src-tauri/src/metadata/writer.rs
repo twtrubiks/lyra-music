@@ -4,7 +4,7 @@ use lofty::tag::{Accessor, TagExt};
 use std::path::Path;
 
 use crate::error::AppError;
-use crate::metadata::reader::read_tagged_file;
+use crate::metadata::reader::{error_chain, read_tagged_file};
 
 pub fn write_metadata(
     file_path: &str,
@@ -13,8 +13,9 @@ pub fn write_metadata(
     album: Option<&str>,
 ) -> Result<(), AppError> {
     let path = Path::new(file_path);
-    let mut tagged_file = read_tagged_file(path)
-        .map_err(|e| AppError::MetadataWrite(format!("Failed to read file: {e}")))?;
+    let mut tagged_file = read_tagged_file(path).map_err(|e| {
+        AppError::MetadataWrite(format!("Failed to read file: {}", error_chain(&e)))
+    })?;
 
     let has_primary = tagged_file.primary_tag_mut().is_some();
     let has_any = has_primary || tagged_file.first_tag_mut().is_some();
@@ -39,7 +40,9 @@ pub fn write_metadata(
             tag.set_album(a.to_string());
         }
         tag.save_to_path(path, WriteOptions::default())
-            .map_err(|e| AppError::MetadataWrite(format!("Failed to save tag: {e}")))?;
+            .map_err(|e| {
+                AppError::MetadataWrite(format!("Failed to save tag: {}", error_chain(&e)))
+            })?;
     } else {
         let tag_type = tagged_file.primary_tag_type();
         let mut tag = lofty::tag::Tag::new(tag_type);
@@ -53,7 +56,9 @@ pub fn write_metadata(
             tag.set_album(a.to_string());
         }
         tag.save_to_path(path, WriteOptions::default())
-            .map_err(|e| AppError::MetadataWrite(format!("Failed to save new tag: {e}")))?;
+            .map_err(|e| {
+                AppError::MetadataWrite(format!("Failed to save new tag: {}", error_chain(&e)))
+            })?;
     }
     Ok(())
 }

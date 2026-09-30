@@ -49,7 +49,7 @@ Lyra 的設計原則：
 | 桌面框架 | Tauri 2 | 原生視窗、系統匣、IPC 通訊 |
 | 後端 | Rust | 音訊處理、檔案掃描、資料庫操作 |
 | 音訊引擎 | rodio 0.22 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
-| 元資料解析 | lofty 0.24 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
+| 元資料解析 | lofty 0.25 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
 | 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
 | 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
 | 線上歌詞 | ureq 3 (rustls) | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar |
