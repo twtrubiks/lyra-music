@@ -23,6 +23,7 @@ import {
   startPlayingTrack,
   handleGaplessTransition,
   handleNext,
+  toggleShuffle,
   applyPlayerStateEvent,
   resetCompletionTracking,
 } from '$lib/logic/playback-actions';
@@ -979,5 +980,68 @@ describe('manual track change vs backend poll events — race protection', () =>
       nextId: tracks[2].id,
       durationSecs: tracks[2].duration_secs,
     });
+  });
+});
+
+describe('startPlayingTrack — shuffle order follows the new queue', () => {
+  const player = getPlayerState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+  });
+
+  /** A permutation of 0..n-1 with `first` at index 0. */
+  function expectShuffleOrder(first: number, length: number) {
+    expect(player.shuffledIndices).toHaveLength(length);
+    expect([...player.shuffledIndices].sort((a, b) => a - b)).toEqual(
+      Array.from({ length }, (_, i) => i),
+    );
+    expect(player.shuffledIndices[0]).toBe(first);
+  }
+
+  it('regenerates when shuffle was enabled before anything was playing', async () => {
+    toggleShuffle();
+    expect(player.shuffledIndices).toEqual([]);
+
+    const tracks = createMockTracks(8);
+    await startPlayingTrack(tracks[3], tracks);
+
+    expectShuffleOrder(3, 8);
+  });
+
+  it('regenerates when a queue of a different length replaces the current one', async () => {
+    const first = createMockTracks(8);
+    await startPlayingTrack(first[0], first);
+    toggleShuffle();
+
+    const second = createMockTracks(5);
+    await startPlayingTrack(second[2], second);
+
+    expectShuffleOrder(2, 5);
+  });
+
+  it('regenerates for a same-length queue so the new track leads the order', async () => {
+    const first = createMockTracks(6);
+    await startPlayingTrack(first[0], first);
+    toggleShuffle();
+
+    const second = createMockTracks(6);
+    await startPlayingTrack(second[4], second);
+
+    expectShuffleOrder(4, 6);
+  });
+
+  it('leaves shuffledIndices untouched when shuffle is off', async () => {
+    const tracks = createMockTracks(4);
+    await startPlayingTrack(tracks[1], tracks);
+
+    expect(player.shuffleEnabled).toBe(false);
+    expect(player.shuffledIndices).toEqual([]);
   });
 });

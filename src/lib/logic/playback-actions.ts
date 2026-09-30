@@ -233,6 +233,12 @@ export async function startPlayingTrack(
     player.playQueue = trackList;
     player.currentIndex = trackList.findIndex((t) => t.id === track.id);
     player.queueSourcePlaylistId = sourcePlaylistId;
+    // A new queue invalidates the old shuffle order: getNextIndex silently
+    // falls back to sequential when the lengths differ, and a same-length
+    // stale order would not start from the track the user just picked.
+    if (player.shuffleEnabled) {
+      player.shuffledIndices = generateShuffledIndices(trackList.length, player.currentIndex);
+    }
     // The throttle keys on track id only — reset it so the first save after
     // rebinding lands even when the new playlist shares the same track.
     resetSaveThrottle();
