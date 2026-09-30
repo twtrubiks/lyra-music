@@ -4,6 +4,7 @@
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { parseTrackIdsFromDrop, TRACK_IDS_DRAG_TYPE } from '$lib/logic/format';
   import { t, getLocale, toggleLocale, LOCALE_NAMES } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
@@ -206,9 +207,9 @@
     }
   }
 
-  // Drag-and-drop: add track to playlist
+  // Drag-and-drop: add dragged track(s) to playlist
   function handleDragOver(e: DragEvent, playlistId: number) {
-    if (!e.dataTransfer?.types.includes('application/x-track-id')) return;
+    if (!e.dataTransfer?.types.includes(TRACK_IDS_DRAG_TYPE)) return;
     e.preventDefault();
     e.dataTransfer!.dropEffect = 'copy';
     dragOverPlaylistId = playlistId;
@@ -221,14 +222,12 @@
   async function handleDrop(e: DragEvent, playlistId: number) {
     e.preventDefault();
     dragOverPlaylistId = null;
-    const trackIdStr = e.dataTransfer?.getData('application/x-track-id');
-    if (!trackIdStr) return;
-    const trackId = parseInt(trackIdStr, 10);
-    if (isNaN(trackId)) return;
+    const trackIds = parseTrackIdsFromDrop(e.dataTransfer?.getData(TRACK_IDS_DRAG_TYPE));
+    if (trackIds.length === 0) return;
     try {
-      await playlistApi.addToPlaylist(playlistId, trackId);
+      await playlistApi.batchAddToPlaylist(playlistId, trackIds);
     } catch (err) {
-      warnNonCritical('Add track to playlist', err);
+      warnNonCritical('Add tracks to playlist', err);
     }
   }
 

@@ -14,6 +14,7 @@
     resolveContextClick,
     removeFromSelection,
     getSelectedTracks,
+    resolveDragIds,
     moveFocusDown,
     moveFocusUp,
     extendSelectionDown,
@@ -409,6 +410,7 @@
             isActive={track.id === currentTrackId}
             isSelected={selection.selectedIds.has(track.id)}
             isFocused={selection.focusedIndex === globalIndex}
+            dragIds={() => resolveDragIds(tracks, selection, track.id)}
             ondblclick={onplay}
             onclick={(e) => handleRowClick(globalIndex, e)}
             oncontextmenu={(e) => handleRowContextMenu(globalIndex, e)}

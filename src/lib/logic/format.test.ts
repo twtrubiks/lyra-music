@@ -3,7 +3,9 @@ import {
   formatDuration,
   filterTracks,
   shouldUpdateDuration,
-  parseTrackIdFromDrop,
+  parseTrackIdsFromDrop,
+  isTrackDrag,
+  TRACK_IDS_DRAG_TYPE,
   findTrackIndex,
   formatTotalDuration,
   formatFileSize,
@@ -133,29 +135,55 @@ describe('shouldUpdateDuration — MP3 duration bug guard', () => {
   });
 });
 
-describe('parseTrackIdFromDrop — drag-and-drop parsing', () => {
-  it('parses valid integer string', () => {
-    expect(parseTrackIdFromDrop('42')).toBe(42);
+describe('parseTrackIdsFromDrop — drag-and-drop parsing', () => {
+  it('parses a single integer string', () => {
+    expect(parseTrackIdsFromDrop('42')).toEqual([42]);
   });
 
   it('parses "0" as valid', () => {
-    expect(parseTrackIdFromDrop('0')).toBe(0);
+    expect(parseTrackIdsFromDrop('0')).toEqual([0]);
   });
 
-  it('returns null for undefined', () => {
-    expect(parseTrackIdFromDrop(undefined)).toBeNull();
+  it('parses comma-separated ids preserving order', () => {
+    expect(parseTrackIdsFromDrop('3,1,2')).toEqual([3, 1, 2]);
   });
 
-  it('returns null for null', () => {
-    expect(parseTrackIdFromDrop(null)).toBeNull();
+  it('skips invalid segments and empty entries', () => {
+    expect(parseTrackIdsFromDrop('1,,abc, 4 ,')).toEqual([1, 4]);
   });
 
-  it('returns null for empty string', () => {
-    expect(parseTrackIdFromDrop('')).toBeNull();
+  it('deduplicates repeated ids', () => {
+    expect(parseTrackIdsFromDrop('5,5,6')).toEqual([5, 6]);
   });
 
-  it('returns null for non-numeric string', () => {
-    expect(parseTrackIdFromDrop('abc')).toBeNull();
+  it('returns empty array for undefined', () => {
+    expect(parseTrackIdsFromDrop(undefined)).toEqual([]);
+  });
+
+  it('returns empty array for null', () => {
+    expect(parseTrackIdsFromDrop(null)).toEqual([]);
+  });
+
+  it('returns empty array for empty string', () => {
+    expect(parseTrackIdsFromDrop('')).toEqual([]);
+  });
+
+  it('returns empty array for non-numeric string', () => {
+    expect(parseTrackIdsFromDrop('abc')).toEqual([]);
+  });
+});
+
+describe('isTrackDrag — internal track drag detection', () => {
+  it('is true when the track-id type is present', () => {
+    expect(isTrackDrag(['text/plain', TRACK_IDS_DRAG_TYPE])).toBe(true);
+  });
+
+  it('is false for an OS file drop', () => {
+    expect(isTrackDrag(['text/uri-list', 'Files'])).toBe(false);
+  });
+
+  it('is false for undefined types', () => {
+    expect(isTrackDrag(undefined)).toBe(false);
   });
 });
 

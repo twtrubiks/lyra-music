@@ -181,6 +181,19 @@ export function getSelectedTracks<T extends { id: number }>(
 }
 
 /**
+ * IDs to carry when a row starts a drag: the whole selection (in display
+ * order) if the dragged row is part of it, otherwise just that row.
+ */
+export function resolveDragIds<T extends { id: number }>(
+  tracks: T[],
+  selection: SelectionState,
+  draggedId: number,
+): number[] {
+  if (!selection.selectedIds.has(draggedId)) return [draggedId];
+  return getSelectedTracks(tracks, selection).map((t) => t.id);
+}
+
+/**
  * True when `tracks` lists exactly the ids in `ids`, in the same order.
  * Distinguishes a meaningful listing change (search, playlist switch, sort)
  * from a benign array rebuild (play-count mirror, library-changed refetch

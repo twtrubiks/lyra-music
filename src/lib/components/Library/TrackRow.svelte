@@ -1,12 +1,13 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
-  import { formatDuration } from '$lib/logic/format';
+  import { formatDuration, TRACK_IDS_DRAG_TYPE } from '$lib/logic/format';
 
   let {
     track,
     isActive = false,
     isSelected = false,
     isFocused = false,
+    dragIds,
     ondblclick,
     onclick,
     oncontextmenu,
@@ -15,6 +16,8 @@
     isActive?: boolean;
     isSelected?: boolean;
     isFocused?: boolean;
+    /** IDs carried by a drag started on this row; defaults to just this track. */
+    dragIds?: () => number[];
     ondblclick: (track: Track) => void;
     onclick?: (e: MouseEvent) => void;
     oncontextmenu?: (e: MouseEvent) => void;
@@ -23,9 +26,10 @@
   // Drag support
   function handleDragStart(e: DragEvent) {
     if (!e.dataTransfer) return;
+    const ids = dragIds?.() ?? [track.id];
     e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('application/x-track-id', String(track.id));
-    e.dataTransfer.setData('text/plain', track.title);
+    e.dataTransfer.setData(TRACK_IDS_DRAG_TYPE, ids.join(','));
+    e.dataTransfer.setData('text/plain', ids.length > 1 ? `${ids.length} tracks` : track.title);
   }
 </script>
 

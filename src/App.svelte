@@ -33,6 +33,7 @@
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
   import { t } from '$lib/i18n/index.svelte';
+  import { isTrackDrag } from '$lib/logic/format';
 
   const playlistState = getPlaylistState();
   const player = getPlayerState();
@@ -198,22 +199,24 @@
     };
   });
 
-  // HTML5 drag-drop fallback (for Linux/WebKitGTK where Tauri native events may not fire)
+  // HTML5 drag-drop fallback (for Linux/WebKitGTK where Tauri native events may not fire).
+  // Internal track drags (rows → playlist) bubble up here too; they carry no file URIs and
+  // are handled by Sidebar, so ignore them instead of warning about unreadable paths.
   function handleHtml5DragOver(e: DragEvent) {
-    if (tauriDragDropActive) return;
+    if (tauriDragDropActive || isTrackDrag(e.dataTransfer?.types)) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     isDragOver = true;
   }
 
   function handleHtml5DragLeave(e: DragEvent) {
-    if (tauriDragDropActive) return;
+    if (tauriDragDropActive || isTrackDrag(e.dataTransfer?.types)) return;
     if (e.relatedTarget && (e.currentTarget as Node)?.contains(e.relatedTarget as Node)) return;
     isDragOver = false;
   }
 
   async function handleHtml5Drop(e: DragEvent) {
-    if (tauriDragDropActive) return;
+    if (tauriDragDropActive || isTrackDrag(e.dataTransfer?.types)) return;
     e.preventDefault();
     isDragOver = false;
 

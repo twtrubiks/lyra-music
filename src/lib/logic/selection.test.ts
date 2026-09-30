@@ -13,6 +13,7 @@ import {
   extendSelectionDown,
   extendSelectionUp,
   matchesIdSequence,
+  resolveDragIds,
 } from './selection';
 import { createMockTracks } from '$lib/test-helpers';
 
@@ -569,5 +570,30 @@ describe('matchesIdSequence', () => {
 
   it('matches two empty lists', () => {
     expect(matchesIdSequence([], [])).toBe(true);
+  });
+});
+
+// ============================================================
+// resolveDragIds
+// ============================================================
+
+describe('resolveDragIds', () => {
+  it('drags all selected tracks in display order when the dragged row is selected', () => {
+    const s = selectRange(selectSingle(tracks, 3), tracks, 1); // ids 2..4
+    expect(resolveDragIds(tracks, s, 3)).toEqual([2, 3, 4]);
+  });
+
+  it('drags only the dragged row when it is not part of the selection', () => {
+    const s = selectRange(selectSingle(tracks, 0), tracks, 1); // ids 1,2
+    expect(resolveDragIds(tracks, s, 5)).toEqual([5]);
+  });
+
+  it('drags only the dragged row when nothing is selected', () => {
+    expect(resolveDragIds(tracks, createEmptySelection(), 2)).toEqual([2]);
+  });
+
+  it('drags the whole list after select-all', () => {
+    const s = selectAll(tracks);
+    expect(resolveDragIds(tracks, s, 1)).toEqual([1, 2, 3, 4, 5]);
   });
 });

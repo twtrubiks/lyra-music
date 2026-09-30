@@ -35,15 +35,29 @@ export function shouldUpdateDuration(backendDuration: number): boolean {
   return backendDuration > 0;
 }
 
+/** MIME type carried by track rows during drag-and-drop; payload is comma-separated track ids. */
+export const TRACK_IDS_DRAG_TYPE = 'application/x-track-id';
+
+/** True when a DragEvent originates from a track row inside the app (not an OS file drop). */
+export function isTrackDrag(types: readonly string[] | undefined): boolean {
+  return types?.includes(TRACK_IDS_DRAG_TYPE) ?? false;
+}
+
 /**
- * Parse a track ID from drag-and-drop dataTransfer string.
- * Returns null if the string is invalid.
+ * Parse track IDs from a drag-and-drop dataTransfer string (comma-separated).
+ * Invalid segments are skipped, duplicates removed, order preserved.
  */
-export function parseTrackIdFromDrop(raw: string | undefined | null): number | null {
-  if (!raw) return null;
-  const n = parseInt(raw, 10);
-  if (isNaN(n)) return null;
-  return n;
+export function parseTrackIdsFromDrop(raw: string | undefined | null): number[] {
+  if (!raw) return [];
+  const seen = new Set<number>();
+  const ids: number[] = [];
+  for (const part of raw.split(',')) {
+    const n = parseInt(part.trim(), 10);
+    if (isNaN(n) || seen.has(n)) continue;
+    seen.add(n);
+    ids.push(n);
+  }
+  return ids;
 }
 
 /**
