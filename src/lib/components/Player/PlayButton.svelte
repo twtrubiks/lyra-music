@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   let {
     isPlaying,
     disabled = false,
@@ -10,7 +11,12 @@
   } = $props();
 </script>
 
-<button class="play-btn" {disabled} {onclick} title={isPlaying ? 'Pause' : 'Play'}>
+<button
+  class="play-btn"
+  {disabled}
+  {onclick}
+  title={isPlaying ? t('player.pause') : t('player.play')}
+>
   {#if isPlaying}
     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
       <rect x="6" y="4" width="4" height="16" rx="1" />

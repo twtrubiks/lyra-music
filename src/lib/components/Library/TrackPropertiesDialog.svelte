@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TrackDetails } from '$lib/types';
   import { formatDuration, formatFileSize, formatSampleRate } from '$lib/logic/format';
+  import { t } from '$lib/i18n/index.svelte';
 
   let {
     details,
@@ -60,10 +61,10 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={handleBackdropClick}>
-  <div class="dialog" role="dialog" aria-label="Track properties">
+  <div class="dialog" role="dialog" aria-label={t('properties.dialogLabel')}>
     <div class="dialog-header">
-      <h3>屬性</h3>
-      <button class="close-btn" onclick={onclose} aria-label="Close">
+      <h3>{t('properties.title')}</h3>
+      <button class="close-btn" onclick={onclose} aria-label={t('common.close')}>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path
             d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
@@ -75,7 +76,7 @@
     <div class="dialog-body">
       <div class="section">
         <div class="row">
-          <span class="label">標題</span>
+          <span class="label">{t('properties.trackTitle')}</span>
           {#if isEditing}
             <input class="edit-input" type="text" bind:value={editTitle} />
           {:else}
@@ -83,7 +84,7 @@
           {/if}
         </div>
         <div class="row">
-          <span class="label">藝術家</span>
+          <span class="label">{t('properties.artist')}</span>
           {#if isEditing}
             <input class="edit-input" type="text" bind:value={editArtist} />
           {:else}
@@ -91,7 +92,7 @@
           {/if}
         </div>
         <div class="row">
-          <span class="label">專輯</span>
+          <span class="label">{t('properties.album')}</span>
           {#if isEditing}
             <input class="edit-input" type="text" bind:value={editAlbum} />
           {:else}
@@ -99,7 +100,7 @@
           {/if}
         </div>
         <div class="row">
-          <span class="label">時長</span>
+          <span class="label">{t('properties.duration')}</span>
           <span class="value">{formatDuration(details.duration_secs)}</span>
         </div>
       </div>
@@ -108,36 +109,36 @@
 
       <div class="section">
         <div class="row">
-          <span class="label">格式</span>
+          <span class="label">{t('properties.format')}</span>
           <span class="value">{details.format || '—'}</span>
         </div>
         {#if details.bitrate_kbps != null}
           <div class="row">
-            <span class="label">位元率</span>
+            <span class="label">{t('properties.bitrate')}</span>
             <span class="value">{details.bitrate_kbps} kbps</span>
           </div>
         {/if}
         {#if details.sample_rate_hz != null}
           <div class="row">
-            <span class="label">取樣率</span>
+            <span class="label">{t('properties.sampleRate')}</span>
             <span class="value">{formatSampleRate(details.sample_rate_hz)}</span>
           </div>
         {/if}
         {#if details.channels != null}
           <div class="row">
-            <span class="label">聲道</span>
+            <span class="label">{t('properties.channels')}</span>
             <span class="value"
               >{details.channels === 1
-                ? 'Mono'
+                ? t('properties.mono')
                 : details.channels === 2
-                  ? 'Stereo'
+                  ? t('properties.stereo')
                   : `${details.channels} ch`}</span
             >
           </div>
         {/if}
         {#if details.bits_per_sample != null}
           <div class="row">
-            <span class="label">位元深度</span>
+            <span class="label">{t('properties.bitDepth')}</span>
             <span class="value">{details.bits_per_sample} bit</span>
           </div>
         {/if}
@@ -147,11 +148,11 @@
 
       <div class="section">
         <div class="row">
-          <span class="label">檔案大小</span>
+          <span class="label">{t('properties.fileSize')}</span>
           <span class="value">{formatFileSize(details.file_size_bytes)}</span>
         </div>
         <div class="row">
-          <span class="label">檔案路徑</span>
+          <span class="label">{t('properties.filePath')}</span>
           <span class="value path">{details.file_path}</span>
         </div>
       </div>
@@ -160,13 +161,13 @@
         <div class="dialog-actions">
           {#if isEditing}
             <button class="btn btn-secondary" onclick={cancelEditing} disabled={isSaving}
-              >取消</button
+              >{t('common.cancel')}</button
             >
             <button class="btn btn-primary" onclick={saveEditing} disabled={isSaving}>
-              {#if isSaving}儲存中...{:else}儲存{/if}
+              {#if isSaving}{t('common.saving')}{:else}{t('common.save')}{/if}
             </button>
           {:else}
-            <button class="btn btn-secondary" onclick={startEditing}>編輯</button>
+            <button class="btn btn-secondary" onclick={startEditing}>{t('common.edit')}</button>
           {/if}
         </div>
       {/if}

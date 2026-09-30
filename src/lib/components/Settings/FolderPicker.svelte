@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import * as libraryApi from '$lib/api/library';
   import { getLibraryState } from '$lib/state/libraryState.svelte';
@@ -28,10 +29,10 @@
         }
       } else if (selected !== null) {
         console.warn('[lyra] Unexpected dialog result:', selected);
-        pushError('Folder selection returned an unexpected value', 'warn');
+        pushError(t('error.folderUnexpected'), 'warn');
       }
     } catch (err) {
-      notifyCritical('Scan folder', err);
+      notifyCritical('action.scanFolder', err);
       library.isScanning = false;
     }
   }
@@ -45,16 +46,16 @@
       />
     </svg>
     {#if library.isScanning}
-      Scanning...
+      {t('folders.scanning')}
     {:else}
-      Scan Folder
+      {t('folders.scan')}
     {/if}
   </button>
   <button
     class="manage-btn"
     onclick={() => (showWatchedFolders = true)}
-    title="管理監控資料夾"
-    aria-label="管理監控資料夾"
+    title={t('folders.manage')}
+    aria-label={t('folders.manage')}
   >
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
       <path

@@ -3,6 +3,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as libraryApi from '$lib/api/library';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { t } from '$lib/i18n/index.svelte';
 
   const playlistState = getPlaylistState();
 
@@ -25,7 +26,7 @@
       try {
         artists = await libraryApi.getAllArtists();
       } catch (err) {
-        notifyCritical('Load artists', err);
+        notifyCritical('action.loadArtists', err);
       } finally {
         isLoading = false;
       }
@@ -35,22 +36,22 @@
 
 <div class="artist-list-view">
   <div class="header">
-    <h2>Artists</h2>
+    <h2>{t('sidebar.artists')}</h2>
     <div class="search-box">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-icon">
         <path
           d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
         />
       </svg>
-      <input type="text" placeholder="Search artists..." bind:value={searchQuery} />
+      <input type="text" placeholder={t('browse.searchArtists')} bind:value={searchQuery} />
     </div>
   </div>
 
   <div class="artist-scroll">
     {#if isLoading}
-      <div class="empty"><p>Loading...</p></div>
+      <div class="empty"><p>{t('common.loading')}</p></div>
     {:else if filteredArtists.length === 0}
-      <div class="empty"><p>No artists found.</p></div>
+      <div class="empty"><p>{t('browse.noArtists')}</p></div>
     {:else}
       {#each filteredArtists as artist (artist.name)}
         <button class="artist-row" onclick={() => goToArtist(artist.name)}>
@@ -63,8 +64,7 @@
           </div>
           <div class="artist-info">
             <span class="artist-name">{artist.name}</span>
-            <span class="artist-count"
-              >{artist.track_count} track{artist.track_count !== 1 ? 's' : ''}</span
+            <span class="artist-count">{t('common.trackCount', { count: artist.track_count })}</span
             >
           </div>
           <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">

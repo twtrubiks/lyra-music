@@ -1,4 +1,5 @@
 import { isMac } from './platform';
+import { t } from '$lib/i18n/index.svelte';
 
 export interface ShortcutEntry {
   keys: string[];
@@ -15,44 +16,44 @@ export function getShortcutCategories(): ShortcutCategory[] {
 
   return [
     {
-      title: '全域播放控制',
+      title: t('shortcuts.categoryGlobal'),
       shortcuts: [
-        { keys: ['Space'], description: '播放 / 暫停' },
-        { keys: ['←'], description: '倒退 5 秒' },
-        { keys: ['→'], description: '快進 5 秒' },
-        { keys: ['↑'], description: '音量增加（列表未聚焦時）' },
-        { keys: ['↓'], description: '音量降低（列表未聚焦時）' },
-        { keys: ['N'], description: '下一首' },
-        { keys: ['P'], description: '上一首' },
-        { keys: ['S'], description: '隨機播放 開/關' },
-        { keys: ['R'], description: '循環模式切換' },
-        { keys: ['M'], description: '迷你模式 開/關' },
-        { keys: ['L'], description: '歌詞面板 開/關' },
-        { keys: ['Escape'], description: '關閉歌詞面板 / 退出迷你模式' },
-        { keys: [mod, 'F'], description: '搜尋' },
-        { keys: ['?'], description: '顯示快捷鍵說明' },
+        { keys: ['Space'], description: t('shortcuts.playPause') },
+        { keys: ['←'], description: t('shortcuts.seekBack') },
+        { keys: ['→'], description: t('shortcuts.seekForward') },
+        { keys: ['↑'], description: t('shortcuts.volumeUp') },
+        { keys: ['↓'], description: t('shortcuts.volumeDown') },
+        { keys: ['N'], description: t('shortcuts.next') },
+        { keys: ['P'], description: t('shortcuts.previous') },
+        { keys: ['S'], description: t('shortcuts.shuffle') },
+        { keys: ['R'], description: t('shortcuts.repeat') },
+        { keys: ['M'], description: t('shortcuts.miniMode') },
+        { keys: ['L'], description: t('shortcuts.lyrics') },
+        { keys: ['Escape'], description: t('shortcuts.dismiss') },
+        { keys: [mod, 'F'], description: t('shortcuts.search') },
+        { keys: ['?'], description: t('shortcuts.showHelp') },
       ],
     },
     {
-      title: '曲目列表操作',
+      title: t('shortcuts.categoryTrackList'),
       shortcuts: [
-        { keys: ['↑'], description: '上一首曲目' },
-        { keys: ['↓'], description: '下一首曲目' },
-        { keys: ['Shift', '↑'], description: '向上擴展選取' },
-        { keys: ['Shift', '↓'], description: '向下擴展選取' },
-        { keys: [mod, 'A'], description: '全選曲目' },
-        { keys: ['Enter'], description: '播放聚焦曲目' },
-        { keys: ['Home'], description: '跳到第一首' },
-        { keys: ['End'], description: '跳到最後一首' },
-        { keys: [mod, 'Shift', '↑'], description: '上移選取曲目' },
-        { keys: [mod, 'Shift', '↓'], description: '下移選取曲目' },
+        { keys: ['↑'], description: t('shortcuts.focusUp') },
+        { keys: ['↓'], description: t('shortcuts.focusDown') },
+        { keys: ['Shift', '↑'], description: t('shortcuts.extendUp') },
+        { keys: ['Shift', '↓'], description: t('shortcuts.extendDown') },
+        { keys: [mod, 'A'], description: t('shortcuts.selectAll') },
+        { keys: ['Enter'], description: t('shortcuts.playFocused') },
+        { keys: ['Home'], description: t('shortcuts.jumpFirst') },
+        { keys: ['End'], description: t('shortcuts.jumpLast') },
+        { keys: [mod, 'Shift', '↑'], description: t('shortcuts.moveTracksUp') },
+        { keys: [mod, 'Shift', '↓'], description: t('shortcuts.moveTracksDown') },
       ],
     },
     {
-      title: '播放清單管理',
+      title: t('shortcuts.categoryPlaylists'),
       shortcuts: [
-        { keys: [mod, 'Shift', '↑'], description: '上移播放清單' },
-        { keys: [mod, 'Shift', '↓'], description: '下移播放清單' },
+        { keys: [mod, 'Shift', '↑'], description: t('shortcuts.movePlaylistUp') },
+        { keys: [mod, 'Shift', '↓'], description: t('shortcuts.movePlaylistDown') },
       ],
     },
   ];

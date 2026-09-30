@@ -23,6 +23,7 @@
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
   import { warnNonCritical } from '$lib/logic/error-handler';
+  import { t, type MessageKey } from '$lib/i18n/index.svelte';
 
   let {
     tracks,
@@ -327,12 +328,12 @@
       !selection.selectedIds.has(tracks[tracks.length - 1].id),
   );
 
-  const headers: { label: string; column: SortColumn }[] = [
-    { label: 'Title', column: 'title' },
-    { label: 'Artist', column: 'artist' },
-    { label: 'Album', column: 'album' },
-    { label: 'Plays', column: 'play_count' },
-    { label: 'Duration', column: 'duration_secs' },
+  const headers: { label: MessageKey; column: SortColumn }[] = [
+    { label: 'trackList.columnTitle', column: 'title' },
+    { label: 'trackList.columnArtist', column: 'artist' },
+    { label: 'trackList.columnAlbum', column: 'album' },
+    { label: 'trackList.columnPlays', column: 'play_count' },
+    { label: 'trackList.columnDuration', column: 'duration_secs' },
   ];
 
   function getSortIndicator(column: SortColumn): string {
@@ -346,8 +347,8 @@
 <div class="track-list-wrapper" bind:this={wrapperEl} onscroll={handleScroll}>
   {#if tracks.length === 0}
     <div class="empty">
-      <p>No tracks yet.</p>
-      <p class="hint">Use "Scan Folder" or drag files here to add music.</p>
+      <p>{t('library.empty')}</p>
+      <p class="hint">{t('library.emptyHint')}</p>
     </div>
   {:else}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -378,7 +379,7 @@
                 onsort?.(header.column);
               }}
             >
-              <span class="th-label">{header.label}{getSortIndicator(header.column)}</span>
+              <span class="th-label">{t(header.label)}{getSortIndicator(header.column)}</span>
               {#if i < 4}
                 <div
                   class="resize-handle"
@@ -426,7 +427,7 @@
 {#if showMenu}
   <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu">
     {#if playlistState.playlists.length > 0}
-      <div class="menu-header">Add to playlist</div>
+      <div class="menu-header">{t('trackList.addToPlaylist')}</div>
       {#each playlistState.playlists as pl (pl.id)}
         <button
           class="menu-item"
@@ -456,7 +457,7 @@
           if (canMoveUp) handleMenuMoveUp();
         }}
       >
-        ▲ 上移 <span class="shortcut">Ctrl+Shift+↑</span>
+        ▲ {t('common.moveUp')} <span class="shortcut">Ctrl+Shift+↑</span>
       </button>
       <button
         class="menu-item"
@@ -467,7 +468,7 @@
           if (canMoveDown) handleMenuMoveDown();
         }}
       >
-        ▼ 下移 <span class="shortcut">Ctrl+Shift+↓</span>
+        ▼ {t('common.moveDown')} <span class="shortcut">Ctrl+Shift+↓</span>
       </button>
       <div class="menu-divider"></div>
     {/if}
@@ -482,7 +483,7 @@
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
         <path d="M19 13H5v-2h14v2z" />
       </svg>
-      移除{#if selectedCount > 1}
+      {t('common.remove')}{#if selectedCount > 1}
         ({selectedCount}){/if}
     </button>
     <button
@@ -496,7 +497,7 @@
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
         <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
       </svg>
-      丟進垃圾桶{#if selectedCount > 1}
+      {t('trackList.trash')}{#if selectedCount > 1}
         ({selectedCount}){/if}
     </button>
     <div class="menu-divider"></div>
@@ -514,7 +515,7 @@
           d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"
         />
       </svg>
-      屬性
+      {t('common.properties')}
     </button>
   </div>
 {/if}

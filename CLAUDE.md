@@ -59,6 +59,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - `lib/state/` — Svelte 5 runes 響應式狀態（透過 `getPlayerState()` 等取得單例）
 - `lib/logic/` — 抽離的純函式，便於測試（播放動作、斷點續播、鍵盤快捷鍵、排序、選取、虛擬捲動、格式化）
 - `lib/components/` — 依功能分組的 UI 元件（Player/、Library/、Browse/、Playlist/、Sidebar/、Settings/）
+- `lib/i18n/` — 自製型別字典（零相依，繁中 + 英文）。`locales/en.ts` 為基準並定義 `MessageKey`，`locales/zh-TW.ts` 型別為 `Messages`（缺 key 編譯失敗）；`locale.ts` 為純函式（偵測、儲存、插值、`Intl.PluralRules` 複數）；`index.svelte.ts` 持有 `$state` 語系並匯出 `t()`。語系順序：`localStorage`（`lyra-locale`）→ `navigator.languages`（任何 `zh*` → zh-TW）→ en。**使用者可見字串一律走 `t(key)`，不可寫死**；`t()` 讀響應式狀態，須在 template、`$derived` 或函式內呼叫，不可在模組／元件頂層存成常數（切換語言後不會更新）。`notifyCritical` 第一個參數是 `action.*` 的 key。系統匣選單與 Rust `AppError` 前綴不在 i18n 範圍內（維持英文）
 - `lib/types/index.ts` — 所有 TypeScript 介面（Track、Playlist 等）
 - `lib/__mocks__/` — 測試用 Tauri/dialog mock
 - 路徑別名：`$lib` → `src/lib`

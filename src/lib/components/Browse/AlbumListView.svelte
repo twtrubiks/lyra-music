@@ -4,6 +4,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as libraryApi from '$lib/api/library';
   import { notifyCritical } from '$lib/logic/error-handler';
+  import { t } from '$lib/i18n/index.svelte';
 
   const playlistState = getPlaylistState();
 
@@ -50,7 +51,7 @@
       try {
         albums = await libraryApi.getAllAlbums();
       } catch (err) {
-        notifyCritical('Load albums', err);
+        notifyCritical('action.loadAlbums', err);
       } finally {
         isLoading = false;
       }
@@ -60,22 +61,22 @@
 
 <div class="album-list-view">
   <div class="header">
-    <h2>Albums</h2>
+    <h2>{t('sidebar.albums')}</h2>
     <div class="search-box">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-icon">
         <path
           d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
         />
       </svg>
-      <input type="text" placeholder="Search albums..." bind:value={searchQuery} />
+      <input type="text" placeholder={t('browse.searchAlbums')} bind:value={searchQuery} />
     </div>
   </div>
 
   <div class="album-scroll">
     {#if isLoading}
-      <div class="empty"><p>Loading...</p></div>
+      <div class="empty"><p>{t('common.loading')}</p></div>
     {:else if filteredAlbums.length === 0}
-      <div class="empty"><p>No albums found.</p></div>
+      <div class="empty"><p>{t('browse.noAlbums')}</p></div>
     {:else}
       <div class="album-grid">
         {#each filteredAlbums as album (album.name + '::' + album.artist)}
@@ -102,8 +103,7 @@
             <div class="album-info">
               <span class="album-name">{album.name}</span>
               <span class="album-artist">{album.artist}</span>
-              <span class="album-count"
-                >{album.track_count} track{album.track_count !== 1 ? 's' : ''}</span
+              <span class="album-count">{t('common.trackCount', { count: album.track_count })}</span
               >
             </div>
           </button>

@@ -11,6 +11,7 @@
   import { optimisticRemove, optimisticTrash } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { artistName }: { artistName: string } = $props();
 
@@ -55,7 +56,7 @@
       propertiesDetails = await libraryApi.getTrackDetails(track.id);
       showProperties = true;
     } catch (err) {
-      notifyCritical('Get track details', err);
+      notifyCritical('action.getTrackDetails', err);
     }
   }
 
@@ -80,7 +81,7 @@
         player.currentTrack = updated;
       }
     } catch (err) {
-      notifyCritical('Update metadata', err);
+      notifyCritical('action.updateMetadata', err);
     }
   }
 
@@ -88,7 +89,7 @@
     try {
       tracks = await libraryApi.getTracksByArtist(artistName);
     } catch (err) {
-      notifyCritical('Load artist tracks', err);
+      notifyCritical('action.loadArtistTracks', err);
     } finally {
       isLoading = false;
     }
@@ -110,17 +111,17 @@
 
 <div class="artist-detail-view">
   <div class="header">
-    <button class="back-btn" onclick={goBack} aria-label="Back to artists">
+    <button class="back-btn" onclick={goBack} aria-label={t('browse.backToArtists')}>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
       </svg>
     </button>
     <h2>{artistName}</h2>
-    <span class="track-count">{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
+    <span class="track-count">{t('common.trackCount', { count: tracks.length })}</span>
   </div>
 
   {#if isLoading}
-    <div class="empty"><p>Loading...</p></div>
+    <div class="empty"><p>{t('common.loading')}</p></div>
   {:else}
     <TrackList
       {tracks}

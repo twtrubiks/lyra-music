@@ -18,16 +18,25 @@
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
   import { listen } from '@tauri-apps/api/event';
   import type { PlayerState } from '$lib/types';
+  import { t } from '$lib/i18n/index.svelte';
 
   const player = getPlayerState();
   const lyricsState = getLyricsState();
 
   const lyricsTitle = $derived(
     lyricsState.availability === 'synced'
-      ? 'Lyrics（同步歌詞）'
+      ? t('player.lyricsSynced')
       : lyricsState.availability === 'plain'
-        ? 'Lyrics（純文字歌詞）'
-        : 'Lyrics',
+        ? t('player.lyricsPlain')
+        : t('player.lyrics'),
+  );
+
+  const repeatTitle = $derived(
+    player.repeatMode === 'repeat-one'
+      ? t('player.repeatOne')
+      : player.repeatMode === 'repeat-all'
+        ? t('player.repeatAll')
+        : t('player.repeatOff'),
   );
 
   const canNext = $derived(
@@ -62,7 +71,7 @@
         player.isPlaying = true;
       }
     } catch (err) {
-      notifyCritical('Play/Pause', err);
+      notifyCritical('action.playPause', err);
     }
   }
 
@@ -114,7 +123,7 @@
         class="mode-btn"
         class:active={player.shuffleEnabled}
         onclick={toggleShuffle}
-        title="Shuffle"
+        title={t('player.shuffle')}
       >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path
@@ -124,7 +133,7 @@
       </button>
     {/if}
 
-    <button class="nav-btn" onclick={handlePrev} disabled={!canPrev} title="Previous">
+    <button class="nav-btn" onclick={handlePrev} disabled={!canPrev} title={t('player.previous')}>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
       </svg>
@@ -136,7 +145,7 @@
       onclick={handlePlayPause}
     />
 
-    <button class="nav-btn" onclick={handleNext} disabled={!canNext} title="Next">
+    <button class="nav-btn" onclick={handleNext} disabled={!canNext} title={t('player.next')}>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
       </svg>
@@ -147,7 +156,7 @@
         class="mode-btn"
         class:active={player.repeatMode !== 'off'}
         onclick={cycleRepeat}
-        title="Repeat: {player.repeatMode}"
+        title={repeatTitle}
       >
         {#if player.repeatMode === 'repeat-one'}
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -194,7 +203,7 @@
     class="mode-btn"
     class:active={player.miniMode}
     onclick={() => (player.miniMode = !player.miniMode)}
-    title="Mini player"
+    title={t('player.miniPlayer')}
   >
     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
       {#if player.miniMode}

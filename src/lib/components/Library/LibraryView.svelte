@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Track, TrackDetails, SortColumn } from '$lib/types';
   import TrackList from './TrackList.svelte';
   import TrackPropertiesDialog from './TrackPropertiesDialog.svelte';
@@ -45,7 +46,7 @@
       propertiesDetails = await libraryApi.getTrackDetails(track.id);
       showProperties = true;
     } catch (err) {
-      notifyCritical('Get track details', err);
+      notifyCritical('action.getTrackDetails', err);
     }
   }
 
@@ -69,7 +70,7 @@
         player.currentTrack = updated;
       }
     } catch (err) {
-      notifyCritical('Update metadata', err);
+      notifyCritical('action.updateMetadata', err);
     }
   }
 
@@ -80,7 +81,7 @@
         const tracks = await libraryApi.getAllTracks();
         library.allTracks = tracks;
       } catch (err) {
-        notifyCritical('Load library', err);
+        notifyCritical('action.loadLibrary', err);
       }
     })();
   });
@@ -88,14 +89,14 @@
 
 <div class="library-view">
   <div class="header">
-    <h2>All Music</h2>
+    <h2>{t('sidebar.allMusic')}</h2>
     <div class="search-box">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-icon">
         <path
           d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
         />
       </svg>
-      <input type="text" placeholder="Search tracks..." bind:value={searchQuery} />
+      <input type="text" placeholder={t('library.searchTracks')} bind:value={searchQuery} />
     </div>
   </div>
 

@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { notifyCritical, notifyFailedImports, notifyImportResult } from './error-handler';
 import { getErrorState } from '$lib/state/errorState.svelte';
+import { setLocale } from '$lib/i18n/index.svelte';
 import type { FailedFile, ImportResult } from '$lib/types';
 
 describe('notifyFailedImports', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     getErrorState().errors = [];
+    setLocale('zh-TW');
   });
 
   afterEach(() => {
@@ -63,6 +65,23 @@ describe('notifyFailedImports', () => {
     expect(msg).toContain('...等 2 個檔案');
   });
 
+  it('uses English wording and plural forms when the locale is en', () => {
+    setLocale('en');
+    notifyFailedImports([{ file_path: '/a/one.mp3', error: 'err' }]);
+    expect(getErrorState().errors[0].message).toBe('1 file could not be imported: one.mp3');
+
+    getErrorState().errors = [];
+    notifyFailedImports(
+      ['one', 'two', 'three', 'four', 'five'].map((n) => ({
+        file_path: `/a/${n}.mp3`,
+        error: 'err',
+      })),
+    );
+    expect(getErrorState().errors[0].message).toBe(
+      '5 files could not be imported: one.mp3, two.mp3, three.mp3 ...and 2 more',
+    );
+  });
+
   it('extracts filename from path', () => {
     const files: FailedFile[] = [{ file_path: '/very/deep/nested/path/song.wav', error: 'err' }];
     notifyFailedImports(files);
@@ -88,6 +107,7 @@ describe('notifyCritical', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     getErrorState().errors = [];
+    setLocale('en');
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -97,7 +117,10 @@ describe('notifyCritical', () => {
   });
 
   it('includes the underlying error message so the user sees the reason', () => {
-    notifyCritical('Play track', 'Audio error: /usb/music/song.mp3: No such file or directory');
+    notifyCritical(
+      'action.playTrack',
+      'Audio error: /usb/music/song.mp3: No such file or directory',
+    );
 
     const state = getErrorState();
     expect(state.errors).toHaveLength(1);
@@ -108,9 +131,16 @@ describe('notifyCritical', () => {
   });
 
   it('extracts the message from Error instances', () => {
-    notifyCritical('Scan folder', new Error('permission denied'));
+    notifyCritical('action.scanFolder', new Error('permission denied'));
 
     expect(getErrorState().errors[0].message).toBe('Scan folder failed: permission denied');
+  });
+
+  it('translates the action name with the current locale', () => {
+    setLocale('zh-TW');
+    notifyCritical('action.scanFolder', new Error('permission denied'));
+
+    expect(getErrorState().errors[0].message).toBe('掃描資料夾失敗：permission denied');
   });
 });
 
@@ -118,6 +148,7 @@ describe('notifyImportResult', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     getErrorState().errors = [];
+    setLocale('zh-TW');
   });
 
   afterEach(() => {

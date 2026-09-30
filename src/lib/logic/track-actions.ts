@@ -6,6 +6,7 @@ import { trashTracks, removeTracks } from '$lib/api/library';
 import { batchRemoveFromPlaylist } from '$lib/api/playlist';
 import { handleTracksRemovedBatch } from '$lib/logic/playback-actions';
 import { notifyCritical } from '$lib/logic/error-handler';
+import type { ActionKey } from '$lib/i18n/index.svelte';
 
 export interface OptimisticTrackOptions {
   getLocalTracks?: () => Track[];
@@ -16,7 +17,7 @@ export interface OptimisticTrackOptions {
 async function _optimisticLibraryAction(
   tracks: Track[],
   backendAction: (ids: number[]) => Promise<BatchTrashResult>,
-  errorLabel: string,
+  errorLabel: ActionKey,
   options?: OptimisticTrackOptions,
 ): Promise<void> {
   if (tracks.length === 0) return;
@@ -68,14 +69,14 @@ export async function optimisticTrash(
   tracksToTrash: Track[],
   options?: OptimisticTrackOptions,
 ): Promise<void> {
-  await _optimisticLibraryAction(tracksToTrash, trashTracks, 'Trash tracks', options);
+  await _optimisticLibraryAction(tracksToTrash, trashTracks, 'action.trashTracks', options);
 }
 
 export async function optimisticRemove(
   tracksToRemove: Track[],
   options?: OptimisticTrackOptions,
 ): Promise<void> {
-  await _optimisticLibraryAction(tracksToRemove, removeTracks, 'Remove tracks', options);
+  await _optimisticLibraryAction(tracksToRemove, removeTracks, 'action.removeTracks', options);
 }
 
 export interface OptimisticPlaylistRemoveOptions {
@@ -111,7 +112,7 @@ export async function optimisticPlaylistRemove(
   } catch (err) {
     // Total failure — restore all tracks (SQL DELETE is atomic, no partial failure)
     playlistState.playlists = snapshotPlaylists;
-    notifyCritical('Remove from playlist', err);
+    notifyCritical('action.removeFromPlaylist', err);
     return;
   }
 

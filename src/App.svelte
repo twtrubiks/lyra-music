@@ -32,6 +32,7 @@
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
   import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
   import { listen } from '@tauri-apps/api/event';
+  import { t } from '$lib/i18n/index.svelte';
 
   const playlistState = getPlaylistState();
   const player = getPlayerState();
@@ -50,7 +51,7 @@
       library.allTracks = await libraryApi.getAllTracks();
       notifyImportResult(result);
     } catch (err) {
-      notifyCritical('Import dropped files', err);
+      notifyCritical('action.importDropped', err);
     } finally {
       library.isScanning = false;
     }
@@ -73,7 +74,7 @@
             draggedPathCount = 0;
             if (payload.paths.length === 0) {
               console.warn('[lyra] Drop event received but paths array is empty');
-              pushError('Drop event received but no file paths were provided', 'warn');
+              pushError(t('error.dropNoPaths'), 'warn');
               return;
             }
             await importDroppedPaths(payload.paths);
@@ -228,7 +229,7 @@
       await importDroppedPaths(paths);
     } else {
       console.warn('[lyra] HTML5 drop: no file:// URIs found in dataTransfer');
-      pushError('Could not read dropped file paths. Try using Scan Folder instead.', 'warn');
+      pushError(t('error.dropUnreadable'), 'warn');
     }
   }
 
@@ -380,9 +381,9 @@
             d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
           />
         </svg>
-        <p class="drop-title">拖放以匯入</p>
+        <p class="drop-title">{t('drop.title')}</p>
         <p class="drop-hint">
-          {#if draggedPathCount === 1}1 個項目{:else}{draggedPathCount} 個項目{/if}
+          {t('drop.itemCount', { count: draggedPathCount })}
         </p>
       </div>
     </div>

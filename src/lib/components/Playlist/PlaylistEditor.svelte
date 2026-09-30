@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import type { Track, TrackDetails } from '$lib/types';
   import TrackList from '../Library/TrackList.svelte';
   import TrackPropertiesDialog from '../Library/TrackPropertiesDialog.svelte';
@@ -43,7 +44,7 @@
       }
     } catch (err) {
       if (epoch === loadEpoch) {
-        notifyCritical('Load playlist tracks', err);
+        notifyCritical('action.loadPlaylistTracks', err);
       }
     }
   }
@@ -77,7 +78,7 @@
       propertiesDetails = await libraryApi.getTrackDetails(track.id);
       showProperties = true;
     } catch (err) {
-      notifyCritical('Get track details', err);
+      notifyCritical('action.getTrackDetails', err);
     }
   }
 
@@ -93,7 +94,7 @@
     try {
       await playlistApi.reorderPlaylist(playlistId, trackIds);
     } catch (err) {
-      notifyCritical('Reorder playlist', err);
+      notifyCritical('action.reorderPlaylist', err);
       await loadTracks(); // fallback
     }
   }
@@ -119,12 +120,12 @@
       class="play-all-btn"
       onclick={handlePlayAll}
       disabled={tracks.length === 0}
-      title="從上次播放進度繼續"
+      title={t('playlist.resumeHint')}
     >
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
         <path d="M8 5v14l11-7z" />
       </svg>
-      播放
+      {t('playlist.play')}
     </button>
   </div>
 

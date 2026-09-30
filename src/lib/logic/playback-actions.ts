@@ -81,7 +81,7 @@ async function playTrackAtIndex(index: number): Promise<void> {
     tryQueueNext();
   } catch (err) {
     if (epoch === _changeEpoch) {
-      notifyCritical('Play track', err);
+      notifyCritical('action.playTrack', err);
     }
   }
   try {

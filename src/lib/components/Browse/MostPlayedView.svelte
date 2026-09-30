@@ -10,6 +10,7 @@
   import { optimisticTrash, optimisticRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
+  import { t } from '$lib/i18n/index.svelte';
 
   const player = getPlayerState();
   const library = getLibraryState();
@@ -47,7 +48,7 @@
       propertiesDetails = await libraryApi.getTrackDetails(track.id);
       showProperties = true;
     } catch (err) {
-      notifyCritical('Get track details', err);
+      notifyCritical('action.getTrackDetails', err);
     }
   }
 
@@ -72,7 +73,7 @@
         player.currentTrack = updated;
       }
     } catch (err) {
-      notifyCritical('Update metadata', err);
+      notifyCritical('action.updateMetadata', err);
     }
   }
 
@@ -80,7 +81,7 @@
     try {
       tracks = await libraryApi.getMostPlayedTracks(50);
     } catch (err) {
-      notifyCritical('Load most played', err);
+      notifyCritical('action.loadMostPlayed', err);
     } finally {
       isLoading = false;
     }
@@ -104,14 +105,14 @@
     <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" class="header-icon">
       <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
     </svg>
-    <h2>Most Played</h2>
-    <span class="track-count">{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
+    <h2>{t('sidebar.mostPlayed')}</h2>
+    <span class="track-count">{t('common.trackCount', { count: tracks.length })}</span>
   </div>
 
   {#if isLoading}
-    <div class="empty"><p>Loading...</p></div>
+    <div class="empty"><p>{t('common.loading')}</p></div>
   {:else if tracks.length === 0}
-    <div class="empty"><p>No play history yet. Start listening!</p></div>
+    <div class="empty"><p>{t('browse.noPlayHistory')}</p></div>
   {:else}
     <TrackList
       {tracks}

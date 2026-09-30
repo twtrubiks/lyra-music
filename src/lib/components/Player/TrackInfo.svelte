@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { track }: { track: Track | null } = $props();
 
@@ -30,7 +31,7 @@
   {#if track}
     <div class="cover">
       {#if track.cover_art}
-        <img src={track.cover_art} alt="Cover" />
+        <img src={track.cover_art} alt={t('player.cover')} />
       {:else}
         <div class="no-cover">&#9835;</div>
       {/if}
@@ -55,7 +56,7 @@
     </div>
     <div class="meta">
       <div class="text-scroll">
-        <div class="title">No track playing</div>
+        <div class="title">{t('player.noTrack')}</div>
       </div>
       <div class="text-scroll">
         <div class="artist">&nbsp;</div>

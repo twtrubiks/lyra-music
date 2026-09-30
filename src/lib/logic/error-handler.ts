@@ -1,4 +1,5 @@
 import { pushError } from '$lib/state/errorState.svelte';
+import { t, type ActionKey } from '$lib/i18n/index.svelte';
 import type { FailedFile, ImportResult } from '$lib/types';
 
 /**
@@ -15,27 +16,27 @@ export function warnNonCritical(context: string, err: unknown): void {
  * create/delete playlist, load playlists.
  * Shows a user-visible notification AND logs.
  */
-export function notifyCritical(context: string, err: unknown): void {
+export function notifyCritical(action: ActionKey, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
-  console.error(`[lyra] ${context}: ${message}`);
-  pushError(`${context} failed: ${message}`);
+  console.error(`[lyra] ${action}: ${message}`);
+  pushError(t('error.failed', { context: t(action), message }));
 }
 
 export function notifyImportResult(result: ImportResult): void {
   if (result.failed_files.length > 0) {
     notifyFailedImports(result.failed_files);
   } else if (result.tracks.length === 0) {
-    pushError('未找到任何音樂檔案', 'warn');
+    pushError(t('import.noFiles'), 'warn');
   }
 }
 
 export function notifyFailedImports(failedFiles: FailedFile[]): void {
   if (failedFiles.length === 0) return;
   const count = failedFiles.length;
-  const names = failedFiles
+  const shown = failedFiles
     .slice(0, 3)
     .map((f) => f.file_path.split('/').pop() || f.file_path)
     .join(', ');
-  const suffix = count > 3 ? ` ...等 ${count - 3} 個檔案` : '';
-  pushError(`${count} 個檔案無法匯入: ${names}${suffix}`, 'warn', 8000);
+  const names = count > 3 ? `${shown} ${t('import.andMore', { count: count - 3 })}` : shown;
+  pushError(t('import.failed', { count, names }), 'warn', 8000);
 }

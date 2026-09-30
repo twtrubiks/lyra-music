@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import * as libraryApi from '$lib/api/library';
   import { notifyCritical } from '$lib/logic/error-handler';
   import type { WatchedFolder } from '$lib/types';
@@ -13,7 +14,7 @@
     try {
       folders = await libraryApi.getWatchedFolders();
     } catch (err) {
-      notifyCritical('Load watched folders', err);
+      notifyCritical('action.loadWatchedFolders', err);
     } finally {
       loading = false;
     }
@@ -25,7 +26,7 @@
       await libraryApi.stopWatching(path);
       folders = folders.filter((f) => f.path !== path);
     } catch (err) {
-      notifyCritical('Stop watching folder', err);
+      notifyCritical('action.stopWatching', err);
     } finally {
       removingPath = null;
     }
@@ -51,10 +52,10 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={handleBackdropClick}>
-  <div class="dialog" role="dialog" aria-label="Watched folders">
+  <div class="dialog" role="dialog" aria-label={t('folders.title')}>
     <div class="dialog-header">
-      <h3>監控資料夾</h3>
-      <button class="close-btn" onclick={onclose} aria-label="Close">
+      <h3>{t('folders.title')}</h3>
+      <button class="close-btn" onclick={onclose} aria-label={t('common.close')}>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path
             d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
@@ -65,15 +66,15 @@
 
     <div class="dialog-body">
       {#if loading}
-        <p class="hint">載入中...</p>
+        <p class="hint">{t('common.loading')}</p>
       {:else if folders.length === 0}
-        <p class="hint">尚未加入任何監控資料夾</p>
+        <p class="hint">{t('folders.empty')}</p>
       {:else}
         <ul class="folder-list">
           {#each folders as folder (folder.path)}
             <li class="folder-row">
               {#if !folder.exists}
-                <span class="missing-icon" title="資料夾不存在（可能已刪除或未掛載）">
+                <span class="missing-icon" title={t('folders.missing')}>
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                     <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                   </svg>
@@ -87,13 +88,13 @@
                 onclick={() => removeFolder(folder.path)}
                 disabled={removingPath === folder.path}
               >
-                移除
+                {t('common.remove')}
               </button>
             </li>
           {/each}
         </ul>
       {/if}
-      <p class="note">移除只會停止監控該資料夾，已匯入的音樂不受影響。</p>
+      <p class="note">{t('folders.note')}</p>
     </div>
   </div>
 </div>

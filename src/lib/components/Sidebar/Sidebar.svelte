@@ -4,6 +4,7 @@
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { t, getLocale, toggleLocale, LOCALE_NAMES } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
   let { onshowshortcuts }: { onshowshortcuts?: () => void } = $props();
@@ -61,7 +62,7 @@
       const lists = await playlistApi.getAllPlaylists();
       playlistState.playlists = lists;
     } catch (err) {
-      notifyCritical('Create playlist', err);
+      notifyCritical('action.createPlaylist', err);
     }
     newPlaylistName = '';
     showNewInput = false;
@@ -94,7 +95,7 @@
       const lists = await playlistApi.getAllPlaylists();
       playlistState.playlists = lists;
     } catch (err) {
-      notifyCritical('Rename playlist', err);
+      notifyCritical('action.renamePlaylist', err);
     }
     cancelRename();
   }
@@ -121,7 +122,7 @@
         playlistState.activeView = { kind: 'library' };
       }
     } catch (err) {
-      notifyCritical('Delete playlist', err);
+      notifyCritical('action.deletePlaylist', err);
     }
   }
 
@@ -239,7 +240,7 @@
           const lists = await playlistApi.getAllPlaylists();
           playlistState.playlists = lists;
         } catch (err) {
-          notifyCritical('Load playlists', err);
+          notifyCritical('action.loadPlaylists', err);
         }
       })();
     });
@@ -322,7 +323,7 @@
           d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"
         />
       </svg>
-      All Music
+      {t('sidebar.allMusic')}
     </button>
     <button
       class="nav-item"
@@ -335,7 +336,7 @@
           d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
         />
       </svg>
-      Artists
+      {t('sidebar.artists')}
     </button>
     <button
       class="nav-item"
@@ -348,7 +349,7 @@
           d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"
         />
       </svg>
-      Albums
+      {t('sidebar.albums')}
     </button>
     <button
       class="nav-item"
@@ -358,24 +359,26 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
         <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
       </svg>
-      Most Played
+      {t('sidebar.mostPlayed')}
     </button>
   </nav>
 
   <div class="section-label">
-    <span>Playlists</span>
-    <button class="add-btn" onclick={() => (showNewInput = true)} title="New playlist">+</button>
+    <span>{t('sidebar.playlists')}</span>
+    <button class="add-btn" onclick={() => (showNewInput = true)} title={t('sidebar.newPlaylist')}
+      >+</button
+    >
   </div>
 
   {#if showNewInput}
     <div class="new-playlist-input">
       <input
         type="text"
-        placeholder="Playlist name..."
+        placeholder={t('sidebar.playlistNamePlaceholder')}
         bind:value={newPlaylistName}
         onkeydown={handleKeydown}
       />
-      <button class="confirm-btn" onclick={createNewPlaylist}>OK</button>
+      <button class="confirm-btn" onclick={createNewPlaylist}>{t('sidebar.confirm')}</button>
     </div>
   {/if}
 
@@ -418,7 +421,7 @@
         <button
           class="delete-btn"
           onclick={() => handleDeletePlaylist(pl.id)}
-          title="Delete playlist"
+          title={t('sidebar.deletePlaylist')}
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
             <path
@@ -438,7 +441,7 @@
         role="menuitem"
         onclick={handleMenuMoveUp}
       >
-        ▲ 上移 <span class="shortcut">Ctrl+Shift+↑</span>
+        ▲ {t('common.moveUp')} <span class="shortcut">Ctrl+Shift+↑</span>
       </button>
       <button
         class="menu-item"
@@ -446,12 +449,14 @@
         role="menuitem"
         onclick={handleMenuMoveDown}
       >
-        ▼ 下移 <span class="shortcut">Ctrl+Shift+↓</span>
+        ▼ {t('common.moveDown')} <span class="shortcut">Ctrl+Shift+↓</span>
       </button>
       <div class="menu-divider"></div>
-      <button class="menu-item" role="menuitem" onclick={handleMenuRename}>重新命名</button>
+      <button class="menu-item" role="menuitem" onclick={handleMenuRename}
+        >{t('sidebar.rename')}</button
+      >
       <button class="menu-item menu-item-danger" role="menuitem" onclick={handleMenuDelete}
-        >刪除</button
+        >{t('sidebar.delete')}</button
       >
     </div>
   {/if}
@@ -464,9 +469,17 @@
             d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"
           />
         </svg>
-        快捷鍵
+        {t('sidebar.shortcuts')}
       </button>
     {/if}
+    <button class="shortcuts-btn" onclick={toggleLocale} title={t('language.switch')}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path
+          d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95a15.65 15.65 0 00-1.38-3.56A8.03 8.03 0 0118.92 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.987 7.987 0 015.08 16zm2.95-8H5.08a7.987 7.987 0 014.33-3.56A15.65 15.65 0 008.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 01-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"
+        />
+      </svg>
+      {LOCALE_NAMES[getLocale()]}
+    </button>
     <FolderPicker />
   </div>
 </aside>

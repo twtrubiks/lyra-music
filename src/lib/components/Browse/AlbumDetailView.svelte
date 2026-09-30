@@ -11,6 +11,7 @@
   import { optimisticRemove, optimisticTrash } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { albumName, artistName }: { albumName: string; artistName: string } = $props();
 
@@ -56,7 +57,7 @@
       propertiesDetails = await libraryApi.getTrackDetails(track.id);
       showProperties = true;
     } catch (err) {
-      notifyCritical('Get track details', err);
+      notifyCritical('action.getTrackDetails', err);
     }
   }
 
@@ -81,7 +82,7 @@
         player.currentTrack = updated;
       }
     } catch (err) {
-      notifyCritical('Update metadata', err);
+      notifyCritical('action.updateMetadata', err);
     }
   }
 
@@ -92,7 +93,7 @@
         coverArt = await libraryApi.getTrackCover(tracks[0].id);
       }
     } catch (err) {
-      notifyCritical('Load album tracks', err);
+      notifyCritical('action.loadAlbumTracks', err);
     } finally {
       isLoading = false;
     }
@@ -115,7 +116,7 @@
 
 <div class="album-detail-view">
   <div class="header">
-    <button class="back-btn" onclick={goBack} aria-label="Back to albums">
+    <button class="back-btn" onclick={goBack} aria-label={t('browse.backToAlbums')}>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
         <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
       </svg>
@@ -137,13 +138,13 @@
       <div class="album-meta">
         <h2>{albumName}</h2>
         <span class="album-artist">{artistName}</span>
-        <span class="album-count">{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
+        <span class="album-count">{t('common.trackCount', { count: tracks.length })}</span>
       </div>
     </div>
   </div>
 
   {#if isLoading}
-    <div class="empty"><p>Loading...</p></div>
+    <div class="empty"><p>{t('common.loading')}</p></div>
   {:else}
     <TrackList
       {tracks}

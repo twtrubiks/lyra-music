@@ -1,9 +1,10 @@
 <script lang="ts">
   import { getShortcutCategories } from '$lib/logic/shortcut-data';
+  import { t } from '$lib/i18n/index.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 
-  const categories = getShortcutCategories();
+  const categories = $derived(getShortcutCategories());
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -23,10 +24,10 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={handleBackdropClick}>
-  <div class="dialog" role="dialog" aria-label="Keyboard shortcuts">
+  <div class="dialog" role="dialog" aria-label={t('shortcuts.title')}>
     <div class="dialog-header">
-      <h3>快捷鍵說明</h3>
-      <button class="close-btn" onclick={onclose} aria-label="Close">
+      <h3>{t('shortcuts.title')}</h3>
+      <button class="close-btn" onclick={onclose} aria-label={t('common.close')}>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path
             d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"

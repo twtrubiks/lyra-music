@@ -53,7 +53,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
 | Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
 | Online Lyrics | ureq 3 (rustls) | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar |
-| Testing | Vitest + cargo test | 22 frontend test files, 19 backend integration tests |
+| Testing | Vitest + cargo test | 25 frontend test files, 20 backend integration tests |
 
 ## Key Features
 
@@ -75,6 +75,7 @@ Other features:
 - Column header sorting (preferences persisted), play count tracking (Most Played ranking view)
 - Recursive music library scanning with automatic metadata reading and cover art caching
 - Playback modes (loop/repeat-one/shuffle), instant search filtering, multi-select operations, context menu, drag-and-drop import
+- Traditional Chinese / English interface (follows the system locale by default, switchable from the sidebar)
 
 ## Lyrics
 
@@ -123,9 +124,9 @@ Build artifacts are located in `src-tauri/target/release/bundle/`, supporting de
 ## Testing
 
 ```bash
-npm run test                    # Frontend unit tests (Vitest, 22 test files)
+npm run test                    # Frontend unit tests (Vitest, 25 test files)
 npm run check                   # Type checking
-cd src-tauri && cargo test      # Backend integration tests (19 test files, audio tests skipped by default)
+cd src-tauri && cargo test      # Backend integration tests (20 test files, audio tests skipped by default)
 cd src-tauri && cargo test --features audio-tests  # With audio tests (requires audio device)
 npm run quality                 # Code quality checks (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -174,6 +175,7 @@ src/                              # Frontend (Svelte 5 + TypeScript)
     components/                   # UI components (Player, Library, Browse, Playlist, Sidebar, Settings)
     state/                        # Reactive state management (Svelte 5 runes)
     logic/                        # Pure function logic (playback modes, shortcuts, formatting, selection, sorting)
+    i18n/                         # UI translations (typed dictionaries, Traditional Chinese + English)
     types/                        # TypeScript type definitions
 src-tauri/                        # Backend (Rust)
   src/
@@ -183,5 +185,5 @@ src-tauri/                        # Backend (Rust)
     storage/                      # SQLite database (schema v9, WAL mode)
     commands/                     # Tauri command handlers (42 IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
-  tests/                          # 19 integration tests
+  tests/                          # 20 integration tests
 ```

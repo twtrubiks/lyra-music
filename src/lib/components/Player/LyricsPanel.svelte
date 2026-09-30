@@ -3,6 +3,7 @@
   import { getLyricsState } from '$lib/state/lyricsState.svelte';
   import { searchLyricsOnline } from '$lib/logic/lyrics-actions';
   import { currentLineIndex } from '$lib/logic/lrc';
+  import { t } from '$lib/i18n/index.svelte';
 
   const player = getPlayerState();
 
@@ -65,29 +66,31 @@
 <div
   class="lyrics-panel"
   role="region"
-  aria-label="Lyrics"
+  aria-label={t('player.lyrics')}
   bind:this={container}
   onwheel={pauseAutoScroll}
   ontouchmove={pauseAutoScroll}
   onmousedown={pauseAutoScroll}
 >
   {#if !player.currentTrack}
-    <p class="empty">目前沒有播放曲目</p>
+    <p class="empty">{t('lyrics.noTrack')}</p>
   {:else if loading}
-    <p class="empty">載入歌詞中…</p>
+    <p class="empty">{t('lyrics.loading')}</p>
   {:else if !lyrics}
     <div class="empty not-found">
-      <p>找不到歌詞</p>
+      <p>{t('lyrics.notFound')}</p>
       {#if !searchableOnline}
-        <p class="hint">曲目缺少演出者標籤，無法線上搜尋</p>
+        <p class="hint">{t('lyrics.missingArtist')}</p>
       {:else if onlineStatus === 'searching'}
-        <p class="hint">線上搜尋中…</p>
+        <p class="hint">{t('lyrics.searching')}</p>
       {:else}
-        <button class="search-online" onclick={searchLyricsOnline}>線上搜尋歌詞</button>
+        <button class="search-online" onclick={searchLyricsOnline}
+          >{t('lyrics.searchOnline')}</button
+        >
         {#if onlineStatus === 'notfound'}
-          <p class="hint">線上也找不到這首歌的歌詞</p>
+          <p class="hint">{t('lyrics.onlineNotFound')}</p>
         {:else if onlineStatus === 'error'}
-          <p class="hint">線上搜尋失敗，請檢查網路連線</p>
+          <p class="hint">{t('lyrics.onlineError')}</p>
         {/if}
       {/if}
     </div>
@@ -104,13 +107,15 @@
       {#if searchableOnline}
         <div class="upgrade">
           {#if onlineStatus === 'searching'}
-            <p class="hint">線上搜尋中…</p>
+            <p class="hint">{t('lyrics.searching')}</p>
           {:else}
-            <button class="search-online" onclick={searchLyricsOnline}>搜尋同步歌詞</button>
+            <button class="search-online" onclick={searchLyricsOnline}
+              >{t('lyrics.searchSynced')}</button
+            >
             {#if onlineStatus === 'notfound'}
-              <p class="hint">線上沒有這首歌的同步歌詞</p>
+              <p class="hint">{t('lyrics.onlineSyncedNotFound')}</p>
             {:else if onlineStatus === 'error'}
-              <p class="hint">線上搜尋失敗，請檢查網路連線</p>
+              <p class="hint">{t('lyrics.onlineError')}</p>
             {/if}
           {/if}
         </div>
