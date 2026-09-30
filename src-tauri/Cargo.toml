@@ -1,6 +1,6 @@
 [package]
 name = "lyra-music"
-version = "0.1.6"
+version = "0.1.7"
 description = "Lyra Music - A lightweight Linux desktop music player"
 authors = ["twtrubiks"]
 license = "MIT"
