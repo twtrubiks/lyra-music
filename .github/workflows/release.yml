@@ -44,7 +44,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-24.04
+          # AppImage 不打包 glibc：須在最舊仍支援的 LTS 建置，否則舊系統跑不起來
+          - platform: ubuntu-22.04
             args: ""
             rust-targets: ""
           - platform: macos-latest
