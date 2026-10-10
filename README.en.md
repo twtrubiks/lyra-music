@@ -8,6 +8,7 @@ English | [繁體中文](README.md)
 
 [![CI](https://github.com/twtrubiks/lyra-music/actions/workflows/ci.yml/badge.svg)](https://github.com/twtrubiks/lyra-music/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/twtrubiks/lyra-music)](https://github.com/twtrubiks/lyra-music/releases)
+[![AppImageHub](https://img.shields.io/badge/AppImageHub-listed-blue.svg)](https://appimage.github.io/Lyra_Music/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](https://tauri.app/)
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00.svg)](https://svelte.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
@@ -37,6 +38,8 @@ Lyra's design principles:
 ## Download
 
 Go to **[GitHub Releases](https://github.com/twtrubiks/lyra-music/releases/latest)** to download the latest version (supports AppImage, deb, rpm).
+
+The AppImage is also listed on [AppImageHub](https://appimage.github.io/Lyra_Music/).
 
 ## Technical Architecture
 
