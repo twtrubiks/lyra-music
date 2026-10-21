@@ -65,12 +65,25 @@ describe('loadLyricsForTrack', () => {
     expect(lyricsState.availability).toBe('plain');
   });
 
+  it('請求進行中 loading 為 true', async () => {
+    const d = deferred<string | null>();
+    mockInvoke.mockReturnValue(d.promise);
+    const load = loadLyricsForTrack(1);
+    expect(lyricsState.loading).toBe(true);
+    d.resolve(null);
+    await load;
+    expect(lyricsState.loading).toBe(false);
+  });
+
   it('無歌詞（null）→ availability = none', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockInvoke.mockResolvedValue(null);
     await loadLyricsForTrack(1);
     expect(lyricsState.lyrics).toBeNull();
     expect(lyricsState.availability).toBe('none');
     expect(lyricsState.loading).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled(); // 沒歌詞是正常結果，不是錯誤
+    warnSpy.mockRestore();
   });
 
   it('切歌時重設歌詞與線上搜尋狀態', async () => {
@@ -97,6 +110,25 @@ describe('loadLyricsForTrack', () => {
     await load1;
     expect(lyricsState.availability).toBe('synced'); // 仍是曲目 2 的歌詞
     expect(lyricsState.trackId).toBe(2);
+  });
+
+  it('晚到的失敗不影響目前曲目的載入狀態', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const first = deferred<string | null>();
+    const second = deferred<string | null>();
+    mockInvoke.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    const load1 = loadLyricsForTrack(1);
+    const load2 = loadLyricsForTrack(2);
+    first.reject(new Error('io')); // 曲目 1 的失敗晚到
+    await load1;
+    expect(lyricsState.loading).toBe(true); // 曲目 2 仍在載入
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    second.resolve(SYNCED_LRC);
+    await load2;
+    expect(lyricsState.availability).toBe('synced');
+    warnSpy.mockRestore();
   });
 
   it('讀取失敗 → loading 結束、不拋出', async () => {
@@ -187,5 +219,20 @@ describe('searchLyricsOnline', () => {
     expect(lyricsState.lyrics).toBeNull();
     expect(lyricsState.availability).toBe('none');
     expect(lyricsState.onlineStatus).toBe('idle');
+  });
+
+  it('搜尋期間切歌後失敗 → 不標記 error', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    lyricsState.trackId = 1;
+    const search = deferred<string | null>();
+    mockInvoke.mockReturnValueOnce(search.promise); // fetch_lyrics_online（曲目 1）
+    const p = searchLyricsOnline();
+    mockInvoke.mockResolvedValueOnce(null); // get_track_lyrics（曲目 2）
+    await loadLyricsForTrack(2);
+    search.reject(new Error('network')); // 曲目 1 的搜尋失敗晚到
+    await p;
+    expect(lyricsState.onlineStatus).toBe('idle');
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
