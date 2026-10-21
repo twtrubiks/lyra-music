@@ -1,5 +1,7 @@
 mod common;
 
+use lofty::config::WriteOptions;
+use lofty::tag::{Accessor, Tag, TagExt, TagType};
 use lyra_music_lib::metadata::reader;
 use lyra_music_lib::metadata::writer;
 use lyra_music_lib::models::track::Track;
@@ -271,6 +273,26 @@ fn test_read_cover_art_none_for_wav() {
 fn test_read_cover_art_nonexistent_file() {
     let cover = reader::extract_cover_art_bytes("/nonexistent/file.mp3");
     assert!(cover.is_none());
+}
+
+#[test]
+fn test_write_metadata_updates_existing_non_primary_tag() {
+    // A WAV tagged only with RIFF INFO (its primary type is ID3v2): the edit
+    // must land in that tag and keep the fields it does not touch, instead of
+    // creating a fresh ID3v2 tag that shadows them.
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wav_path = common::create_test_wav(dir.path(), "info_only.wav");
+    let mut info = Tag::new(TagType::RiffInfo);
+    info.set_title("Old Title".to_string());
+    info.set_artist("Info Artist".to_string());
+    info.save_to_path(&wav_path, WriteOptions::default())
+        .unwrap();
+
+    writer::write_metadata(wav_path.to_str().unwrap(), Some("New Title"), None, None).unwrap();
+
+    let track = reader::read_metadata(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(track.title, "New Title");
+    assert_eq!(track.artist, "Info Artist");
 }
 
 #[test]
