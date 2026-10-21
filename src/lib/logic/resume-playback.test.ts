@@ -20,6 +20,7 @@ import {
   startPlayingTrack,
   applyPlayerStateEvent,
   handleTrackRemoved,
+  handleNext,
 } from '$lib/logic/playback-actions';
 import type { PlayerState } from '$lib/types';
 import { getPlayerState } from '$lib/state/playerState.svelte';
@@ -178,6 +179,17 @@ describe('resumePlaylistPlayback', () => {
     expect(player.currentTrack?.id).toBe(tracks[1].id);
     expect(player.positionSecs).toBe(42);
     expect(player.queueSourcePlaylistId).toBe(7);
+  });
+
+  it('re-queues the gapless next track after seeking', async () => {
+    const tracks = createMockTracks(3);
+    mockLastPosition(tracks[1].id, 42);
+
+    await resumePlaylistPlayback(7, tracks);
+
+    // seek can drop the queued next on its reload fallback
+    const cmds = mockInvoke.mock.calls.map(([cmd]) => cmd);
+    expect(cmds.lastIndexOf('queue_next_track')).toBeGreaterThan(cmds.indexOf('seek'));
   });
 
   it('plays the first track from the start when nothing was saved', async () => {
@@ -427,6 +439,27 @@ describe('applyPlayerStateEvent — position saving', () => {
     applyPlayerStateEvent(
       pollEvent({ is_playing: false, current_track_id: tracks[1].id, position_secs: 210 }),
     );
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: false, current_track_id: tracks[1].id, position_secs: 210 }),
+    );
+
+    expect(savedPositions()).toEqual([
+      ['save_playback_position', { playlistId: 9, trackId: tracks[0].id, secs: 0 }],
+    ]);
+  });
+
+  it('a next request past the end keeps the rewound position', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[1], tracks, 9);
+    mockInvoke.mockClear();
+    resetSaveThrottle();
+    applyPlayerStateEvent(
+      pollEvent({ track_ended: true, current_track_id: tracks[1].id, position_secs: 210 }),
+    );
+
+    // Tray menu and keyboard shortcut call handleNext without the player
+    // bar's disabled-button guard
+    await handleNext();
     applyPlayerStateEvent(
       pollEvent({ is_playing: false, current_track_id: tracks[1].id, position_secs: 210 }),
     );

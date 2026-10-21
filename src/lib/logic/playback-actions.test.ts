@@ -1450,6 +1450,17 @@ describe('gapless transition and reconciliation — landing index', () => {
     expect(player.currentTrack?.id).toBe(tracks[2].id);
   });
 
+  it('reconciles from the last track, where no next track is expected', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[2], tracks);
+
+    applyPlayerStateEvent(pollEvent({ is_playing: true, current_track_id: tracks[0].id }));
+    await Promise.resolve();
+
+    expect(player.currentIndex).toBe(0);
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
   it('lands on index 0 when repeat-all wraps to the queue start', async () => {
     const tracks = createMockTracks(3);
     await startPlayingTrack(tracks[2], tracks);
@@ -1523,6 +1534,27 @@ describe('handleTracksRemovedBatch — repeat modes', () => {
     player.repeatMode = 'repeat-one';
 
     await handleTrackRemoved(tracks[2].id);
+
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+  });
+
+  it('repeat off: removing the current track and everything after it stops', async () => {
+    const tracks = createMockTracks(4);
+    playing(tracks, 2);
+
+    await handleTracksRemovedBatch(new Set([tracks[2].id, tracks[3].id]));
+
+    expect(player.currentTrack).toBeNull();
+    expect(player.isPlaying).toBe(false);
+    expect(mockInvoke).not.toHaveBeenCalledWith('play_track', expect.anything());
+  });
+
+  it('repeat-one: removing the current track and everything after it wraps to the first', async () => {
+    const tracks = createMockTracks(4);
+    playing(tracks, 2);
+    player.repeatMode = 'repeat-one';
+
+    await handleTracksRemovedBatch(new Set([tracks[2].id, tracks[3].id]));
 
     expect(player.currentTrack?.id).toBe(tracks[0].id);
   });
