@@ -190,6 +190,27 @@ fn test_file_size_bytes_stored_and_retrieved() {
     assert_eq!(searched[0].file_size_bytes, 5_242_880);
 }
 
+#[test]
+fn test_update_track_metadata() {
+    let conn = common::create_test_db();
+    let id1 = library_repo::insert_track(&conn, &common::create_test_track(1)).unwrap();
+    let id2 = library_repo::insert_track(&conn, &common::create_test_track(2)).unwrap();
+
+    library_repo::update_track_metadata(&conn, id1, "New Title", "New Artist", "New Album")
+        .unwrap();
+
+    let updated = library_repo::get_track_by_id(&conn, id1).unwrap().unwrap();
+    assert_eq!(updated.title, "New Title");
+    assert_eq!(updated.artist, "New Artist");
+    assert_eq!(updated.album, "New Album");
+
+    // Only the target row changes
+    let other = library_repo::get_track_by_id(&conn, id2).unwrap().unwrap();
+    assert_eq!(other.title, "Test Track 2");
+    assert_eq!(other.artist, "Artist 2");
+    assert_eq!(other.album, "Album 2");
+}
+
 // ============================================================
 // Delete track tests
 // ============================================================
@@ -309,6 +330,25 @@ fn test_create_playlist() {
     assert_eq!(playlists.len(), 1);
     assert_eq!(playlists[0].name, "My Playlist");
     assert!(playlists[0].track_ids.is_empty());
+}
+
+#[test]
+fn test_rename_playlist() {
+    let conn = common::create_test_db();
+    let id = playlist_repo::create_playlist(&conn, "Old Name").unwrap();
+    let other = playlist_repo::create_playlist(&conn, "Other").unwrap();
+
+    playlist_repo::rename_playlist(&conn, id, "New Name").unwrap();
+
+    let playlists = playlist_repo::get_all_playlists(&conn).unwrap();
+    let name_of = |pl_id: i64| {
+        playlists
+            .iter()
+            .find(|p| p.id == pl_id)
+            .map(|p| p.name.as_str())
+    };
+    assert_eq!(name_of(id), Some("New Name"));
+    assert_eq!(name_of(other), Some("Other"));
 }
 
 #[test]
@@ -990,6 +1030,49 @@ fn test_get_tracks_by_album_multiple_tracks() {
         assert_eq!(track.album, "Big Album");
         assert_eq!(track.artist, "The Band");
     }
+}
+
+// ============================================================
+// Artist browse tests
+// ============================================================
+
+#[test]
+fn test_get_all_artists_counts_tracks_sorted_by_name() {
+    let conn = common::create_test_db();
+    for (i, artist) in [(1, "Beta"), (2, "Alpha"), (3, "Beta")] {
+        let mut t = common::create_test_track(i);
+        t.artist = artist.to_string();
+        library_repo::insert_track(&conn, &t).unwrap();
+    }
+
+    let artists = library_repo::get_all_artists(&conn).unwrap();
+    let got: Vec<(&str, i64)> = artists
+        .iter()
+        .map(|a| (a.name.as_str(), a.track_count))
+        .collect();
+    assert_eq!(got, vec![("Alpha", 1), ("Beta", 2)]);
+}
+
+#[test]
+fn test_get_tracks_by_artist_filters_and_orders_by_album_then_title() {
+    let conn = common::create_test_db();
+    let mut ids = Vec::new();
+    for (i, artist, album, title) in [
+        (1, "Me", "B Album", "Song 1"),
+        (2, "Me", "A Album", "Song 2"),
+        (3, "Me", "A Album", "Song 1"),
+        (4, "Someone Else", "A Album", "Song 0"),
+    ] {
+        let mut t = common::create_test_track(i);
+        t.artist = artist.to_string();
+        t.album = album.to_string();
+        t.title = title.to_string();
+        ids.push(library_repo::insert_track(&conn, &t).unwrap());
+    }
+
+    let tracks = library_repo::get_tracks_by_artist(&conn, "Me").unwrap();
+    let got: Vec<i64> = tracks.iter().map(|t| t.id).collect();
+    assert_eq!(got, vec![ids[2], ids[1], ids[0]]);
 }
 
 // ============================================================

@@ -429,6 +429,34 @@ mod tests {
     }
 
     #[test]
+    fn search_accepts_candidate_exactly_at_duration_cap() {
+        // The cap is inclusive: 15s off is still within tolerance.
+        let body = format!(
+            "[{}]",
+            search_item("周杰倫", "回到過去", 284.0, "[00:01.00] at cap", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 299.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] at cap");
+    }
+
+    #[test]
+    fn search_keeps_first_candidate_on_full_tie() {
+        // Unknown local duration makes every candidate equally close; with
+        // the same lyrics kind too, list order decides — first one wins.
+        let body = format!(
+            "[{},{}]",
+            search_item("周杰倫", "回到過去", 231.0, "[00:01.00] first", ""),
+            search_item("周杰倫", "回到過去", 305.0, "[00:01.00] second", ""),
+        );
+        let got = pick_search_match(&body, "周杰倫", "回到過去", 0.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(text(got), "[00:01.00] first");
+    }
+
+    #[test]
     fn search_rejects_candidate_without_duration_when_local_known() {
         let body = r#"[{"artistName":"周杰倫","trackName":"回到過去","duration":null,"syncedLyrics":"[00:01.00] hi","plainLyrics":null}]"#;
         assert!(
