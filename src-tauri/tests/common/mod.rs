@@ -200,14 +200,30 @@ pub fn create_test_wav_with_cover(
     name: &str,
     image: &[u8],
 ) -> std::path::PathBuf {
+    create_test_wav_with_pictures(dir, name, &[(3, "image/jpeg", image)])
+}
+
+/// Create a test WAV with one ID3v2.4 APIC frame per `(picture type, MIME, image)`,
+/// in the given order. Picture types follow ID3: 3 = front cover, 4 = back cover.
+pub fn create_test_wav_with_pictures(
+    dir: &std::path::Path,
+    name: &str,
+    pictures: &[(u8, &str, &[u8])],
+) -> std::path::PathBuf {
     let path = create_test_wav(dir, name);
 
-    let mut body = vec![3u8]; // text encoding: UTF-8
-    body.extend_from_slice(b"image/jpeg\0"); // MIME type, terminated
-    body.push(3); // picture type: cover (front)
-    body.push(0); // empty description, terminated
-    body.extend_from_slice(image);
-    let frames = raw_frame(b"APIC", &body);
+    let mut frames = Vec::new();
+    for (i, (pic_type, mime, image)) in pictures.iter().enumerate() {
+        let mut body = vec![3u8]; // text encoding: UTF-8
+        body.extend_from_slice(mime.as_bytes());
+        body.push(0); // MIME type terminator
+        body.push(*pic_type);
+        // ID3 allows several APIC frames only with distinct descriptions
+        body.extend_from_slice(format!("pic{i}").as_bytes());
+        body.push(0); // description terminator
+        body.extend_from_slice(image);
+        frames.extend(raw_frame(b"APIC", &body));
+    }
 
     append_id3_chunk(&path, &frames);
     path

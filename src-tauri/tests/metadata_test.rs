@@ -274,6 +274,81 @@ fn test_read_cover_art_nonexistent_file() {
 }
 
 #[test]
+fn test_extract_cover_art_prefers_front_cover() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    // The back cover comes first in tag order
+    let wav_path = common::create_test_wav_with_pictures(
+        dir.path(),
+        "two_pictures.wav",
+        &[(4, "image/png", b"back"), (3, "image/jpeg", b"front")],
+    );
+
+    let (data, mime) = reader::extract_cover_art_bytes(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(data, b"front");
+    assert_eq!(mime, "image/jpeg");
+}
+
+#[test]
+fn test_extract_cover_art_falls_back_to_first_picture() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wav_path = common::create_test_wav_with_pictures(
+        dir.path(),
+        "back_only.wav",
+        &[(4, "image/png", b"back")],
+    );
+
+    let (data, mime) = reader::extract_cover_art_bytes(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(data, b"back");
+    assert_eq!(mime, "image/png");
+}
+
+#[test]
+fn test_save_cover_art_picks_extension_from_mime() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    for (id, mime, ext) in [
+        (1, "image/png", "png"),
+        (2, "image/gif", "gif"),
+        (3, "image/bmp", "bmp"),
+        (4, "image/webp", "webp"),
+        (5, "image/jpeg", "jpg"),
+        (6, "application/octet-stream", "jpg"),
+    ] {
+        let saved = reader::save_cover_art(dir.path(), id, b"img", mime).unwrap();
+        assert_eq!(
+            std::path::Path::new(&saved),
+            dir.path().join("covers").join(format!("{id}.{ext}")),
+            "{mime}"
+        );
+        assert_eq!(std::fs::read(&saved).unwrap(), b"img");
+    }
+}
+
+#[test]
+fn test_read_cover_art_from_file_builds_data_uri() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    for (ext, mime) in [
+        ("png", "image/png"),
+        ("gif", "image/gif"),
+        ("bmp", "image/bmp"),
+        ("webp", "image/webp"),
+        ("jpg", "image/jpeg"),
+    ] {
+        let path = dir.path().join(format!("cover.{ext}"));
+        std::fs::write(&path, b"img").unwrap();
+        assert_eq!(
+            reader::read_cover_art_from_file(path.to_str().unwrap()),
+            Some(format!("data:{mime};base64,aW1n")), // base64("img")
+            "{ext}"
+        );
+    }
+}
+
+#[test]
+fn test_read_cover_art_from_missing_file_is_none() {
+    assert!(reader::read_cover_art_from_file("/nonexistent/covers/1.jpg").is_none());
+}
+
+#[test]
 fn test_read_track_details_wav_file() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let wav_path = common::create_test_wav(dir.path(), "details_test.wav");
