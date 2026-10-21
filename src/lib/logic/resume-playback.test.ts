@@ -19,6 +19,7 @@ import {
   resumePlaylistPlayback,
   startPlayingTrack,
   applyPlayerStateEvent,
+  handleTrackRemoved,
 } from '$lib/logic/playback-actions';
 import type { PlayerState } from '$lib/types';
 import { getPlayerState } from '$lib/state/playerState.svelte';
@@ -333,6 +334,35 @@ describe('applyPlayerStateEvent — position saving', () => {
     expect(savedPositions()).toEqual([]);
   });
 
+  it('does not save from a paused event describing another track', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[1], tracks, 9);
+    mockInvoke.mockClear();
+    resetSaveThrottle();
+
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: false, current_track_id: tracks[0].id, position_secs: 200 }),
+    );
+
+    expect(savedPositions()).toEqual([]);
+  });
+
+  it('neither saves nor throws once its playing track was removed', async () => {
+    const tracks = createMockTracks(1);
+    await startPlayingTrack(tracks[0], tracks, 9);
+    await handleTrackRemoved(tracks[0].id); // stops playback, queue stays bound
+    mockInvoke.mockClear();
+    resetSaveThrottle();
+
+    // The backend may still report the removed track for a poll or two
+    expect(() =>
+      applyPlayerStateEvent(
+        pollEvent({ is_playing: false, current_track_id: tracks[0].id, position_secs: 12 }),
+      ),
+    ).not.toThrow();
+    expect(savedPositions()).toEqual([]);
+  });
+
   it('rewinds the saved position to the queue start when playback finishes', async () => {
     const tracks = createMockTracks(2);
     await startPlayingTrack(tracks[1], tracks, 9);
@@ -347,6 +377,38 @@ describe('applyPlayerStateEvent — position saving', () => {
       ]);
     });
     expect(player.isPlaying).toBe(false);
+  });
+
+  it('rewinds a single-track playlist even right after a position save', async () => {
+    const tracks = createMockTracks(1);
+    await startPlayingTrack(tracks[0], tracks, 9);
+    applyPlayerStateEvent(
+      pollEvent({ is_playing: true, current_track_id: tracks[0].id, position_secs: 230 }),
+    );
+    mockInvoke.mockClear();
+
+    // Same track, inside the throttle window of the save above: the rewind
+    // must bypass the while-playing throttle.
+    applyPlayerStateEvent(
+      pollEvent({ track_ended: true, current_track_id: tracks[0].id, position_secs: 240 }),
+    );
+
+    expect(savedPositions()).toEqual([
+      ['save_playback_position', { playlistId: 9, trackId: tracks[0].id, secs: 0 }],
+    ]);
+  });
+
+  it('does not rewind when the finished queue is not bound to a playlist', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[1], tracks);
+    mockInvoke.mockClear();
+    resetSaveThrottle();
+
+    applyPlayerStateEvent(pollEvent({ track_ended: true, current_track_id: tracks[1].id }));
+    await Promise.resolve();
+
+    expect(player.isPlaying).toBe(false);
+    expect(savedPositions()).toEqual([]);
   });
 
   it('keeps the rewound position across idle polls after playback finishes', async () => {
