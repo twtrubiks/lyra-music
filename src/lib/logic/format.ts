@@ -88,7 +88,7 @@ export function formatSampleRate(hz: number): string {
   if (hz < 1000) return `${hz} Hz`;
   const khz = hz / 1000;
   const rounded = Math.round(khz * 10) / 10;
-  return rounded % 1 === 0 ? `${rounded} kHz` : `${rounded} kHz`;
+  return `${rounded} kHz`;
 }
 
 /**
