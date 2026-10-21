@@ -72,6 +72,10 @@ describe('resolveResumeTarget', () => {
     expect(resolveResumeTarget(tracks, tracks[1].id, 42.5)).toEqual({ index: 1, secs: 42.5 });
   });
 
+  it('resolves a saved position on the first track', () => {
+    expect(resolveResumeTarget(tracks, tracks[0].id, 42)).toEqual({ index: 0, secs: 42 });
+  });
+
   it('falls back to the track start when seconds is null', () => {
     expect(resolveResumeTarget(tracks, tracks[1].id, null)).toEqual({ index: 1, secs: 0 });
   });
@@ -109,6 +113,13 @@ describe('maybeSavePlaybackPosition', () => {
 
     expect(savedPositions()).toHaveLength(2);
     expect(savedPositions()[1][1]).toEqual({ playlistId: 5, trackId: 1, secs: 16 });
+  });
+
+  it('saves again exactly when the interval has elapsed', () => {
+    maybeSavePlaybackPosition(5, 1, 10, true, 1_000);
+    maybeSavePlaybackPosition(5, 1, 15, true, 6_000);
+
+    expect(savedPositions()).toHaveLength(2);
   });
 
   it('saves immediately when the track changes', () => {
