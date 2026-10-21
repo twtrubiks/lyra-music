@@ -105,6 +105,11 @@ describe('parseLyrics — synced LRC', () => {
     expect(result?.lines[0]).toEqual({ timeSecs: 10, text: 'Hello world' });
   });
 
+  it('leaves no stray spaces where edge word timestamps were stripped', () => {
+    const result = parseLyrics('[00:10.00]<00:10.00> Hello <00:11.00>');
+    expect(result?.lines[0]).toEqual({ timeSecs: 10, text: 'Hello' });
+  });
+
   it('strips word timestamps without a fraction', () => {
     const result = parseLyrics('[00:10.00]<00:10>Hello <00:11>world');
     expect(result?.lines[0]).toEqual({ timeSecs: 10, text: 'Hello world' });
