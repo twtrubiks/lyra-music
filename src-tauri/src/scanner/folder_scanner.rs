@@ -25,7 +25,8 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
     let mut audio_files = Vec::new();
     let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
 
-    for entry_result in WalkDir::new(root).follow_links(true) {
+    let mut walker = WalkDir::new(root).follow_links(true).into_iter();
+    while let Some(entry_result) = walker.next() {
         let entry = match entry_result {
             Ok(e) => e,
             Err(e) => {
@@ -44,6 +45,9 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
                             "Warning: skipping already-visited directory (possible symlink cycle): {}",
                             path.display()
                         );
+                        // `continue` alone would still descend into it — the
+                        // same files would be imported again under this path.
+                        walker.skip_current_dir();
                         continue;
                     }
                 }

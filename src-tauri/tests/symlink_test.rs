@@ -207,9 +207,12 @@ fn test_scan_folder_valid_symlink_no_cycle() {
     assert!(result.is_ok());
 
     let files = result.unwrap();
-    // The linked mp3 should be found (via the original path or the symlink)
-    assert!(
-        !files.is_empty(),
-        "should find audio files through valid symlinks"
+    // The linked mp3 should be found exactly once — via the original path or
+    // the symlink, not both (that would import the same file twice).
+    assert_eq!(
+        files.len(),
+        1,
+        "a directory reachable via a symlink must be scanned once: {files:?}"
     );
+    assert!(files[0].ends_with("linked_song.mp3"));
 }
