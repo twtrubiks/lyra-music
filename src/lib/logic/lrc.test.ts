@@ -85,6 +85,16 @@ describe('parseLyrics — synced LRC', () => {
     expect((result?.lines[0] as LrcLine).timeSecs).toBeCloseTo(10.5);
   });
 
+  it('accepts an unsigned [offset:] with inner spaces', () => {
+    const result = parseLyrics('[offset: 500 ]\n[00:10.00]Line');
+    expect((result?.lines[0] as LrcLine).timeSecs).toBeCloseTo(9.5);
+  });
+
+  it('only honours an [offset:] tag that stands on its own line', () => {
+    const result = parseLyrics('note [offset:+5000]\n[offset:+3000] note\n[00:10.00]Line');
+    expect((result?.lines[0] as LrcLine).timeSecs).toBe(10);
+  });
+
   it('clamps offset-shifted times at zero', () => {
     const result = parseLyrics('[offset:+2000]\n[00:01.00]Line');
     expect((result?.lines[0] as LrcLine).timeSecs).toBe(0);
@@ -93,6 +103,20 @@ describe('parseLyrics — synced LRC', () => {
   it('strips enhanced LRC word timestamps from text', () => {
     const result = parseLyrics('[00:10.00]<00:10.00>Hello <00:11.00>world');
     expect(result?.lines[0]).toEqual({ timeSecs: 10, text: 'Hello world' });
+  });
+
+  it('strips word timestamps without a fraction', () => {
+    const result = parseLyrics('[00:10.00]<00:10>Hello <00:11>world');
+    expect(result?.lines[0]).toEqual({ timeSecs: 10, text: 'Hello world' });
+  });
+
+  it('accepts indented timed lines and normalises whitespace in the text', () => {
+    const result = parseLyrics('  [00:10.00]  Hello   world  ');
+    expect(result?.lines).toEqual([{ timeSecs: 10, text: 'Hello world' }]);
+  });
+
+  it('ignores time tags that do not start the line', () => {
+    expect(parseLyrics('Chorus [00:10.00]')?.synced).toBe(false);
   });
 
   it('keeps empty timed lines (instrumental gaps)', () => {
@@ -125,6 +149,10 @@ describe('parseLyrics — unsynced fallback', () => {
       synced: false,
       lines: ['Just some lyrics', 'Second line'],
     });
+  });
+
+  it('keeps leading indentation but drops trailing spaces in plain lines', () => {
+    expect(parseLyrics('  indented  \nnext')?.lines).toEqual(['  indented', 'next']);
   });
 
   it('treats metadata-only LRC (no timed lines) as unsynced text', () => {

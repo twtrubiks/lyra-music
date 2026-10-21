@@ -307,6 +307,83 @@ describe('optimisticTrash', () => {
     });
   });
 
+  it('notifies with the first failure reason on partial failure', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'trash_tracks') {
+        return { succeeded_ids: [1], failed: [{ id: 2, error: 'read-only volume' }] };
+      }
+    });
+    const { getErrorState } = await import('$lib/state/errorState.svelte');
+
+    await optimisticTrash([tracks[0], tracks[1]]);
+
+    await vi.waitFor(() => {
+      expect(getErrorState().errors.some((e) => e.message.includes('read-only volume'))).toBe(true);
+    });
+  });
+
+  it('does not call onComplete when every track failed', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'trash_tracks') {
+        return {
+          succeeded_ids: [],
+          failed: [
+            { id: 1, error: 'disk error' },
+            { id: 2, error: 'disk error' },
+          ],
+        };
+      }
+    });
+
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+    await optimisticTrash([tracks[0], tracks[1]], { onComplete });
+
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(2); // rollback happened
+    });
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('ignores local-track callbacks unless both are given (partial failure)', async () => {
+    const tracks = createMockTracks(3);
+    library.allTracks = [...tracks];
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'trash_tracks') {
+        return { succeeded_ids: [1, 3], failed: [{ id: 2, error: 'disk error' }] };
+      }
+    });
+    const getLocalTracks = vi.fn(() => tracks);
+
+    await optimisticTrash([...tracks], { getLocalTracks });
+
+    await vi.waitFor(() => {
+      expect(library.allTracks.map((t) => t.id)).toEqual([2]);
+    });
+    expect(getLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it('ignores local-track callbacks unless both are given (total failure)', async () => {
+    const tracks = createMockTracks(2);
+    library.allTracks = [...tracks];
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'trash_tracks') {
+        throw new Error('disk error');
+      }
+    });
+    const getLocalTracks = vi.fn(() => tracks);
+
+    await optimisticTrash([tracks[0]], { getLocalTracks });
+
+    await vi.waitFor(() => {
+      expect(library.allTracks).toHaveLength(2); // rollback happened
+    });
+    expect(getLocalTracks).not.toHaveBeenCalled();
+  });
+
   it('calls onComplete on partial failure when some tracks succeed', async () => {
     const tracks = createMockTracks(2);
     library.allTracks = [...tracks];
@@ -562,6 +639,25 @@ describe('optimisticPlaylistRemove', () => {
 
     // All tracks restored because batch operation is atomic
     expect(playlistState.playlists[0].track_ids).toEqual([1, 2, 3]);
+  });
+
+  it('calls onComplete after a successful removal', async () => {
+    playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+
+    await optimisticPlaylistRemove(10, createMockTracks(1), { onComplete });
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onComplete when the backend removal fails', async () => {
+    playlistState.playlists = [createMockPlaylist({ id: 10, name: 'Test PL', track_ids: [1, 2] })];
+    mockInvoke.mockRejectedValue(new Error('db error'));
+    const onComplete = vi.fn().mockResolvedValue(undefined);
+
+    await optimisticPlaylistRemove(10, createMockTracks(1), { onComplete });
+
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it('does not affect other playlists', async () => {

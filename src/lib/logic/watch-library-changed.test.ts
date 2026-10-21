@@ -30,6 +30,8 @@ describe('watchLibraryChanged', () => {
     await listenPromise;
 
     expect(mockListen).toHaveBeenCalledWith('library-changed', expect.any(Function));
+    // The subscription stays alive until cleanup runs
+    expect(mockUnlisten).not.toHaveBeenCalled();
 
     listenCallback!();
 
