@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockInvoke = vi.fn();
 
@@ -7,6 +7,21 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import {
+  scanFolder,
+  getAllTracks,
+  getTrackCover,
+  searchTracks,
+  removeTrack,
+  trashTrack,
+  trashTracks,
+  removeTracks,
+  getTrackDetails,
+  importPaths,
+  updateTrackMetadata,
+  getAllArtists,
+  getTracksByArtist,
+  startWatching,
+  getMostPlayedTracks,
   getTracksByAlbum,
   getAllAlbums,
   getTrackLyrics,
@@ -14,6 +29,54 @@ import {
   getWatchedFolders,
   stopWatching,
 } from './library';
+
+// Command names and argument keys must match the Rust #[tauri::command]
+// handlers (camelCase keys map to snake_case params) — a typo only fails at
+// runtime, so pin every wrapper's IPC call.
+describe('IPC command contract', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    ['scanFolder', () => scanFolder('/music'), ['scan_folder', { folderPath: '/music' }]],
+    ['getAllTracks', () => getAllTracks(), ['get_all_tracks']],
+    ['getTrackCover', () => getTrackCover(7), ['get_track_cover', { id: 7 }]],
+    ['searchTracks', () => searchTracks('abc'), ['search_tracks', { query: 'abc' }]],
+    ['removeTrack', () => removeTrack(7), ['remove_track', { id: 7 }]],
+    ['trashTrack', () => trashTrack(7), ['trash_track', { id: 7 }]],
+    ['trashTracks', () => trashTracks([1, 2]), ['trash_tracks', { ids: [1, 2] }]],
+    ['removeTracks', () => removeTracks([1, 2]), ['remove_tracks', { ids: [1, 2] }]],
+    ['getTrackDetails', () => getTrackDetails(7), ['get_track_details', { id: 7 }]],
+    ['importPaths', () => importPaths(['/a.mp3']), ['import_paths', { paths: ['/a.mp3'] }]],
+    [
+      'updateTrackMetadata',
+      () => updateTrackMetadata(7, 'T', 'Ar', 'Al'),
+      ['update_track_metadata', { id: 7, title: 'T', artist: 'Ar', album: 'Al' }],
+    ],
+    ['getAllArtists', () => getAllArtists(), ['get_all_artists']],
+    [
+      'getTracksByArtist',
+      () => getTracksByArtist('Ar'),
+      ['get_tracks_by_artist', { artist: 'Ar' }],
+    ],
+    ['startWatching', () => startWatching('/music'), ['start_watching', { folder: '/music' }]],
+    [
+      'getMostPlayedTracks (default limit)',
+      () => getMostPlayedTracks(),
+      ['get_most_played_tracks', { limit: 50 }],
+    ],
+    [
+      'getMostPlayedTracks (explicit limit)',
+      () => getMostPlayedTracks(10),
+      ['get_most_played_tracks', { limit: 10 }],
+    ],
+  ] as const)('%s', async (_, call, expected) => {
+    await call();
+    expect(mockInvoke).toHaveBeenCalledExactlyOnceWith(...expected);
+  });
+});
 
 describe('getTracksByAlbum', () => {
   it('passes album and artist to invoke', async () => {
