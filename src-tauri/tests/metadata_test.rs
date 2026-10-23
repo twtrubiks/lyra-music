@@ -1,5 +1,7 @@
 mod common;
 
+use lofty::config::WriteOptions;
+use lofty::tag::{Accessor, Tag, TagExt, TagType};
 use lyra_music_lib::metadata::reader;
 use lyra_music_lib::metadata::writer;
 use lyra_music_lib::models::track::Track;
@@ -271,6 +273,101 @@ fn test_read_cover_art_none_for_wav() {
 fn test_read_cover_art_nonexistent_file() {
     let cover = reader::extract_cover_art_bytes("/nonexistent/file.mp3");
     assert!(cover.is_none());
+}
+
+#[test]
+fn test_write_metadata_updates_existing_non_primary_tag() {
+    // A WAV tagged only with RIFF INFO (its primary type is ID3v2): the edit
+    // must land in that tag and keep the fields it does not touch, instead of
+    // creating a fresh ID3v2 tag that shadows them.
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wav_path = common::create_test_wav(dir.path(), "info_only.wav");
+    let mut info = Tag::new(TagType::RiffInfo);
+    info.set_title("Old Title".to_string());
+    info.set_artist("Info Artist".to_string());
+    info.save_to_path(&wav_path, WriteOptions::default())
+        .unwrap();
+
+    writer::write_metadata(wav_path.to_str().unwrap(), Some("New Title"), None, None).unwrap();
+
+    let track = reader::read_metadata(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(track.title, "New Title");
+    assert_eq!(track.artist, "Info Artist");
+}
+
+#[test]
+fn test_extract_cover_art_prefers_front_cover() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    // The back cover comes first in tag order
+    let wav_path = common::create_test_wav_with_pictures(
+        dir.path(),
+        "two_pictures.wav",
+        &[(4, "image/png", b"back"), (3, "image/jpeg", b"front")],
+    );
+
+    let (data, mime) = reader::extract_cover_art_bytes(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(data, b"front");
+    assert_eq!(mime, "image/jpeg");
+}
+
+#[test]
+fn test_extract_cover_art_falls_back_to_first_picture() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    let wav_path = common::create_test_wav_with_pictures(
+        dir.path(),
+        "back_only.wav",
+        &[(4, "image/png", b"back")],
+    );
+
+    let (data, mime) = reader::extract_cover_art_bytes(wav_path.to_str().unwrap()).unwrap();
+    assert_eq!(data, b"back");
+    assert_eq!(mime, "image/png");
+}
+
+#[test]
+fn test_save_cover_art_picks_extension_from_mime() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    for (id, mime, ext) in [
+        (1, "image/png", "png"),
+        (2, "image/gif", "gif"),
+        (3, "image/bmp", "bmp"),
+        (4, "image/webp", "webp"),
+        (5, "image/jpeg", "jpg"),
+        (6, "application/octet-stream", "jpg"),
+    ] {
+        let saved = reader::save_cover_art(dir.path(), id, b"img", mime).unwrap();
+        assert_eq!(
+            std::path::Path::new(&saved),
+            dir.path().join("covers").join(format!("{id}.{ext}")),
+            "{mime}"
+        );
+        assert_eq!(std::fs::read(&saved).unwrap(), b"img");
+    }
+}
+
+#[test]
+fn test_read_cover_art_from_file_builds_data_uri() {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
+    for (ext, mime) in [
+        ("png", "image/png"),
+        ("gif", "image/gif"),
+        ("bmp", "image/bmp"),
+        ("webp", "image/webp"),
+        ("jpg", "image/jpeg"),
+    ] {
+        let path = dir.path().join(format!("cover.{ext}"));
+        std::fs::write(&path, b"img").unwrap();
+        assert_eq!(
+            reader::read_cover_art_from_file(path.to_str().unwrap()),
+            Some(format!("data:{mime};base64,aW1n")), // base64("img")
+            "{ext}"
+        );
+    }
+}
+
+#[test]
+fn test_read_cover_art_from_missing_file_is_none() {
+    assert!(reader::read_cover_art_from_file("/nonexistent/covers/1.jpg").is_none());
 }
 
 #[test]

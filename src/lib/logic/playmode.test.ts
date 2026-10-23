@@ -27,6 +27,14 @@ describe('generateShuffledIndices', () => {
     expect(result[0]).toBe(0);
     expect(result).toHaveLength(5);
   });
+
+  it('actually shuffles the remaining order', () => {
+    // 50 runs over 7! orderings of the tail: all identical means no shuffle
+    const orders = new Set(
+      Array.from({ length: 50 }, () => generateShuffledIndices(8, 0).join(',')),
+    );
+    expect(orders.size).toBeGreaterThan(1);
+  });
 });
 
 describe('getNextIndex', () => {
@@ -49,6 +57,16 @@ describe('getNextIndex', () => {
 
   it('returns null for empty queue', () => {
     expect(getNextIndex(0, 0, 'off', false, [])).toBeNull();
+    expect(getNextIndex(0, 0, 'repeat-one', false, [])).toBeNull();
+  });
+
+  it('ignores a leftover shuffle order once shuffle is off', () => {
+    // toggleShuffle keeps shuffledIndices around when turning shuffle off
+    expect(getNextIndex(3, 5, 'off', false, [3, 1, 4, 0, 2])).toBe(4);
+  });
+
+  it('falls back to sequential when the shuffle order is stale (length mismatch)', () => {
+    expect(getNextIndex(1, 5, 'off', true, [2, 0, 1])).toBe(2);
   });
 
   it('follows shuffle order', () => {
@@ -95,6 +113,15 @@ describe('getPrevIndex', () => {
 
   it('returns null for empty queue', () => {
     expect(getPrevIndex(0, 0, 'off', false, [])).toBeNull();
+    expect(getPrevIndex(0, 0, 'repeat-one', false, [])).toBeNull();
+  });
+
+  it('ignores a leftover shuffle order once shuffle is off', () => {
+    expect(getPrevIndex(4, 5, 'off', false, [3, 1, 4, 0, 2])).toBe(3);
+  });
+
+  it('falls back to sequential when the shuffle order is stale (length mismatch)', () => {
+    expect(getPrevIndex(1, 5, 'off', true, [0, 2, 1])).toBe(0);
   });
 
   it('follows shuffle order backwards', () => {

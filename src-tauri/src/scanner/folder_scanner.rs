@@ -14,6 +14,11 @@ pub fn is_supported_audio_file(file_path: &str) -> bool {
         .is_some_and(|ext| SUPPORTED_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
 }
 
+/// Recursively collect supported audio files under `folder_path`, following
+/// symlinks. A directory reachable through more than one path is scanned
+/// only the first time it is met — but the visited set lives in this call
+/// alone, so two separate scans (e.g. a folder and a symlink to it added as
+/// two library sources) still yield the same files under different paths.
 pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
     let root = Path::new(folder_path);
     if !root.is_dir() {
@@ -25,7 +30,8 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
     let mut audio_files = Vec::new();
     let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
 
-    for entry_result in WalkDir::new(root).follow_links(true) {
+    let mut walker = WalkDir::new(root).follow_links(true).into_iter();
+    while let Some(entry_result) = walker.next() {
         let entry = match entry_result {
             Ok(e) => e,
             Err(e) => {
@@ -44,6 +50,9 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
                             "Warning: skipping already-visited directory (possible symlink cycle): {}",
                             path.display()
                         );
+                        // `continue` alone would still descend into it — the
+                        // same files would be imported again under this path.
+                        walker.skip_current_dir();
                         continue;
                     }
                 }

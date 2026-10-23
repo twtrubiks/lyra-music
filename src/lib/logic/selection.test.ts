@@ -486,6 +486,15 @@ describe('extendSelectionDown', () => {
     expect(s.selectedIds.has(tracks[1].id)).toBe(true);
     expect(s.selectedIds.has(tracks[2].id)).toBe(true);
   });
+
+  it('clamps stale anchor and focus when tracks array shrinks', () => {
+    const prev = { selectedIds: new Set([tracks[4].id]), anchorIndex: 4, focusedIndex: 4 };
+    const shorter = createMockTracks(3);
+    const s = extendSelectionDown(prev, shorter);
+    expect(s.anchorIndex).toBe(2);
+    expect(s.focusedIndex).toBe(2);
+    expect([...s.selectedIds]).toEqual([shorter[2].id]);
+  });
 });
 
 // ============================================================
@@ -537,6 +546,15 @@ describe('extendSelectionUp', () => {
     expect(s.selectedIds.size).toBe(2);
     expect(s.selectedIds.has(tracks[1].id)).toBe(true);
     expect(s.selectedIds.has(tracks[2].id)).toBe(true);
+  });
+
+  it('clamps stale anchor and focus when tracks array shrinks', () => {
+    const prev = { selectedIds: new Set([tracks[4].id]), anchorIndex: 4, focusedIndex: 4 };
+    const shorter = createMockTracks(3);
+    const s = extendSelectionUp(prev, shorter);
+    expect(s.anchorIndex).toBe(2); // clamped to last
+    expect(s.focusedIndex).toBe(1); // clamped to 2, then -1 = 1
+    expect(s.selectedIds).toEqual(new Set([shorter[1].id, shorter[2].id]));
   });
 });
 

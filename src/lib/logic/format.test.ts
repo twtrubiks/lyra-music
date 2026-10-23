@@ -251,6 +251,9 @@ describe('formatSampleRate', () => {
   it('formats 22050 Hz as 22.1 kHz', () => {
     expect(formatSampleRate(22050)).toBe('22.1 kHz');
   });
+  it('switches to kHz at exactly 1000 Hz', () => {
+    expect(formatSampleRate(1000)).toBe('1 kHz');
+  });
   it('formats values below 1000 in Hz', () => {
     expect(formatSampleRate(800)).toBe('800 Hz');
   });
@@ -272,6 +275,16 @@ describe('formatFileSize', () => {
 
   it('formats megabytes', () => {
     expect(formatFileSize(5 * 1024 * 1024)).toBe('5.0 MB');
+  });
+
+  it('switches units exactly at each power-of-1024 boundary', () => {
+    expect(formatFileSize(1024 * 1024)).toBe('1.0 MB');
+    expect(formatFileSize(1024 * 1024 * 1024)).toBe('1.00 GB');
+  });
+
+  it('drops the decimal from 100 MB up', () => {
+    expect(formatFileSize(100 * 1024 * 1024)).toBe('100 MB');
+    expect(formatFileSize(99.94 * 1024 * 1024)).toBe('99.9 MB');
   });
 
   it('formats gigabytes', () => {

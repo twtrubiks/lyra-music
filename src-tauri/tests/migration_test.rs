@@ -192,3 +192,37 @@ fn v1_db_with_data_upgrades_and_backfills() {
             .any(|i| i == "idx_tracks_album_artist")
     );
 }
+
+/// v3 backfills `file_size_bytes` from disk for rows imported before the
+/// column existed; a file that is gone keeps the 0 default.
+#[test]
+fn v3_backfills_file_size_from_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let on_disk = dir.path().join("song.mp3");
+    std::fs::write(&on_disk, vec![0u8; 1234]).unwrap();
+
+    let conn = create_v1_db();
+    conn.execute(
+        "INSERT INTO tracks (file_path, title) VALUES (?1, 'On disk')",
+        [on_disk.to_str().unwrap()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO tracks (file_path, title) VALUES (?1, 'Gone')",
+        [dir.path().join("gone.mp3").to_str().unwrap()],
+    )
+    .unwrap();
+
+    db::run_migrations(&conn).unwrap();
+
+    let size_of = |title: &str| -> i64 {
+        conn.query_row(
+            "SELECT file_size_bytes FROM tracks WHERE title = ?1",
+            [title],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(size_of("On disk"), 1234);
+    assert_eq!(size_of("Gone"), 0);
+}

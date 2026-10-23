@@ -71,6 +71,19 @@ describe('calculateVisibleRange', () => {
     }
   });
 
+  it('computes the exact rendered window for a scrolled position', () => {
+    // 10-row viewport scrolled 10px past row 100: rows 100..110 are (partly)
+    // visible, plus the default 10-row overscan on each side.
+    const result = calculateVisibleRange(100 * ROW_HEIGHT + 10, 10 * ROW_HEIGHT, 1000);
+
+    expect(result).toEqual({
+      startIndex: 90,
+      endIndex: 121,
+      topPadding: 90 * ROW_HEIGHT,
+      bottomPadding: (1000 - 121) * ROW_HEIGHT,
+    });
+  });
+
   it('respects overscan parameter', () => {
     const totalCount = 1000;
     const containerHeight = 370; // exactly 10 rows
@@ -118,6 +131,14 @@ describe('scrollTopForIndex', () => {
 
     const result = scrollTopForIndex(index, scrollTop, containerHeight);
     expect(result).toBeNull();
+  });
+
+  it('returns null when row is flush with the viewport edges', () => {
+    const containerHeight = 10 * ROW_HEIGHT;
+    const scrollTop = 10 * ROW_HEIGHT;
+
+    expect(scrollTopForIndex(10, scrollTop, containerHeight)).toBeNull(); // top edge
+    expect(scrollTopForIndex(19, scrollTop, containerHeight)).toBeNull(); // bottom edge
   });
 
   it('returns correct scrollTop when row is above viewport', () => {
