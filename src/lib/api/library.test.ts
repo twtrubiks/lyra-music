@@ -27,6 +27,7 @@ import {
   getTrackLyrics,
   fetchLyricsOnline,
   getWatchedFolders,
+  takeWatcherError,
   stopWatching,
 } from './library';
 
@@ -137,6 +138,17 @@ describe('getWatchedFolders', () => {
 
     expect(mockInvoke).toHaveBeenCalledWith('get_watched_folders');
     expect(result).toEqual(folders);
+  });
+});
+
+describe('takeWatcherError', () => {
+  it('invokes take_watcher_error and returns the pending message', async () => {
+    mockInvoke.mockResolvedValue('watch limit reached');
+
+    const result = await takeWatcherError();
+
+    expect(mockInvoke).toHaveBeenCalledWith('take_watcher_error');
+    expect(result).toBe('watch limit reached');
   });
 });
 

@@ -40,3 +40,13 @@ export function notifyFailedImports(failedFiles: FailedFile[]): void {
   const names = count > 3 ? `${shown} ${t('import.andMore', { count: count - 3 })}` : shown;
   pushError(t('import.failed', { count, names }), 'warn', 8000);
 }
+
+/**
+ * The folder watcher reported an error (`watcher-error` event): changes on
+ * disk may have been missed, so the library can be out of date. The backend
+ * rate-limits these.
+ */
+export function notifyWatcherError(message: string): void {
+  console.warn(`[lyra] folder watcher error: ${message}`);
+  pushError(t('error.watcher', { message }), 'warn', 8000);
+}

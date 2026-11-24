@@ -152,6 +152,8 @@ export const en = {
   'error.dropNoPaths': 'Drop event received but no file paths were provided',
   'error.dropUnreadable': 'Could not read dropped file paths. Try using Scan Folder instead.',
   'error.folderUnexpected': 'Folder selection returned an unexpected value',
+  'error.watcher':
+    'Folder watching hit an error; the library may be out of date. Rescan the folder to catch up. ({message})',
 
   'action.createPlaylist': 'Create playlist',
   'action.renamePlaylist': 'Rename playlist',

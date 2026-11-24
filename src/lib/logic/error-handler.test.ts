@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { notifyCritical, notifyFailedImports, notifyImportResult } from './error-handler';
+import {
+  notifyCritical,
+  notifyFailedImports,
+  notifyImportResult,
+  notifyWatcherError,
+} from './error-handler';
 import { getErrorState } from '$lib/state/errorState.svelte';
 import { setLocale } from '$lib/i18n/index.svelte';
 import type { FailedFile, ImportResult } from '$lib/types';
@@ -201,5 +206,27 @@ describe('notifyImportResult', () => {
     notifyImportResult(result);
 
     expect(getErrorState().errors).toHaveLength(0);
+  });
+});
+
+describe('notifyWatcherError', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    getErrorState().errors = [];
+    setLocale('zh-TW');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows a warn notification carrying the backend message', () => {
+    notifyWatcherError('inotify watch limit reached');
+
+    const state = getErrorState();
+    expect(state.errors).toHaveLength(1);
+    expect(state.errors[0].level).toBe('warn');
+    expect(state.errors[0].message).toContain('資料夾監控');
+    expect(state.errors[0].message).toContain('inotify watch limit reached');
   });
 });

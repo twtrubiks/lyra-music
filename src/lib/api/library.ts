@@ -90,6 +90,11 @@ export async function getWatchedFolders(): Promise<WatchedFolder[]> {
   return invoke('get_watched_folders');
 }
 
+/** The latest folder watcher error not yet shown to the user, if any. */
+export async function takeWatcherError(): Promise<string | null> {
+  return invoke('take_watcher_error');
+}
+
 export async function startWatching(folder: string): Promise<void> {
   return invoke('start_watching', { folder });
 }

@@ -14,7 +14,12 @@
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
   import KeyboardShortcutsDialog from '$lib/components/Help/KeyboardShortcutsDialog.svelte';
   import { mapKeyToAction, resolveDismissTarget } from '$lib/logic/keyboard';
-  import { warnNonCritical, notifyCritical, notifyImportResult } from '$lib/logic/error-handler';
+  import {
+    warnNonCritical,
+    notifyCritical,
+    notifyImportResult,
+    notifyWatcherError,
+  } from '$lib/logic/error-handler';
   import { pushError } from '$lib/state/errorState.svelte';
   import * as playbackApi from '$lib/api/playback';
   import * as libraryApi from '$lib/api/library';
@@ -194,6 +199,26 @@
         });
       } catch (err) {
         warnNonCritical('Listen tracks-removed', err);
+      }
+    })();
+    return () => {
+      unlisten?.();
+    };
+  });
+
+  $effect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        unlisten = await listen<string>('watcher-error', (event) => {
+          notifyWatcherError(event.payload);
+        });
+        // Errors from before this listener existed (the saved folders are
+        // watched while the app starts) were emitted to nobody.
+        const missed = await libraryApi.takeWatcherError();
+        if (missed) notifyWatcherError(missed);
+      } catch (err) {
+        warnNonCritical('Listen watcher-error', err);
       }
     })();
     return () => {

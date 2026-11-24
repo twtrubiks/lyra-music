@@ -12,6 +12,7 @@ use crate::models::browse::{AlbumSummary, ArtistSummary};
 use crate::models::track::{FailedFile, ImportResult, Track, TrackDetails};
 use crate::models::watched_folder::WatchedFolder;
 use crate::scanner::folder_scanner;
+use crate::scanner::watcher::PendingWatcherError;
 use crate::storage::library_repo;
 
 #[derive(Serialize)]
@@ -514,6 +515,14 @@ pub fn get_most_played_tracks(
 ) -> Result<Vec<Track>, AppError> {
     let conn = db.0.lock().map_err(|_| AppError::LockPoisoned)?;
     library_repo::get_most_played_tracks(&conn, limit.unwrap_or(50))
+}
+
+/// The latest folder watcher error not yet shown to the user, if any. The
+/// frontend calls this once it listens for `watcher-error`, to catch errors
+/// raised before that (while the saved folders were first watched).
+#[tauri::command(async)]
+pub fn take_watcher_error(pending: State<PendingWatcherError>) -> Option<String> {
+    pending.take()
 }
 
 #[tauri::command(async)]

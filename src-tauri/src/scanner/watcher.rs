@@ -21,12 +21,93 @@ enum WatcherCommand {
     Shutdown,
 }
 
+/// What the notify callback hands to the watcher thread.
+enum WatcherSignal {
+    Event(notify::Event),
+    Error(String),
+}
+
+/// Message reported when the OS dropped events (see `to_signal`).
+const MISSED_EVENTS: &str = "the event queue overflowed and some changes were missed";
+
+/// Turn what notify hands the callback into a signal. A queue overflow
+/// arrives as an ordinary event flagged "rescan" (inotify `Q_OVERFLOW`), not
+/// as an `Err` — events were lost, so it is reported as an error.
+fn to_signal(res: Result<notify::Event, notify::Error>) -> WatcherSignal {
+    match res {
+        Ok(event) if event.need_rescan() => WatcherSignal::Error(MISSED_EVENTS.to_string()),
+        Ok(event) => WatcherSignal::Event(event),
+        Err(e) => WatcherSignal::Error(e.to_string()),
+    }
+}
+
+/// The latest watcher error the frontend has not picked up yet. Errors
+/// raised while the saved folders are first watched fire before the webview
+/// listens for `watcher-error`, so the event alone would lose them; the
+/// frontend takes the pending one once it has loaded.
+#[derive(Clone, Default)]
+pub struct PendingWatcherError(Arc<Mutex<Option<String>>>);
+
+impl PendingWatcherError {
+    pub fn set(&self, message: String) {
+        *self.lock() = Some(message);
+    }
+
+    pub fn take(&self) -> Option<String> {
+        self.lock().take()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<String>> {
+        // The slot holds a plain value; a poisoned lock is still usable.
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// Quiet period after the last event before a batch is processed.
+const DEBOUNCE: Duration = Duration::from_secs(2);
+/// Upper bound on how long a batch may keep collecting. A steady event
+/// stream never goes quiet, so without this the batch grows without bound
+/// and the library is not updated until the stream stops.
+const MAX_BATCH_AGE: Duration = Duration::from_secs(10);
+/// Minimum gap between two `watcher-error` notifications to the frontend.
+const ERROR_REPORT_INTERVAL: Duration = Duration::from_secs(60);
+
+fn batch_is_due(first_event: Instant, last_event: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(last_event) >= DEBOUNCE
+        || now.saturating_duration_since(first_event) >= MAX_BATCH_AGE
+}
+
+/// Rate limit for reporting watcher errors: a broken watch can fail on
+/// every event, and one notification is enough.
+#[derive(Default)]
+struct ErrorReportLimiter {
+    last_reported: Option<Instant>,
+}
+
+impl ErrorReportLimiter {
+    fn should_report(&mut self, now: Instant) -> bool {
+        let due = self
+            .last_reported
+            .is_none_or(|last| now.saturating_duration_since(last) >= ERROR_REPORT_INTERVAL);
+        if due {
+            self.last_reported = Some(now);
+        }
+        due
+    }
+}
+
 pub struct FolderWatcher {
     cmd_tx: mpsc::Sender<WatcherCommand>,
 }
 
 impl FolderWatcher {
-    pub fn new(db: Arc<Mutex<Connection>>, app_handle: AppHandle) -> Result<Self, AppError> {
+    pub fn new(
+        db: Arc<Mutex<Connection>>,
+        app_handle: AppHandle,
+        pending_error: PendingWatcherError,
+    ) -> Result<Self, AppError> {
         let app_data_dir = app_handle
             .path()
             .app_data_dir()
@@ -36,9 +117,7 @@ impl FolderWatcher {
 
         let mut watcher = RecommendedWatcher::new(
             move |res: Result<notify::Event, notify::Error>| {
-                if let Ok(event) = res {
-                    let _ = event_tx.send(event);
-                }
+                let _ = event_tx.send(to_signal(res));
             },
             Config::default(),
         )
@@ -49,9 +128,10 @@ impl FolderWatcher {
 
         std::thread::spawn(move || {
             let mut watched_paths: HashSet<PathBuf> = HashSet::new();
-            let debounce_duration = Duration::from_secs(2);
             let mut pending_events: Vec<notify::Event> = Vec::new();
-            let mut last_event_time: Option<Instant> = None;
+            // (first, last) event times of the pending batch
+            let mut batch_times: Option<(Instant, Instant)> = None;
+            let mut error_limiter = ErrorReportLimiter::default();
 
             loop {
                 // Check for commands (non-blocking)
@@ -73,18 +153,33 @@ impl FolderWatcher {
                 }
 
                 // Collect file events (non-blocking)
-                while let Ok(event) = event_rx.try_recv() {
-                    pending_events.push(event);
-                    last_event_time = Some(Instant::now());
+                while let Ok(signal) = event_rx.try_recv() {
+                    match signal {
+                        WatcherSignal::Event(event) => {
+                            pending_events.push(event);
+                            let now = Instant::now();
+                            batch_times = Some((batch_times.map_or(now, |(first, _)| first), now));
+                        }
+                        // A watcher error means changes on disk may have been
+                        // missed. Tell the user: otherwise all they see is a
+                        // library that silently stopped updating.
+                        WatcherSignal::Error(message) => {
+                            eprintln!("[lyra] folder watcher error: {message}");
+                            pending_error.set(message.clone());
+                            if error_limiter.should_report(Instant::now()) {
+                                let _ = app_handle_clone.emit("watcher-error", message);
+                            }
+                        }
+                    }
                 }
 
                 // Process debounced events
-                if let Some(last_time) = last_event_time
-                    && last_time.elapsed() >= debounce_duration
+                if let Some((first, last)) = batch_times
+                    && batch_is_due(first, last, Instant::now())
                     && !pending_events.is_empty()
                 {
                     let events = std::mem::take(&mut pending_events);
-                    last_event_time = None;
+                    batch_times = None;
 
                     let (changed, removed_track_ids) =
                         process_event_batch(&events, &db_clone, &app_data_dir);
@@ -410,6 +505,77 @@ mod tests {
 
     use super::*;
     use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind, RenameMode};
+
+    /// inotify reports a queue overflow as an ordinary event flagged
+    /// "rescan", not as an error. Events were lost, so it must be reported
+    /// like one instead of being collected and ignored.
+    #[test]
+    fn overflow_event_is_reported_as_an_error() {
+        let overflow = notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        assert!(matches!(
+            to_signal(Ok(overflow)),
+            WatcherSignal::Error(message) if message == MISSED_EVENTS
+        ));
+    }
+
+    #[test]
+    fn ordinary_events_and_errors_keep_their_kind() {
+        let event = notify::Event::new(EventKind::Create(CreateKind::File));
+        assert!(matches!(to_signal(Ok(event)), WatcherSignal::Event(_)));
+        assert!(matches!(
+            to_signal(Err(notify::Error::generic("boom"))),
+            WatcherSignal::Error(message) if message.contains("boom")
+        ));
+    }
+
+    /// Errors raised while the saved folders are first watched fire before
+    /// the frontend listens for `watcher-error`; they are kept so it can
+    /// pick the latest one up once, after it has loaded.
+    #[test]
+    fn pending_error_is_handed_out_once_and_keeps_the_latest() {
+        let pending = PendingWatcherError::default();
+        assert_eq!(pending.take(), None);
+        pending.set("first".to_string());
+        pending.set("second".to_string());
+        assert_eq!(pending.take(), Some("second".to_string()));
+        assert_eq!(pending.take(), None);
+    }
+
+    #[test]
+    fn batch_is_due_after_quiet_period() {
+        let first = Instant::now();
+        let last = first + Duration::from_secs(1);
+        assert!(!batch_is_due(
+            first,
+            last,
+            last + Duration::from_millis(1900)
+        ));
+        assert!(batch_is_due(first, last, last + DEBOUNCE));
+    }
+
+    /// A steady stream of events (large copy, a download writing for
+    /// minutes) keeps pushing the quiet period back; without an age cap the
+    /// batch would grow without bound and the library would never update.
+    #[test]
+    fn batch_is_due_once_too_old_even_if_events_keep_coming() {
+        let first = Instant::now();
+        let now = first + MAX_BATCH_AGE;
+        let last = now - Duration::from_millis(100);
+        assert!(batch_is_due(first, last, now));
+        assert!(!batch_is_due(first, last, now - Duration::from_millis(200)));
+    }
+
+    /// A broken watch can fail on every event; the user must hear about it
+    /// once, not once per event.
+    #[test]
+    fn error_reports_are_rate_limited() {
+        let mut limiter = ErrorReportLimiter::default();
+        let t0 = Instant::now();
+        assert!(limiter.should_report(t0));
+        assert!(!limiter.should_report(t0 + Duration::from_secs(1)));
+        assert!(!limiter.should_report(t0 + ERROR_REPORT_INTERVAL - Duration::from_secs(1)));
+        assert!(limiter.should_report(t0 + ERROR_REPORT_INTERVAL));
+    }
 
     /// Regression: an atomic save (or delete-then-recreate within the
     /// debounce window) emits Remove for a path that exists again by the

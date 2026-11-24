@@ -89,14 +89,17 @@ fn spawn_player_polling(
 fn init_watcher(
     db_arc: &Arc<Mutex<Connection>>,
     app_handle: &tauri::AppHandle,
+    pending_error: &scanner::watcher::PendingWatcherError,
 ) -> Option<scanner::watcher::FolderWatcher> {
     let watcher = match scanner::watcher::FolderWatcher::new(
         Arc::<Mutex<Connection>>::clone(db_arc),
         app_handle.clone(),
+        pending_error.clone(),
     ) {
         Ok(w) => w,
         Err(e) => {
             eprintln!("[lyra] folder watcher unavailable, live library updates disabled: {e}");
+            pending_error.set(e.to_string());
             return None;
         }
     };
@@ -127,7 +130,9 @@ pub fn run() {
             let db_arc = Arc::new(Mutex::new(conn));
             app.manage(DbState(Arc::<Mutex<Connection>>::clone(&db_arc)));
 
-            let watcher = init_watcher(&db_arc, app.handle());
+            let pending_watcher_error = scanner::watcher::PendingWatcherError::default();
+            let watcher = init_watcher(&db_arc, app.handle(), &pending_watcher_error);
+            app.manage(pending_watcher_error);
             app.manage(WatcherState(Mutex::new(watcher)));
 
             // No output device must not keep the app from starting: the
@@ -195,6 +200,7 @@ pub fn run() {
             commands::library::start_watching,
             commands::library::stop_watching,
             commands::library::get_watched_folders,
+            commands::library::take_watcher_error,
             // Playlist commands
             commands::playlist::create_playlist,
             commands::playlist::rename_playlist,

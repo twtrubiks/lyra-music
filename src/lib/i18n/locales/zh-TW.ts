@@ -145,6 +145,7 @@ export const zhTW: Messages = {
   'error.dropNoPaths': '收到拖放事件，但沒有取得任何檔案路徑',
   'error.dropUnreadable': '無法讀取拖放的檔案路徑，請改用「掃描資料夾」。',
   'error.folderUnexpected': '資料夾選擇回傳了非預期的值',
+  'error.watcher': '資料夾監控發生錯誤，音樂庫可能未更新，可重新掃描資料夾補上。（{message}）',
 
   'action.createPlaylist': '建立播放清單',
   'action.renamePlaylist': '重新命名播放清單',
