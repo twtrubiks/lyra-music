@@ -13,7 +13,7 @@
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00.svg)](https://svelte.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-dea584.svg)](https://www.rust-lang.org/)
-[![rodio](https://img.shields.io/badge/rodio-0.22-e2603a.svg)](https://github.com/RustAudio/rodio)
+[![rodio](https://img.shields.io/badge/rodio-0.23-e2603a.svg)](https://github.com/RustAudio/rodio)
 
 基於 Tauri 2 + Svelte 5 + Rust 的桌面音樂播放器。純本地播放，核心功能不依賴任何網路服務；唯一的網路功能是使用者手動觸發的線上歌詞搜尋。
 
@@ -51,12 +51,12 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 | 建置工具   | Vite 8                     | 開發伺服器與前端打包                                   |
 | 桌面框架   | Tauri 2                    | 原生視窗、系統匣、IPC 通訊                             |
 | 後端       | Rust                       | 音訊處理、檔案掃描、資料庫操作                         |
-| 音訊引擎   | rodio 0.22                 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
+| 音訊引擎   | rodio 0.23                 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
 | 元資料解析 | lofty 0.25                 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖                       |
-| 檔案監視   | notify 8                   | 即時偵測資料夾變化，自動更新音樂庫                     |
+| 檔案監視   | notify 9                   | 即時偵測資料夾變化，自動更新音樂庫                     |
 | 資料庫     | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理                        |
 | 線上歌詞   | ureq 3 (rustls)            | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar     |
-| 測試       | Vitest + cargo test        | 前端 25 個測試檔、後端 20 個整合測試                   |
+| 測試       | Vitest + cargo test        | 前端單元測試、後端整合測試                             |
 
 ## 主要功能
 
@@ -68,7 +68,7 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 
 **Mini Player + System Tray** -- 按 `m` 切換為 420x80 精簡視窗（always-on-top）。系統匣支援 Play/Pause、上一首、下一首、顯示視窗、退出。關閉視窗時自動最小化到系統匣。
 
-**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 43 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
+**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
 
 其他功能：
 
@@ -128,9 +128,9 @@ npm run tauri build   # 正式建置
 ## 測試
 
 ```bash
-npm run test                    # 前端單元測試 (Vitest, 25 個測試檔)
+npm run test                    # 前端單元測試 (Vitest)
 npm run check                   # 類型檢查
-cd src-tauri && cargo test      # 後端整合測試 (20 個測試檔，音訊測試預設跳過)
+cd src-tauri && cargo test      # 後端整合測試 (音訊測試預設跳過)
 cd src-tauri && cargo test --features audio-tests  # 含音訊測試 (需音訊裝置)
 npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -180,7 +180,7 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 src/                              # 前端 (Svelte 5 + TypeScript)
   lib/
     api/                          # Tauri IPC 呼叫封裝 (playback, library, playlist)
-    components/                   # UI 元件 (Player, Library, Browse, Playlist, Sidebar, Settings)
+    components/                   # UI 元件 (Player, Library, Browse, Playlist, Sidebar, Settings, Help)
     state/                        # 響應式狀態管理 (Svelte 5 runes)
     logic/                        # 純函式邏輯 (播放模式、快捷鍵、格式化、選取、排序)
     i18n/                         # 介面翻譯 (型別字典，繁體中文 + 英文)
@@ -191,9 +191,9 @@ src-tauri/                        # 後端 (Rust)
     scanner/                      # 資料夾掃描與檔案監視 (walkdir, notify)
     metadata/                     # 元資料讀寫與封面快取 (lofty)
     storage/                      # SQLite 資料庫 (schema v9, WAL mode)
-    commands/                     # Tauri command handlers (42 個 IPC 介面)
+    commands/                     # Tauri command handlers (IPC 介面)
     models/                       # 資料結構定義 (track, playlist, player_state)
-  tests/                          # 20 個整合測試
+  tests/                          # 整合測試
 ```
 
 ## 日誌

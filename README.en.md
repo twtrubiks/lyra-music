@@ -13,7 +13,7 @@ English | [繁體中文](README.md)
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00.svg)](https://svelte.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-dea584.svg)](https://www.rust-lang.org/)
-[![rodio](https://img.shields.io/badge/rodio-0.22-e2603a.svg)](https://github.com/RustAudio/rodio)
+[![rodio](https://img.shields.io/badge/rodio-0.23-e2603a.svg)](https://github.com/RustAudio/rodio)
 
 A desktop music player built with Tauri 2 + Svelte 5 + Rust. Fully local playback; the core never depends on an online service. The only network feature is the user-triggered online lyrics search.
 
@@ -51,12 +51,12 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 | Build Tool        | Vite 8                     | Dev server and frontend bundling                                                       |
 | Desktop Framework | Tauri 2                    | Native windows, system tray, IPC communication                                         |
 | Backend           | Rust                       | Audio processing, file scanning, database operations                                   |
-| Audio Engine      | rodio 0.22                 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
+| Audio Engine      | rodio 0.23                 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
 | Metadata Parsing  | lofty 0.25                 | Read/write ID3/Vorbis/MP4 tags and cover art                                           |
-| File Watching     | notify 8                   | Real-time folder change detection, automatic music library updates                     |
+| File Watching     | notify 9                   | Real-time folder change detection, automatic music library updates                     |
 | Database          | SQLite (rusqlite, bundled) | WAL mode, schema migration management                                                  |
 | Online Lyrics     | ureq 3 (rustls)            | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar                       |
-| Testing           | Vitest + cargo test        | 25 frontend test files, 20 backend integration tests                                   |
+| Testing           | Vitest + cargo test        | Frontend unit tests, backend integration tests                                         |
 
 ## Key Features
 
@@ -68,7 +68,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 
 **Mini Player + System Tray** -- Press `m` to switch to a compact 420x80 window (always-on-top). System tray supports Play/Pause, previous, next, show window, and quit. Closing the window automatically minimizes to the system tray.
 
-**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 43 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
+**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
 
 Other features:
 
@@ -128,9 +128,9 @@ Build artifacts are located in `src-tauri/target/release/bundle/`, supporting de
 ## Testing
 
 ```bash
-npm run test                    # Frontend unit tests (Vitest, 25 test files)
+npm run test                    # Frontend unit tests (Vitest)
 npm run check                   # Type checking
-cd src-tauri && cargo test      # Backend integration tests (20 test files, audio tests skipped by default)
+cd src-tauri && cargo test      # Backend integration tests (audio tests skipped by default)
 cd src-tauri && cargo test --features audio-tests  # With audio tests (requires audio device)
 npm run quality                 # Code quality checks (ESLint + Prettier + Stylelint + Clippy + rustfmt)
 ```
@@ -180,7 +180,7 @@ All shortcuts are disabled when an input field is focused.
 src/                              # Frontend (Svelte 5 + TypeScript)
   lib/
     api/                          # Tauri IPC call wrappers (playback, library, playlist)
-    components/                   # UI components (Player, Library, Browse, Playlist, Sidebar, Settings)
+    components/                   # UI components (Player, Library, Browse, Playlist, Sidebar, Settings, Help)
     state/                        # Reactive state management (Svelte 5 runes)
     logic/                        # Pure function logic (playback modes, shortcuts, formatting, selection, sorting)
     i18n/                         # UI translations (typed dictionaries, Traditional Chinese + English)
@@ -191,9 +191,9 @@ src-tauri/                        # Backend (Rust)
     scanner/                      # Folder scanning & file watching (walkdir, notify)
     metadata/                     # Metadata read/write & cover art caching (lofty)
     storage/                      # SQLite database (schema v9, WAL mode)
-    commands/                     # Tauri command handlers (42 IPC interfaces)
+    commands/                     # Tauri command handlers (IPC interfaces)
     models/                       # Data structure definitions (track, playlist, player_state)
-  tests/                          # 20 integration tests
+  tests/                          # Integration tests
 ```
 
 ## Logs
