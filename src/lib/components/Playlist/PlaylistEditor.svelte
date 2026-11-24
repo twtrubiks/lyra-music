@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { getRevealState } from '$lib/state/revealState.svelte';
   import type { Track, TrackDetails } from '$lib/types';
   import TrackList from '../Library/TrackList.svelte';
   import TrackPropertiesDialog from '../Library/TrackPropertiesDialog.svelte';
@@ -135,6 +137,18 @@
       void loadTracks();
     }),
   );
+
+  // "Go to the playing track" must not be defeated by a search that hides it.
+  const reveal = getRevealState();
+  $effect(() => {
+    const request = reveal.request;
+    if (!request) return;
+    untrack(() => {
+      if (searchQuery.trim() !== '' && !visibleTracks.some((t) => t.id === request.trackId)) {
+        searchQuery = '';
+      }
+    });
+  });
 </script>
 
 <div class="playlist-editor">

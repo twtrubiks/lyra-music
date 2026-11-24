@@ -96,3 +96,14 @@ describe('resolveDismissTarget', () => {
     expect(resolveDismissTarget(true, false)).toBe('mini');
   });
 });
+
+describe('reveal-playing', () => {
+  it('Ctrl+j / Cmd+j → reveal-playing', () => {
+    expect(mapKeyToAction({ key: 'j', ctrlKey: true, metaKey: false })).toBe('reveal-playing');
+    expect(mapKeyToAction({ key: 'j', ctrlKey: false, metaKey: true })).toBe('reveal-playing');
+  });
+
+  it('plain j does nothing', () => {
+    expect(mapKeyToAction({ key: 'j', ctrlKey: false, metaKey: false })).toBeNull();
+  });
+});

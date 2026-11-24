@@ -64,6 +64,7 @@ export const zhTW: Messages = {
   'player.noTrack': '目前沒有播放曲目',
   'player.cover': '封面',
   'player.seek': '播放進度',
+  'player.revealPlaying': '跳到播放中的曲目',
   'player.volume': '音量',
 
   'lyrics.noTrack': '目前沒有播放曲目',
@@ -125,6 +126,7 @@ export const zhTW: Messages = {
   'shortcuts.lyrics': '歌詞面板 開/關',
   'shortcuts.dismiss': '關閉歌詞面板 / 退出迷你模式',
   'shortcuts.search': '搜尋',
+  'shortcuts.revealPlaying': '跳到播放中的曲目',
   'shortcuts.showHelp': '顯示快捷鍵說明',
   'shortcuts.focusUp': '焦點上移',
   'shortcuts.focusDown': '焦點下移',

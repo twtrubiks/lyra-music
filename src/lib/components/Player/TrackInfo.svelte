@@ -2,7 +2,16 @@
   import type { Track } from '$lib/types';
   import { t } from '$lib/i18n/index.svelte';
 
-  let { track }: { track: Track | null } = $props();
+  let {
+    track,
+    onreveal,
+  }: {
+    track: Track | null;
+    /** Show this track in the track list; omitted where there is no list (mini mode). */
+    onreveal?: () => void;
+  } = $props();
+
+  let canReveal = $derived(track !== null && onreveal !== undefined);
 
   let titleEl = $state<HTMLDivElement | null>(null);
   let artistEl = $state<HTMLDivElement | null>(null);
@@ -27,7 +36,13 @@
   });
 </script>
 
-<div class="track-info">
+<button
+  type="button"
+  class="track-info"
+  disabled={!canReveal}
+  title={canReveal ? t('player.revealPlaying') : undefined}
+  onclick={() => onreveal?.()}
+>
   {#if track}
     <div class="cover">
       {#if track.cover_art}
@@ -63,7 +78,7 @@
       </div>
     </div>
   {/if}
-</div>
+</button>
 
 <style>
   .track-info {
@@ -72,6 +87,17 @@
     gap: 12px;
     width: 220px;
     flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .track-info:disabled {
+    cursor: default;
   }
 
   .cover {

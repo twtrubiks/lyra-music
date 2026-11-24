@@ -12,6 +12,7 @@ export type KeyAction =
   | 'lyrics-toggle'
   | 'dismiss'
   | 'focus-search'
+  | 'reveal-playing'
   | 'show-shortcuts'
   | null;
 
@@ -23,6 +24,11 @@ export function mapKeyToAction(e: { key: string; ctrlKey: boolean; metaKey: bool
   // Ctrl+F or Cmd+F → focus search
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
     return 'focus-search';
+  }
+
+  // Ctrl+J or Cmd+J → show the playing track in the list
+  if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+    return 'reveal-playing';
   }
 
   // 其他帶 Ctrl/Cmd 的組合鍵屬於各自的 context（如列表重排 Ctrl+Shift+↑），

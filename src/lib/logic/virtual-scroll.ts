@@ -59,3 +59,17 @@ export function scrollTopForIndex(
   // Below viewport — scroll down so row is at bottom
   return rowBottom - containerHeight;
 }
+
+/**
+ * Scroll offset that puts a row in the middle of the rows area (the part of
+ * the container below the sticky header).
+ */
+export function scrollTopToCenterIndex(
+  index: number,
+  containerHeight: number,
+  rowHeight: number = ROW_HEIGHT,
+  headerHeight: number = 0,
+): number {
+  const top = index * rowHeight + (rowHeight + headerHeight - containerHeight) / 2;
+  return Math.max(0, Math.round(top));
+}

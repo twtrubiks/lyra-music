@@ -45,18 +45,18 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 
 延伸閱讀：[為什麼選擇 Rust](docs/why-rust.md)、[Tauri 2 介紹](docs/tauri2-introduction.md)
 
-| 層級 | 技術 | 說明 |
-|------|------|------|
-| 前端 | Svelte 5 + TypeScript | 使用 Svelte 5 runes 做響應式狀態管理 |
-| 建置工具 | Vite 8 | 開發伺服器與前端打包 |
-| 桌面框架 | Tauri 2 | 原生視窗、系統匣、IPC 通訊 |
-| 後端 | Rust | 音訊處理、檔案掃描、資料庫操作 |
-| 音訊引擎 | rodio 0.22 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
-| 元資料解析 | lofty 0.25 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖 |
-| 檔案監視 | notify 8 | 即時偵測資料夾變化，自動更新音樂庫 |
-| 資料庫 | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理 |
-| 線上歌詞 | ureq 3 (rustls) | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar |
-| 測試 | Vitest + cargo test | 前端 25 個測試檔、後端 20 個整合測試 |
+| 層級       | 技術                       | 說明                                                   |
+| ---------- | -------------------------- | ------------------------------------------------------ |
+| 前端       | Svelte 5 + TypeScript      | 使用 Svelte 5 runes 做響應式狀態管理                   |
+| 建置工具   | Vite 8                     | 開發伺服器與前端打包                                   |
+| 桌面框架   | Tauri 2                    | 原生視窗、系統匣、IPC 通訊                             |
+| 後端       | Rust                       | 音訊處理、檔案掃描、資料庫操作                         |
+| 音訊引擎   | rodio 0.22                 | 純 Rust 實作，不需要安裝 GStreamer、MPV 等系統音訊框架 |
+| 元資料解析 | lofty 0.25                 | 讀寫 ID3/Vorbis/MP4 標籤與封面圖                       |
+| 檔案監視   | notify 8                   | 即時偵測資料夾變化，自動更新音樂庫                     |
+| 資料庫     | SQLite (rusqlite, bundled) | WAL mode，schema migration 管理                        |
+| 線上歌詞   | ureq 3 (rustls)            | LRCLIB API 手動搜尋，同步歌詞快取為 `.lrc` sidecar     |
+| 測試       | Vitest + cargo test        | 前端 25 個測試檔、後端 20 個整合測試                   |
 
 ## 主要功能
 
@@ -71,6 +71,7 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 **Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 43 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
 
 其他功能：
+
 - 時間同步滾動歌詞與線上歌詞搜尋（LRCLIB）——取得方式見[歌詞](#歌詞)
 - 演出者 / 專輯瀏覽視圖（網格封面、搜尋過濾、詳情視圖）
 - 曲目元資料編輯（標題、演出者、專輯寫回檔案）
@@ -138,36 +139,37 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 
 所有快捷鍵在輸入框聚焦時不生效。
 
-| 按鍵 | 動作 |
-|------|------|
-| `Space` | 播放 / 暫停 |
-| `ArrowLeft` / `ArrowRight` | 快退 / 快進 5 秒 |
-| `ArrowUp` / `ArrowDown` | 音量增加 / 降低 5%（曲目列表未聚焦時） |
-| `n` / `p` | 下一首 / 上一首 |
-| `s` | 切換隨機播放 |
-| `r` | 切換循環模式（off / repeat-all / repeat-one） |
-| `m` | 切換 Mini Player |
-| `l` | 切換歌詞面板 |
-| `Escape` | 關閉歌詞面板 / 退出 Mini Player |
-| `Ctrl+F` / `Cmd+F` | 聚焦搜尋框 |
-| 聚焦進度列後 `←` `→` / `PageUp` `PageDown` / `Home` `End` | 倒轉／快轉 5 秒、30 秒、跳到開頭／結尾 |
-| `?` | 顯示快捷鍵說明 |
+| 按鍵                                                      | 動作                                             |
+| --------------------------------------------------------- | ------------------------------------------------ |
+| `Space`                                                   | 播放 / 暫停                                      |
+| `ArrowLeft` / `ArrowRight`                                | 快退 / 快進 5 秒                                 |
+| `ArrowUp` / `ArrowDown`                                   | 音量增加 / 降低 5%（曲目列表未聚焦時）           |
+| `n` / `p`                                                 | 下一首 / 上一首                                  |
+| `s`                                                       | 切換隨機播放                                     |
+| `r`                                                       | 切換循環模式（off / repeat-all / repeat-one）    |
+| `m`                                                       | 切換 Mini Player                                 |
+| `l`                                                       | 切換歌詞面板                                     |
+| `Escape`                                                  | 關閉歌詞面板 / 退出 Mini Player                  |
+| `Ctrl+F` / `Cmd+F`                                        | 聚焦搜尋框                                       |
+| `Ctrl+J` / `Cmd+J`                                        | 跳到播放中的曲目（也可點擊播放列左側的曲目資訊） |
+| 聚焦進度列後 `←` `→` / `PageUp` `PageDown` / `Home` `End` | 倒轉／快轉 5 秒、30 秒、跳到開頭／結尾           |
+| `?`                                                       | 顯示快捷鍵說明                                   |
 
 **曲目列表聚焦時：**
 
-| 按鍵 | 動作 |
-|------|------|
-| `ArrowUp` / `ArrowDown` | 上一首 / 下一首曲目 |
-| `Shift+ArrowUp` / `Shift+ArrowDown` | 向上 / 向下擴展選取 |
-| `Ctrl+A` / `Cmd+A` | 全選曲目 |
-| `Enter` | 播放聚焦曲目 |
-| `Home` / `End` | 跳到第一首 / 最後一首 |
+| 按鍵                                          | 動作                              |
+| --------------------------------------------- | --------------------------------- |
+| `ArrowUp` / `ArrowDown`                       | 上一首 / 下一首曲目               |
+| `Shift+ArrowUp` / `Shift+ArrowDown`           | 向上 / 向下擴展選取               |
+| `Ctrl+A` / `Cmd+A`                            | 全選曲目                          |
+| `Enter`                                       | 播放聚焦曲目                      |
+| `Home` / `End`                                | 跳到第一首 / 最後一首             |
 | `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 上移 / 下移選取曲目（播放清單內） |
 
 **播放清單檢視中：**
 
-| 按鍵 | 動作 |
-|------|------|
+| 按鍵                                          | 動作                            |
+| --------------------------------------------- | ------------------------------- |
 | `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 在側邊欄上移 / 下移目前播放清單 |
 
 ## 專案結構

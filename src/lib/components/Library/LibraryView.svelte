@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { t } from '$lib/i18n/index.svelte';
+  import { getRevealState } from '$lib/state/revealState.svelte';
   import type { Track, TrackDetails, SortColumn } from '$lib/types';
   import TrackList from './TrackList.svelte';
   import TrackPropertiesDialog from './TrackPropertiesDialog.svelte';
@@ -84,6 +86,18 @@
         notifyCritical('action.loadLibrary', err);
       }
     })();
+  });
+
+  // "Go to the playing track" must not be defeated by a search that hides it.
+  const reveal = getRevealState();
+  $effect(() => {
+    const request = reveal.request;
+    if (!request) return;
+    untrack(() => {
+      if (searchQuery.trim() !== '' && !filteredTracks.some((t) => t.id === request.trackId)) {
+        searchQuery = '';
+      }
+    });
   });
 </script>
 

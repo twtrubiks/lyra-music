@@ -19,6 +19,7 @@
   import { listen } from '@tauri-apps/api/event';
   import type { PlayerState } from '$lib/types';
   import { t } from '$lib/i18n/index.svelte';
+  import { revealPlayingTrack } from '$lib/logic/reveal-track';
 
   const player = getPlayerState();
   const lyricsState = getLyricsState();
@@ -115,7 +116,10 @@
 </script>
 
 <div class="player-bar" class:mini={player.miniMode}>
-  <TrackInfo track={player.currentTrack} />
+  <TrackInfo
+    track={player.currentTrack}
+    onreveal={player.miniMode ? undefined : revealPlayingTrack}
+  />
 
   <div class="controls">
     {#if !player.miniMode}

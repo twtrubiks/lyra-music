@@ -67,6 +67,7 @@ export const en = {
   'player.noTrack': 'No track playing',
   'player.cover': 'Cover',
   'player.seek': 'Seek',
+  'player.revealPlaying': 'Go to the playing track',
   'player.volume': 'Volume',
 
   'lyrics.noTrack': 'No track playing',
@@ -129,6 +130,7 @@ export const en = {
   'shortcuts.lyrics': 'Toggle lyrics panel',
   'shortcuts.dismiss': 'Close lyrics panel / exit mini mode',
   'shortcuts.search': 'Search',
+  'shortcuts.revealPlaying': 'Go to the playing track',
   'shortcuts.showHelp': 'Show keyboard shortcuts',
   'shortcuts.focusUp': 'Move focus up',
   'shortcuts.focusDown': 'Move focus down',

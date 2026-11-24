@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { calculateVisibleRange, scrollTopForIndex, ROW_HEIGHT } from './virtual-scroll';
+import {
+  calculateVisibleRange,
+  scrollTopForIndex,
+  scrollTopToCenterIndex,
+  ROW_HEIGHT,
+} from './virtual-scroll';
 
 describe('calculateVisibleRange', () => {
   it('returns zero range for empty list', () => {
@@ -180,5 +185,24 @@ describe('scrollTopForIndex', () => {
     // Row 0: rowTop = 0 + 40 = 40, below scrollTop 100? No, 40 < 100 → above viewport
     const result = scrollTopForIndex(index, scrollTop, containerHeight, ROW_HEIGHT, headerHeight);
     expect(result).toBe(40);
+  });
+});
+
+describe('scrollTopToCenterIndex', () => {
+  it('puts the row in the middle of the area below the sticky header', () => {
+    // Visible rows area: 400 - 40 = 360px, row 100 starts at 40 + 1000.
+    // Centered: row middle (1045) sits at scrollTop + 40 + 180.
+    expect(scrollTopToCenterIndex(100, 400, 10, 40)).toBe(825);
+  });
+
+  it('never returns a negative offset for rows near the top', () => {
+    expect(scrollTopToCenterIndex(0, 400, 10, 40)).toBe(0);
+    expect(scrollTopToCenterIndex(3, 400, 10, 40)).toBe(0);
+  });
+
+  it('uses the default row height', () => {
+    expect(scrollTopToCenterIndex(50, 300)).toBe(
+      Math.round(50 * ROW_HEIGHT + ROW_HEIGHT / 2 - 150),
+    );
   });
 });

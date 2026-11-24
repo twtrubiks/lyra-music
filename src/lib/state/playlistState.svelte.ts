@@ -1,6 +1,6 @@
 import type { Playlist } from '$lib/types';
 
-type ActiveView =
+export type ActiveView =
   | { kind: 'library' }
   | { kind: 'playlist'; playlistId: number }
   | { kind: 'artists' }

@@ -4,7 +4,14 @@
   import { loadColumnWidths, saveColumnWidths, MIN_WIDTHS } from '$lib/logic/column-resize';
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
-  import { calculateVisibleRange, scrollTopForIndex, ROW_HEIGHT } from '$lib/logic/virtual-scroll';
+  import {
+    calculateVisibleRange,
+    scrollTopForIndex,
+    scrollTopToCenterIndex,
+    ROW_HEIGHT,
+  } from '$lib/logic/virtual-scroll';
+  import { getRevealState, registerRevealListing } from '$lib/state/revealState.svelte';
+  import { isRevealFresh } from '$lib/logic/reveal-track';
   import {
     createEmptySelection,
     selectSingle,
@@ -94,6 +101,23 @@
       selection = createEmptySelection();
     }
     prevTrackIds = tracks.map((t) => t.id);
+  });
+
+  // "Go to the playing track": report what is listed, and serve a pending
+  // request once the track is listed here (after a view switch, an async
+  // playlist load or a cleared search) and the viewport has a size.
+  const reveal = getRevealState();
+  $effect(() => registerRevealListing(() => tracks));
+  $effect(() => {
+    const request = reveal.request;
+    if (!request || !wrapperEl || containerHeight <= 0) return;
+    const index = tracks.findIndex((track) => track.id === request.trackId);
+    if (index < 0 || !isRevealFresh(request, Date.now())) return;
+    selection = selectSingle(tracks, index);
+    wrapperEl.scrollTop = scrollTopToCenterIndex(index, containerHeight, ROW_HEIGHT, theadHeight);
+    // Arrow keys then continue from the revealed row
+    tableEl?.focus({ preventScroll: true });
+    reveal.request = null;
   });
 
   // Context menu state

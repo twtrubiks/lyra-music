@@ -45,18 +45,18 @@ The AppImage is also listed on [AppImageHub](https://appimage.github.io/Lyra_Mus
 
 Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri2-introduction.md)
 
-| Layer | Technology | Description |
-|-------|------------|-------------|
-| Frontend | Svelte 5 + TypeScript | Reactive state management using Svelte 5 runes |
-| Build Tool | Vite 8 | Dev server and frontend bundling |
-| Desktop Framework | Tauri 2 | Native windows, system tray, IPC communication |
-| Backend | Rust | Audio processing, file scanning, database operations |
-| Audio Engine | rodio 0.22 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
-| Metadata Parsing | lofty 0.25 | Read/write ID3/Vorbis/MP4 tags and cover art |
-| File Watching | notify 8 | Real-time folder change detection, automatic music library updates |
-| Database | SQLite (rusqlite, bundled) | WAL mode, schema migration management |
-| Online Lyrics | ureq 3 (rustls) | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar |
-| Testing | Vitest + cargo test | 25 frontend test files, 20 backend integration tests |
+| Layer             | Technology                 | Description                                                                            |
+| ----------------- | -------------------------- | -------------------------------------------------------------------------------------- |
+| Frontend          | Svelte 5 + TypeScript      | Reactive state management using Svelte 5 runes                                         |
+| Build Tool        | Vite 8                     | Dev server and frontend bundling                                                       |
+| Desktop Framework | Tauri 2                    | Native windows, system tray, IPC communication                                         |
+| Backend           | Rust                       | Audio processing, file scanning, database operations                                   |
+| Audio Engine      | rodio 0.22                 | Pure Rust implementation, no need for GStreamer, MPV, or other system audio frameworks |
+| Metadata Parsing  | lofty 0.25                 | Read/write ID3/Vorbis/MP4 tags and cover art                                           |
+| File Watching     | notify 8                   | Real-time folder change detection, automatic music library updates                     |
+| Database          | SQLite (rusqlite, bundled) | WAL mode, schema migration management                                                  |
+| Online Lyrics     | ureq 3 (rustls)            | Manual LRCLIB API search, synced lyrics cached as `.lrc` sidecar                       |
+| Testing           | Vitest + cargo test        | 25 frontend test files, 20 backend integration tests                                   |
 
 ## Key Features
 
@@ -71,6 +71,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 **Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 43 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
 
 Other features:
+
 - Time-synced scrolling lyrics and online lyrics search (LRCLIB) -- see [Lyrics](#lyrics) for how to get them
 - Artist / Album browse views (grid covers, search filtering, detail views)
 - Track metadata editing (title, artist, album written back to file)
@@ -138,36 +139,37 @@ npm run quality                 # Code quality checks (ESLint + Prettier + Style
 
 All shortcuts are disabled when an input field is focused.
 
-| Key | Action |
-|-----|--------|
-| `Space` | Play / Pause |
-| `ArrowLeft` / `ArrowRight` | Rewind / Fast-forward 5 seconds |
-| `ArrowUp` / `ArrowDown` | Increase / Decrease volume by 5% (when track list is not focused) |
-| `n` / `p` | Next / Previous track |
-| `s` | Toggle shuffle |
-| `r` | Toggle repeat mode (off / repeat-all / repeat-one) |
-| `m` | Toggle Mini Player |
-| `l` | Toggle lyrics panel |
-| `Escape` | Close lyrics panel / Exit Mini Player |
-| `Ctrl+F` / `Cmd+F` | Focus search box |
-| `←` `→` / `PageUp` `PageDown` / `Home` `End` with the progress bar focused | Seek 5 s, 30 s, or jump to start / end |
-| `?` | Show keyboard shortcuts help |
+| Key                                                                        | Action                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `Space`                                                                    | Play / Pause                                                        |
+| `ArrowLeft` / `ArrowRight`                                                 | Rewind / Fast-forward 5 seconds                                     |
+| `ArrowUp` / `ArrowDown`                                                    | Increase / Decrease volume by 5% (when track list is not focused)   |
+| `n` / `p`                                                                  | Next / Previous track                                               |
+| `s`                                                                        | Toggle shuffle                                                      |
+| `r`                                                                        | Toggle repeat mode (off / repeat-all / repeat-one)                  |
+| `m`                                                                        | Toggle Mini Player                                                  |
+| `l`                                                                        | Toggle lyrics panel                                                 |
+| `Escape`                                                                   | Close lyrics panel / Exit Mini Player                               |
+| `Ctrl+F` / `Cmd+F`                                                         | Focus search box                                                    |
+| `Ctrl+J` / `Cmd+J`                                                         | Go to the playing track (or click the track info in the player bar) |
+| `←` `→` / `PageUp` `PageDown` / `Home` `End` with the progress bar focused | Seek 5 s, 30 s, or jump to start / end                              |
+| `?`                                                                        | Show keyboard shortcuts help                                        |
 
 **When track list is focused:**
 
-| Key | Action |
-|-----|--------|
-| `ArrowUp` / `ArrowDown` | Previous / Next track |
-| `Shift+ArrowUp` / `Shift+ArrowDown` | Extend selection up / down |
-| `Ctrl+A` / `Cmd+A` | Select all tracks |
-| `Enter` | Play focused track |
-| `Home` / `End` | Jump to first / last track |
+| Key                                           | Action                                             |
+| --------------------------------------------- | -------------------------------------------------- |
+| `ArrowUp` / `ArrowDown`                       | Previous / Next track                              |
+| `Shift+ArrowUp` / `Shift+ArrowDown`           | Extend selection up / down                         |
+| `Ctrl+A` / `Cmd+A`                            | Select all tracks                                  |
+| `Enter`                                       | Play focused track                                 |
+| `Home` / `End`                                | Jump to first / last track                         |
 | `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move selected tracks up / down (within a playlist) |
 
 **In playlist view:**
 
-| Key | Action |
-|-----|--------|
+| Key                                           | Action                                             |
+| --------------------------------------------- | -------------------------------------------------- |
 | `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move the current playlist up / down in the sidebar |
 
 ## Project Structure

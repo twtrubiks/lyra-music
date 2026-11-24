@@ -31,6 +31,7 @@ export function getShortcutCategories(): ShortcutCategory[] {
         { keys: ['L'], description: t('shortcuts.lyrics') },
         { keys: ['Escape'], description: t('shortcuts.dismiss') },
         { keys: [mod, 'F'], description: t('shortcuts.search') },
+        { keys: [mod, 'J'], description: t('shortcuts.revealPlaying') },
         { keys: ['?'], description: t('shortcuts.showHelp') },
       ],
     },

@@ -14,6 +14,7 @@
   import ErrorNotification from '$lib/components/ErrorNotification.svelte';
   import KeyboardShortcutsDialog from '$lib/components/Help/KeyboardShortcutsDialog.svelte';
   import { mapKeyToAction, resolveDismissTarget } from '$lib/logic/keyboard';
+  import { revealPlayingTrack } from '$lib/logic/reveal-track';
   import {
     warnNonCritical,
     notifyCritical,
@@ -355,6 +356,9 @@
         break;
       case 'focus-search':
         (document.querySelector('.search-box input') as HTMLElement)?.focus();
+        break;
+      case 'reveal-playing':
+        revealPlayingTrack();
         break;
     }
   }
