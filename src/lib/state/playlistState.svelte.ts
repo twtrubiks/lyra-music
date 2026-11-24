@@ -11,6 +11,9 @@ type ActiveView =
 
 let playlists = $state<Playlist[]>([]);
 let activeView = $state<ActiveView>({ kind: 'library' });
+// Bumped when a playlist's tracks change outside the view showing it (files
+// dropped into it); playlist views reload on change.
+let tracksVersion = $state(0);
 
 export function getPlaylistState() {
   return {
@@ -25,6 +28,12 @@ export function getPlaylistState() {
     },
     set activeView(v: ActiveView) {
       activeView = v;
+    },
+    get tracksVersion() {
+      return tracksVersion;
+    },
+    set tracksVersion(v: number) {
+      tracksVersion = v;
     },
   };
 }

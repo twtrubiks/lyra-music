@@ -103,6 +103,7 @@ export const zhTW: Messages = {
   'playlist.resumeHint': '從上次播放進度繼續',
 
   'drop.title': '拖放以匯入',
+  'drop.titlePlaylist': '拖放以加入「{name}」',
   'drop.itemCount': { other: '{count} 個項目' },
 
   'shortcuts.title': '快捷鍵說明',
@@ -152,6 +153,7 @@ export const zhTW: Messages = {
   'action.loadPlaylistTracks': '載入播放清單曲目',
   'action.reorderPlaylist': '重新排序播放清單',
   'action.removeFromPlaylist': '從播放清單移除',
+  'action.addToPlaylist': '加入播放清單',
   'action.getTrackDetails': '取得曲目詳細資料',
   'action.updateMetadata': '更新曲目資訊',
   'action.loadLibrary': '載入音樂庫',

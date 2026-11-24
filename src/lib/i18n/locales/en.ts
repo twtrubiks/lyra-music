@@ -107,6 +107,7 @@ export const en = {
   'playlist.resumeHint': 'Resume from where you left off',
 
   'drop.title': 'Drop to import',
+  'drop.titlePlaylist': 'Drop to add to “{name}”',
   'drop.itemCount': { one: '{count} item', other: '{count} items' },
 
   'shortcuts.title': 'Keyboard shortcuts',
@@ -159,6 +160,7 @@ export const en = {
   'action.loadPlaylistTracks': 'Load playlist tracks',
   'action.reorderPlaylist': 'Reorder playlist',
   'action.removeFromPlaylist': 'Remove from playlist',
+  'action.addToPlaylist': 'Add to playlist',
   'action.getTrackDetails': 'Get track details',
   'action.updateMetadata': 'Update metadata',
   'action.loadLibrary': 'Load library',

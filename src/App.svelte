@@ -32,6 +32,7 @@
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { createMiniWindowSync } from '$lib/logic/mini-window';
+  import { addImportedTracksToPlaylist } from '$lib/logic/track-actions';
   import { listen } from '@tauri-apps/api/event';
   import { t } from '$lib/i18n/index.svelte';
   import { isTrackDrag } from '$lib/logic/format';
@@ -45,13 +46,25 @@
   let draggedPathCount = $state(0);
   let tauriDragDropActive = $state(false);
 
+  // Files dropped while a playlist is shown also go into that playlist.
+  const dropTargetPlaylist = $derived.by(() => {
+    const view = playlistState.activeView;
+    if (view.kind !== 'playlist') return null;
+    return playlistState.playlists.find((pl) => pl.id === view.playlistId) ?? null;
+  });
+
   async function importDroppedPaths(paths: string[]) {
     if (library.isScanning || paths.length === 0) return;
+    // Captured now: the view may change while the import runs.
+    const targetPlaylistId = dropTargetPlaylist?.id ?? null;
     library.isScanning = true;
     try {
       const result = await libraryApi.importPaths(paths);
       library.allTracks = await libraryApi.getAllTracks();
       notifyImportResult(result);
+      if (targetPlaylistId !== null) {
+        await addImportedTracksToPlaylist(targetPlaylistId, result.tracks);
+      }
     } catch (err) {
       notifyCritical('action.importDropped', err);
     } finally {
@@ -373,7 +386,11 @@
             d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
           />
         </svg>
-        <p class="drop-title">{t('drop.title')}</p>
+        <p class="drop-title">
+          {dropTargetPlaylist
+            ? t('drop.titlePlaylist', { name: dropTargetPlaylist.name })
+            : t('drop.title')}
+        </p>
         <p class="drop-hint">
           {t('drop.itemCount', { count: draggedPathCount })}
         </p>

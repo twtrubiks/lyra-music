@@ -4,7 +4,7 @@ import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
 import { getPlayerState } from '$lib/state/playerState.svelte';
 import { trashTracks, removeTracks } from '$lib/api/library';
-import { batchRemoveFromPlaylist } from '$lib/api/playlist';
+import { batchAddToPlaylist, batchRemoveFromPlaylist } from '$lib/api/playlist';
 import { handleTracksRemovedBatch, removeUpcomingFromQueue } from '$lib/logic/playback-actions';
 import { notifyCritical } from '$lib/logic/error-handler';
 import type { ActionKey } from '$lib/i18n/index.svelte';
@@ -128,4 +128,33 @@ export async function optimisticPlaylistRemove(
   if (options?.onComplete) {
     await options.onComplete();
   }
+}
+
+/**
+ * Add freshly imported tracks to a playlist: used when files are dropped
+ * while that playlist is shown. The import upserts on file path, so `tracks`
+ * also holds files that were already in the library; the backend skips ids
+ * the playlist already has.
+ */
+export async function addImportedTracksToPlaylist(
+  playlistId: number,
+  tracks: readonly Track[],
+): Promise<void> {
+  const ids = [...new Set(tracks.map((t) => t.id))];
+  if (ids.length === 0) return;
+
+  try {
+    await batchAddToPlaylist(playlistId, ids);
+  } catch (err) {
+    notifyCritical('action.addToPlaylist', err);
+    return;
+  }
+
+  const playlistState = getPlaylistState();
+  playlistState.playlists = playlistState.playlists.map((pl) => {
+    if (pl.id !== playlistId) return pl;
+    const existing = new Set(pl.track_ids);
+    return { ...pl, track_ids: [...pl.track_ids, ...ids.filter((id) => !existing.has(id))] };
+  });
+  playlistState.tracksVersion += 1;
 }

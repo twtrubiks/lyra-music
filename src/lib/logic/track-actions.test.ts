@@ -13,6 +13,7 @@ import {
   optimisticTrash,
   optimisticRemove,
   optimisticPlaylistRemove,
+  addImportedTracksToPlaylist,
 } from '$lib/logic/track-actions';
 import { createMockPlaylist } from '$lib/test-helpers';
 
@@ -735,5 +736,73 @@ describe('optimisticPlaylistRemove', () => {
 
       expect(player.playQueue).toHaveLength(3);
     });
+  });
+});
+
+describe('addImportedTracksToPlaylist', () => {
+  const playlistState = getPlaylistState();
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlaylistState();
+    playlistState.tracksVersion = 0;
+  });
+
+  afterEach(() => {
+    resetPlaylistState();
+  });
+
+  it('adds the imported tracks to the playlist in one call', async () => {
+    const tracks = createMockTracks(3);
+    playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [] })];
+
+    await addImportedTracksToPlaylist(10, tracks);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith('batch_add_to_playlist', {
+      playlistId: 10,
+      trackIds: [1, 2, 3],
+    });
+  });
+
+  it('appends only the ids that are not in the playlist yet', async () => {
+    const tracks = createMockTracks(3);
+    playlistState.playlists = [
+      createMockPlaylist({ id: 10, track_ids: [2] }),
+      createMockPlaylist({ id: 11, track_ids: [9] }),
+    ];
+
+    await addImportedTracksToPlaylist(10, tracks);
+
+    expect(playlistState.playlists[0].track_ids).toEqual([2, 1, 3]);
+    expect(playlistState.playlists[1].track_ids).toEqual([9]);
+  });
+
+  it('signals playlist views to reload', async () => {
+    playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [] })];
+
+    await addImportedTracksToPlaylist(10, createMockTracks(1));
+
+    expect(playlistState.tracksVersion).toBe(1);
+  });
+
+  it('does nothing when no track was imported', async () => {
+    playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [] })];
+
+    await addImportedTracksToPlaylist(10, []);
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(playlistState.tracksVersion).toBe(0);
+  });
+
+  it('leaves the state untouched when the backend call fails', async () => {
+    mockInvoke.mockRejectedValue(new Error('db error'));
+    playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [5] })];
+
+    await addImportedTracksToPlaylist(10, createMockTracks(2));
+
+    expect(playlistState.playlists[0].track_ids).toEqual([5]);
+    expect(playlistState.tracksVersion).toBe(0);
   });
 });

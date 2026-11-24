@@ -119,6 +119,12 @@
     void playlistId;
     // This instance is reused across playlists; a search belongs to one.
     searchQuery = '';
+  });
+
+  $effect(() => {
+    void playlistId;
+    // Also reload when tracks were added from outside (files dropped in).
+    void getPlaylistState().tracksVersion;
     loadTracks();
   });
 
