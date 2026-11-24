@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod commands;
 pub mod error;
+pub mod logging;
 pub mod metadata;
 pub mod models;
 pub mod scanner;
@@ -39,7 +40,7 @@ fn spawn_player_polling(
                 let mut p = match player.lock() {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!("player lock poisoned in polling thread: {e}");
+                        log::error!("player lock poisoned in polling thread: {e}");
                         continue;
                     }
                 };
@@ -71,10 +72,12 @@ fn spawn_player_polling(
                     match db.lock() {
                         Ok(conn) => {
                             if let Err(e) = storage::library_repo::increment_play_count(&conn, id) {
-                                eprintln!("[lyra] failed to credit play count for track {id}: {e}");
+                                log::error!("failed to credit play count for track {id}: {e}");
                             }
                         }
-                        Err(e) => eprintln!("[lyra] db lock poisoned in polling thread: {e}"),
+                        Err(e) => {
+                            log::error!("db lock poisoned in polling thread: {e}");
+                        }
                     }
                 }
             }
@@ -98,7 +101,7 @@ fn init_watcher(
     ) {
         Ok(w) => w,
         Err(e) => {
-            eprintln!("[lyra] folder watcher unavailable, live library updates disabled: {e}");
+            log::error!("folder watcher unavailable, live library updates disabled: {e}");
             pending_error.set(e.to_string());
             return None;
         }
@@ -109,13 +112,13 @@ fn init_watcher(
             Ok(folders) => {
                 for folder in folders {
                     if let Err(e) = watcher.watch(&folder) {
-                        eprintln!("[lyra] failed to watch folder {folder}: {e}");
+                        log::warn!("failed to watch folder {folder}: {e}");
                     }
                 }
             }
-            Err(e) => eprintln!("[lyra] failed to load scan folders for watching: {e}"),
+            Err(e) => log::error!("failed to load scan folders for watching: {e}"),
         },
-        Err(e) => eprintln!("[lyra] failed to lock db while starting watcher: {e}"),
+        Err(e) => log::error!("failed to lock db while starting watcher: {e}"),
     }
 
     Some(watcher)
@@ -126,6 +129,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // First, so that everything after it (including a failed setup,
+            // which panics) ends up in the log file.
+            logging::init(app.handle());
+            log::info!("started, version {}", env!("CARGO_PKG_VERSION"));
+
             let conn = db::init_db(app.handle())?;
             let db_arc = Arc::new(Mutex::new(conn));
             app.manage(DbState(Arc::<Mutex<Connection>>::clone(&db_arc)));
@@ -138,7 +146,7 @@ pub fn run() {
             // No output device must not keep the app from starting: the
             // device is opened again on the next play.
             let player = AudioPlayer::new().unwrap_or_else(|e| {
-                eprintln!("[lyra] audio output unavailable at startup: {e}");
+                log::warn!("audio output unavailable at startup: {e}");
                 AudioPlayer::without_device()
             });
             app.manage(SharedPlayer::new(Mutex::new(player)));

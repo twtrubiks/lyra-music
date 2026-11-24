@@ -35,7 +35,7 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
         let entry = match entry_result {
             Ok(e) => e,
             Err(e) => {
-                eprintln!("Warning: skipping entry during scan: {e}");
+                log::warn!("skipping entry during scan: {e}");
                 continue;
             }
         };
@@ -46,8 +46,8 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
             match path.canonicalize() {
                 Ok(canonical) => {
                     if !visited_dirs.insert(canonical) {
-                        eprintln!(
-                            "Warning: skipping already-visited directory (possible symlink cycle): {}",
+                        log::warn!(
+                            "skipping already-visited directory (possible symlink cycle): {}",
                             path.display()
                         );
                         // `continue` alone would still descend into it — the
@@ -57,7 +57,7 @@ pub fn scan_folder(folder_path: &str) -> Result<Vec<String>, AppError> {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Warning: failed to canonicalize {}: {e}", path.display());
+                    log::warn!("failed to canonicalize {}: {e}", path.display());
                     continue;
                 }
             }

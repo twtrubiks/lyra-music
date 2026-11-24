@@ -195,3 +195,15 @@ src-tauri/                        # Backend (Rust)
     models/                       # Data structure definitions (track, playlist, player_state)
   tests/                          # 20 integration tests
 ```
+
+## Logs
+
+Backend errors and warnings (files skipped during a scan, folder watching failures, audio device errors, panics) are written to a log file. Please attach it when reporting a problem:
+
+| Platform | Location                                      |
+| -------- | --------------------------------------------- |
+| Linux    | `~/.local/share/com.lyra.music/logs/lyra.log` |
+| macOS    | `~/Library/Logs/com.lyra.music/lyra.log`      |
+| Windows  | `%LOCALAPPDATA%\com.lyra.music\logs\lyra.log` |
+
+The file is capped at 1 MB; when it fills up it is renamed to `lyra_<date>_<time>.log` next to it, and only the most recent of those is kept. Timestamps are UTC. The log contains file paths, so review it before sharing.

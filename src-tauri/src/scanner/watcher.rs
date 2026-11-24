@@ -164,7 +164,7 @@ impl FolderWatcher {
                         // missed. Tell the user: otherwise all they see is a
                         // library that silently stopped updating.
                         WatcherSignal::Error(message) => {
-                            eprintln!("[lyra] folder watcher error: {message}");
+                            log::error!("folder watcher error: {message}");
                             pending_error.set(message.clone());
                             if error_limiter.should_report(Instant::now()) {
                                 let _ = app_handle_clone.emit("watcher-error", message);
@@ -235,7 +235,7 @@ where
         Ok(()) => {
             watched_paths.insert(p);
         }
-        Err(e) => eprintln!("Failed to watch {path}: {e}"),
+        Err(e) => log::warn!("Failed to watch {path}: {e}"),
     }
 }
 
@@ -339,7 +339,7 @@ pub fn process_event_batch(
         let conn = match db.lock() {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("Failed to acquire database lock: {e}");
+                log::error!("Failed to acquire database lock: {e}");
                 return (false, Vec::new());
             }
         };
@@ -475,7 +475,7 @@ fn apply_rename_events(
                 Ok(n) if n > 0 => changed = true,
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("[lyra] watcher: failed to rename folder {from_str}: {e}");
+                    log::warn!("watcher: failed to rename folder {from_str}: {e}");
                 }
             }
         } else if folder_scanner::is_supported_audio_file(to_str) {
@@ -489,7 +489,7 @@ fn apply_rename_events(
                 match library_repo::update_track_path(conn, from_str, to_str) {
                     Ok(_) => changed = true,
                     Err(e) => {
-                        eprintln!("[lyra] watcher: failed to rename {from_str}: {e}");
+                        log::warn!("watcher: failed to rename {from_str}: {e}");
                     }
                 }
             }

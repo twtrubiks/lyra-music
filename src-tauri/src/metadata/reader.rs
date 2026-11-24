@@ -99,8 +99,8 @@ pub fn read_metadata(file_path: &str) -> Result<Track, AppError> {
         Err(e) => {
             // Last-resort fallback for tags even Relaxed mode cannot parse:
             // skip tag reading and use only audio properties + filename.
-            eprintln!(
-                "[lyra] Tag parsing failed for {file_path}: {}; \
+            log::warn!(
+                "Tag parsing failed for {file_path}: {}; \
                  retrying without tags",
                 error_chain(&e)
             );
@@ -179,8 +179,8 @@ pub fn read_lyrics(file_path: &str) -> Option<String> {
         match String::from_utf8(bytes) {
             Ok(text) if !text.trim().is_empty() => return Some(text),
             Ok(_) => {}
-            Err(_) => eprintln!(
-                "[lyra] sidecar lyrics not valid UTF-8, ignoring: {}",
+            Err(_) => log::warn!(
+                "sidecar lyrics not valid UTF-8, ignoring: {}",
                 sidecar.display()
             ),
         }
@@ -250,7 +250,7 @@ pub fn remove_cover_art_file(cover_art_path: &str) {
     if let Err(e) = fs::remove_file(cover_art_path)
         && e.kind() != std::io::ErrorKind::NotFound
     {
-        eprintln!("[lyra] failed to remove cover art {cover_art_path}: {e}");
+        log::warn!("failed to remove cover art {cover_art_path}: {e}");
     }
 }
 

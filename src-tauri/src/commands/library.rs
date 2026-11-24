@@ -45,7 +45,7 @@ fn read_audio_file(file_path: &str) -> Result<PreparedFile, FailedFile> {
             track,
         }),
         Err(e) => {
-            eprintln!("[lyra] Failed to read metadata for {file_path}: {e}");
+            log::warn!("Failed to read metadata for {file_path}: {e}");
             Err(FailedFile {
                 file_path: file_path.to_string(),
                 error: e.to_string(),
@@ -89,7 +89,7 @@ fn insert_chunk(
             match reader::save_cover_art(app_data_dir, id, data, mime) {
                 Ok(path) => Some((i, path)),
                 Err(e) => {
-                    eprintln!("[lyra] failed to save cover art for track {id}: {e}");
+                    log::warn!("failed to save cover art for track {id}: {e}");
                     None
                 }
             }
@@ -103,8 +103,8 @@ fn insert_chunk(
                     inserted[i].cover_art_path = Some(path);
                 }
             }
-            Err(e) => eprintln!(
-                "[lyra] failed to record cover art paths for {} tracks: {e}",
+            Err(e) => log::warn!(
+                "failed to record cover art paths for {} tracks: {e}",
                 saved_covers.len()
             ),
         }
@@ -161,10 +161,7 @@ pub fn import_audio_files(
         match insert_chunk(db, app_data_dir, &prepared) {
             Ok(inserted) => tracks.extend(inserted),
             Err(e) => {
-                eprintln!(
-                    "[lyra] Import chunk failed, {} files skipped: {e}",
-                    prepared.len()
-                );
+                log::error!("Import chunk failed, {} files skipped: {e}", prepared.len());
                 failed_files.extend(prepared.into_iter().map(|p| FailedFile {
                     file_path: p.track.file_path,
                     error: format!("database error: {e}"),

@@ -29,6 +29,8 @@ thiserror = "2"
 trash = "5"
 notify = "9"
 ureq = "3"
+tauri-plugin-log = "2"
+log = "0.4"
 
 [features]
 audio-tests = []

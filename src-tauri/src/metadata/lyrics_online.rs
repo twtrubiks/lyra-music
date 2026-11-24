@@ -232,18 +232,12 @@ pub fn save_sidecar_if_absent(audio_path: &str, lyrics: &str) {
     {
         Ok(mut file) => {
             if let Err(e) = file.write_all(lyrics.as_bytes()) {
-                eprintln!(
-                    "[lyra] failed to write lyrics sidecar {}: {e}",
-                    path.display()
-                );
+                log::warn!("failed to write lyrics sidecar {}: {e}", path.display());
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(e) => {
-            eprintln!(
-                "[lyra] failed to create lyrics sidecar {}: {e}",
-                path.display()
-            );
+            log::warn!("failed to create lyrics sidecar {}: {e}", path.display());
         }
     }
 }

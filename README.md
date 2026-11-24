@@ -196,6 +196,18 @@ src-tauri/                        # 後端 (Rust)
   tests/                          # 20 個整合測試
 ```
 
+## 日誌
+
+後端的錯誤與警告（掃描略過的檔案、資料夾監控失敗、音訊裝置無法開啟、程式 panic 等）會寫入日誌檔，回報問題時請附上：
+
+| 平台    | 位置                                          |
+| ------- | --------------------------------------------- |
+| Linux   | `~/.local/share/com.lyra.music/logs/lyra.log` |
+| macOS   | `~/Library/Logs/com.lyra.music/lyra.log`      |
+| Windows | `%LOCALAPPDATA%\com.lyra.music\logs\lyra.log` |
+
+檔案上限 1 MB，寫滿時改名為同目錄的 `lyra_<日期>_<時間>.log`，只保留最近一個。時間為 UTC。日誌內容包含檔案路徑，分享前請自行檢視。
+
 ## Donation
 
 文章都是我自己研究內化後原創，如果有幫助到您，也想鼓勵我的話，歡迎請我喝一杯咖啡 :laughing:
