@@ -687,3 +687,180 @@ fn test_stop_is_not_a_completion() {
     assert_eq!(player.completion_seq(), 0);
     assert!(player.last_completed_track_id().is_none());
 }
+
+// ---------------------------------------------------------------------------
+// Replacing / clearing the queued gapless track
+// ---------------------------------------------------------------------------
+
+/// Regression: once a next track was queued, queue_next was a silent no-op,
+/// so a track removed from the queue (or a shuffle toggle) could not change
+/// what played next — the stale track played anyway.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_queue_next_replaces_previously_queued_track() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100 / 2);
+    // b is long: if it were still played, the sink would not be on c below.
+    let b = common::create_test_wav_with_samples(dir.path(), "b.wav", 44100 * 5);
+    let c = common::create_test_wav_with_samples(dir.path(), "c.wav", 44100 * 5);
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 0.5).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(b.to_str().unwrap(), 2, 5.0).unwrap();
+    player.queue_next(c.to_str().unwrap(), 3, 5.0).unwrap();
+    assert!(player.is_gapless_queued());
+
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    assert!(
+        player.check_gapless_transition(),
+        "should transition once the first track ends"
+    );
+    assert_eq!(
+        player.get_current_track_id(),
+        Some(3),
+        "the replacement track must play, not the stale one"
+    );
+    // Position is within the replacement track, i.e. b was skipped instantly.
+    let pos = player.get_pos();
+    assert!(pos < 1.5, "replacement should have just started, got {pos}");
+    assert!(!player.has_track_ended());
+}
+
+/// Queueing the track that is already queued must not restart or drop it.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_queue_next_same_track_is_noop() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100 / 2);
+    let b = common::create_test_wav(dir.path(), "b.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 0.5).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(b.to_str().unwrap(), 2, 0.1).unwrap();
+    player.queue_next(b.to_str().unwrap(), 2, 0.1).unwrap();
+    assert!(player.is_gapless_queued());
+
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    assert!(player.check_gapless_transition());
+    assert_eq!(player.get_current_track_id(), Some(2));
+}
+
+/// Regression: there was no way to un-queue the next track, so removing it
+/// from the queue while the current track played did not stop it playing.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_clear_queued_next_stops_after_current_track() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100 / 2);
+    let b = common::create_test_wav_with_samples(dir.path(), "b.wav", 44100 * 5);
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 0.5).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(b.to_str().unwrap(), 2, 5.0).unwrap();
+
+    player.clear_queued_next();
+    assert!(!player.is_gapless_queued());
+
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    assert!(
+        !player.check_gapless_transition(),
+        "no transition after the queued track was cleared"
+    );
+    assert_eq!(player.get_current_track_id(), Some(1));
+    assert!(
+        player.has_track_ended(),
+        "playback should end with the current track; the cleared track must not play"
+    );
+}
+
+/// The cancelled source resets the sink position to 0 when the queue reaches
+/// it, so the end of a track longer than the 1 s position guard must still be
+/// detected — otherwise auto-advance and the play count never happen.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_clear_queued_next_still_reports_end_of_longer_track() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100 * 5 / 2);
+    let b = common::create_test_wav_with_samples(dir.path(), "b.wav", 44100 * 5);
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 2.5).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(b.to_str().unwrap(), 2, 5.0).unwrap();
+    player.clear_queued_next();
+
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    assert!(
+        !player.has_track_ended(),
+        "must not report the end while the current track is still playing"
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(2300));
+    assert!(!player.check_gapless_transition());
+    assert!(
+        player.has_track_ended(),
+        "the end of the current track must be detected after a cleared queue"
+    );
+}
+
+/// A replacement that fails to open has already cancelled the old queued
+/// track; the current track's end must still be reported so the frontend can
+/// advance on its own.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_queue_next_failed_replacement_still_reports_end() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100 * 5 / 2);
+    let b = common::create_test_wav_with_samples(dir.path(), "b.wav", 44100 * 5);
+    let missing = dir.path().join("missing.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 2.5).unwrap();
+    player.set_current_track_id(Some(1));
+    player.queue_next(b.to_str().unwrap(), 2, 5.0).unwrap();
+    assert!(
+        player
+            .queue_next(missing.to_str().unwrap(), 3, 5.0)
+            .is_err()
+    );
+    assert!(!player.is_gapless_queued());
+
+    std::thread::sleep(std::time::Duration::from_millis(3300));
+    assert!(!player.check_gapless_transition());
+    assert_eq!(player.get_current_track_id(), Some(1));
+    assert!(player.has_track_ended());
+}
+
+/// Clearing with nothing queued is a harmless no-op.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_clear_queued_next_without_queue_is_noop() {
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.clear_queued_next();
+    assert!(!player.is_gapless_queued());
+}
+
+/// Queueing after the current track has ended must not start playback: an
+/// append to the drained sink would play at once with no track loaded.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_queue_next_after_track_ended_is_noop() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav(dir.path(), "a.wav");
+    let b = common::create_test_wav_with_samples(dir.path(), "b.wav", 44100 * 5);
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(a.to_str().unwrap(), 0.1).unwrap();
+    player.set_current_track_id(Some(1));
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert!(player.has_track_ended());
+    player.acknowledge_track_ended();
+
+    player.queue_next(b.to_str().unwrap(), 2, 5.0).unwrap();
+
+    assert!(!player.is_gapless_queued());
+    assert!(!player.is_playing(), "nothing may start playing");
+}

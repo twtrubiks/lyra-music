@@ -19,6 +19,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 import {
   handleTrackRemoved,
   handleTracksRemovedBatch,
+  removeUpcomingFromQueue,
+  reorderQueue,
   autoAdvance,
   startPlayingTrack,
   handleGaplessTransition,
@@ -1201,7 +1203,9 @@ describe('toggleShuffle', () => {
     ]);
   });
 
-  it('does not queue anything while paused', async () => {
+  it('re-queues while paused too, so resuming does not play the stale next', async () => {
+    // The paused track still has its gapless next sitting in the backend
+    // queue; leaving it would play the pre-toggle track after resume.
     const tracks = createMockTracks(4);
     await startPlayingTrack(tracks[0], tracks);
     player.isPlaying = false;
@@ -1209,7 +1213,22 @@ describe('toggleShuffle', () => {
 
     toggleShuffle();
 
-    expect(callsOf('queue_next_track')).toEqual([]);
+    const next = tracks[player.shuffledIndices[1]];
+    expect(callsOf('queue_next_track')).toEqual([
+      [
+        'queue_next_track',
+        { path: next.file_path, nextId: next.id, durationSecs: next.duration_secs },
+      ],
+    ]);
+  });
+
+  it('does not queue anything when no track is loaded', () => {
+    player.playQueue = createMockTracks(4);
+    mockInvoke.mockClear();
+
+    toggleShuffle();
+
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 });
 
@@ -1575,5 +1594,200 @@ describe('handleTracksRemovedBatch — repeat modes', () => {
     expect(player.playQueue).toEqual([]);
     expect(player.currentTrack).toBeNull();
     expect(player.isPlaying).toBe(false);
+  });
+});
+
+describe('gapless next follows queue changes', () => {
+  const player = getPlayerState();
+
+  const queueArgs = (t: { file_path: string; id: number; duration_secs: number }) => [
+    'queue_next_track',
+    { path: t.file_path, nextId: t.id, durationSecs: t.duration_secs },
+  ];
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue(undefined);
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  afterEach(() => {
+    resetPlayerState();
+    resetPlaylistState();
+  });
+
+  it('re-queues the new next when the upcoming track is removed', async () => {
+    // Regression: playing a of [a, b, c], removing b left b in the backend
+    // gapless queue, so b played anyway.
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    await handleTrackRemoved(tracks[1].id);
+
+    expect(player.currentTrack?.id).toBe(tracks[0].id);
+    expect(callsOf('stop')).toEqual([]);
+    expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[2])]);
+  });
+
+  it('clears the queued next when the removed track was the last one', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[0], tracks);
+    mockInvoke.mockClear();
+
+    await handleTrackRemoved(tracks[1].id);
+
+    expect(callsOf('queue_next_track')).toEqual([]);
+    expect(callsOf('clear_queued_next_track')).toHaveLength(1);
+  });
+
+  it('re-queues after a removal while paused', async () => {
+    const tracks = createMockTracks(3);
+    await startPlayingTrack(tracks[0], tracks);
+    player.isPlaying = false;
+    mockInvoke.mockClear();
+
+    await handleTrackRemoved(tracks[1].id);
+
+    expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[2])]);
+  });
+
+  it('cycleRepeat re-queues the next for the new repeat mode', async () => {
+    const tracks = createMockTracks(2);
+    await startPlayingTrack(tracks[1], tracks); // last track, repeat off → no next
+    mockInvoke.mockClear();
+
+    cycleRepeat(); // repeat-all → wraps to the first track
+    expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[0])]);
+
+    mockInvoke.mockClear();
+    cycleRepeat(); // repeat-one → the same track again
+    expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[1])]);
+
+    mockInvoke.mockClear();
+    cycleRepeat(); // off → nothing follows the last track
+    expect(callsOf('queue_next_track')).toEqual([]);
+    expect(callsOf('clear_queued_next_track')).toHaveLength(1);
+  });
+
+  describe('removeUpcomingFromQueue', () => {
+    it('drops the tracks from the queue and re-queues the next', async () => {
+      const tracks = createMockTracks(4);
+      await startPlayingTrack(tracks[1], tracks);
+      mockInvoke.mockClear();
+
+      removeUpcomingFromQueue(new Set([tracks[0].id, tracks[2].id]));
+
+      expect(player.playQueue.map((t) => t.id)).toEqual([tracks[1].id, tracks[3].id]);
+      expect(player.currentIndex).toBe(0);
+      expect(player.currentTrack?.id).toBe(tracks[1].id);
+      expect(callsOf('stop')).toEqual([]);
+      expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[3])]);
+    });
+
+    it('keeps the currently playing track in the queue', async () => {
+      const tracks = createMockTracks(3);
+      await startPlayingTrack(tracks[1], tracks);
+      mockInvoke.mockClear();
+
+      removeUpcomingFromQueue(new Set([tracks[1].id, tracks[2].id]));
+
+      expect(player.playQueue.map((t) => t.id)).toEqual([tracks[0].id, tracks[1].id]);
+      expect(player.currentIndex).toBe(1);
+      expect(player.currentTrack?.id).toBe(tracks[1].id);
+      expect(callsOf('stop')).toEqual([]);
+      expect(callsOf('play_track')).toEqual([]);
+    });
+
+    it('remaps the shuffle order', async () => {
+      const tracks = createMockTracks(4);
+      await startPlayingTrack(tracks[0], tracks);
+      player.shuffleEnabled = true;
+      player.shuffledIndices = [0, 3, 1, 2];
+      mockInvoke.mockClear();
+
+      removeUpcomingFromQueue(new Set([tracks[1].id]));
+
+      expect(player.shuffledIndices).toEqual([0, 2, 1]);
+      expect(callsOf('queue_next_track')).toEqual([queueArgs(tracks[3])]);
+    });
+
+    it('does nothing when no queued track matches', async () => {
+      const tracks = createMockTracks(2);
+      await startPlayingTrack(tracks[0], tracks);
+      mockInvoke.mockClear();
+
+      removeUpcomingFromQueue(new Set([999]));
+
+      expect(player.playQueue).toHaveLength(2);
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reorderQueue', () => {
+    it('follows the new order and re-queues the next', async () => {
+      const [a, b, c] = createMockTracks(3);
+      await startPlayingTrack(a, [a, b, c]);
+      mockInvoke.mockClear();
+
+      reorderQueue([a.id, c.id, b.id]);
+
+      expect(player.playQueue.map((t) => t.id)).toEqual([a.id, c.id, b.id]);
+      expect(player.currentIndex).toBe(0);
+      expect(player.currentTrack?.id).toBe(a.id);
+      expect(callsOf('play_track')).toEqual([]);
+      expect(callsOf('queue_next_track')).toEqual([queueArgs(c)]);
+    });
+
+    it('moves the current index along with the playing track', async () => {
+      const [a, b, c] = createMockTracks(3);
+      await startPlayingTrack(a, [a, b, c]);
+      mockInvoke.mockClear();
+
+      reorderQueue([b.id, c.id, a.id]);
+
+      expect(player.currentIndex).toBe(2);
+      expect(player.currentTrack?.id).toBe(a.id);
+      // a is now last and repeat is off: nothing may follow it
+      expect(callsOf('queue_next_track')).toEqual([]);
+      expect(callsOf('clear_queued_next_track')).toHaveLength(1);
+    });
+
+    it('keeps queued tracks that are not in the new order in their slot', async () => {
+      const [a, b, c, d] = createMockTracks(4);
+      await startPlayingTrack(b, [a, b, c, d]);
+      mockInvoke.mockClear();
+
+      // b was removed from the playlist while playing, so it is not listed
+      reorderQueue([d.id, c.id, a.id]);
+
+      expect(player.playQueue.map((t) => t.id)).toEqual([d.id, b.id, c.id, a.id]);
+      expect(player.currentIndex).toBe(1);
+      expect(callsOf('queue_next_track')).toEqual([queueArgs(c)]);
+    });
+
+    it('keeps the shuffle order pointing at the same tracks', async () => {
+      const [a, b, c] = createMockTracks(3);
+      await startPlayingTrack(a, [a, b, c]);
+      player.shuffleEnabled = true;
+      player.shuffledIndices = [0, 2, 1]; // a, c, b
+      mockInvoke.mockClear();
+
+      reorderQueue([c.id, b.id, a.id]);
+
+      expect(player.shuffledIndices.map((i) => player.playQueue[i].id)).toEqual([a.id, c.id, b.id]);
+      expect(player.currentIndex).toBe(2);
+    });
+
+    it('does nothing when the order is unchanged', async () => {
+      const [a, b, c] = createMockTracks(3);
+      await startPlayingTrack(a, [a, b, c]);
+      mockInvoke.mockClear();
+
+      reorderQueue([a.id, b.id, c.id]);
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
   });
 });

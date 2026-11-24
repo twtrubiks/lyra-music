@@ -2,9 +2,10 @@ import type { Track } from '$lib/types';
 import type { BatchTrashResult } from '$lib/api/library';
 import { getLibraryState } from '$lib/state/libraryState.svelte';
 import { getPlaylistState } from '$lib/state/playlistState.svelte';
+import { getPlayerState } from '$lib/state/playerState.svelte';
 import { trashTracks, removeTracks } from '$lib/api/library';
 import { batchRemoveFromPlaylist } from '$lib/api/playlist';
-import { handleTracksRemovedBatch } from '$lib/logic/playback-actions';
+import { handleTracksRemovedBatch, removeUpcomingFromQueue } from '$lib/logic/playback-actions';
 import { notifyCritical } from '$lib/logic/error-handler';
 import type { ActionKey } from '$lib/i18n/index.svelte';
 
@@ -116,7 +117,14 @@ export async function optimisticPlaylistRemove(
     return;
   }
 
-  // 3a. Call onComplete on success
+  // 3a. The playing queue is a snapshot taken when playback started. When it
+  //     came from this playlist, drop the removed tracks from it too —
+  //     otherwise they would still play next.
+  if (getPlayerState().queueSourcePlaylistId === playlistId) {
+    removeUpcomingFromQueue(removedIds);
+  }
+
+  // 3b. Call onComplete on success
   if (options?.onComplete) {
     await options.onComplete();
   }

@@ -8,7 +8,11 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import * as libraryApi from '$lib/api/library';
-  import { startPlayingTrack, resumePlaylistPlayback } from '$lib/logic/playback-actions';
+  import {
+    startPlayingTrack,
+    resumePlaylistPlayback,
+    reorderQueue,
+  } from '$lib/logic/playback-actions';
   import { optimisticTrash, optimisticPlaylistRemove } from '$lib/logic/track-actions';
   import { notifyCritical } from '$lib/logic/error-handler';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
@@ -96,6 +100,11 @@
     } catch (err) {
       notifyCritical('action.reorderPlaylist', err);
       await loadTracks(); // fallback
+      return;
+    }
+    // The playing queue is a snapshot; keep it in step when it came from here.
+    if (player.queueSourcePlaylistId === playlistId) {
+      reorderQueue(trackIds);
     }
   }
 

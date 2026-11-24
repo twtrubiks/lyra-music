@@ -167,6 +167,7 @@ pub fn run() {
             commands::playback::set_volume,
             commands::playback::get_player_state,
             commands::playback::queue_next_track,
+            commands::playback::clear_queued_next_track,
             // Library commands
             commands::library::scan_folder,
             commands::library::get_all_tracks,

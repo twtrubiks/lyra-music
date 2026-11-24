@@ -94,7 +94,11 @@ async function playTrackAtIndex(index: number): Promise<void> {
   }
 }
 
-/** Try to queue the next track for gapless playback */
+/**
+ * Sync the backend's gapless queue with the upcoming track: queue it
+ * (replacing whatever was queued before), or clear the queue when nothing
+ * follows the current track.
+ */
 export function tryQueueNext(): void {
   const nextIdx = getNextIndex(
     player.currentIndex,
@@ -108,7 +112,89 @@ export function tryQueueNext(): void {
     playbackApi
       .queueNextTrack(nextTrack.file_path, nextTrack.id, nextTrack.duration_secs)
       .catch((err) => warnNonCritical('Queue next track', err));
+  } else {
+    playbackApi
+      .clearQueuedNextTrack()
+      .catch((err) => warnNonCritical('Clear queued next track', err));
   }
+}
+
+/**
+ * Re-sync the gapless queue after the upcoming track may have changed
+ * (track removed, shuffle or repeat toggled). The backend queues the next
+ * track as soon as the current one starts, so without this the stale track
+ * plays anyway. Applies while paused too — the queued track is still there
+ * on resume. A finished queue is safe: the backend ignores queueing once
+ * the current track has ended.
+ */
+function requeueNext(): void {
+  if (player.currentTrack !== null && player.currentIndex >= 0) {
+    tryQueueNext();
+  }
+}
+
+/** Index of `idx` after the entries at `removed` are taken out of the list. */
+function shiftIndex(idx: number, removed: ReadonlySet<number>): number {
+  let offset = 0;
+  for (const ri of removed) {
+    if (ri < idx) offset++;
+  }
+  return idx - offset;
+}
+
+/**
+ * Take tracks out of the play queue without touching playback: used when
+ * tracks leave the playlist the queue was started from. The currently
+ * playing track stays in the queue even when listed — it keeps playing, and
+ * removing it would leave the queue with no current position.
+ */
+export function removeUpcomingFromQueue(trackIds: ReadonlySet<number>): void {
+  const currentId = player.currentTrack?.id;
+  const removed = new Set<number>();
+  player.playQueue.forEach((t, i) => {
+    if (trackIds.has(t.id) && t.id !== currentId) removed.add(i);
+  });
+  if (removed.size === 0) return;
+
+  const oldIndex = player.currentIndex;
+  player.playQueue = player.playQueue.filter((_, i) => !removed.has(i));
+  if (oldIndex >= 0) {
+    player.currentIndex = shiftIndex(oldIndex, removed);
+  }
+  if (player.shuffleEnabled && player.shuffledIndices.length > 0) {
+    player.shuffledIndices = player.shuffledIndices
+      .filter((idx) => !removed.has(idx))
+      .map((idx) => shiftIndex(idx, removed));
+  }
+  requeueNext();
+}
+
+/**
+ * Re-arrange the play queue to follow `trackIds`: used when the playlist the
+ * queue was started from is reordered. Queued tracks missing from `trackIds`
+ * (the playing track after it was removed from the playlist) keep their slot.
+ */
+export function reorderQueue(trackIds: readonly number[]): void {
+  const rank = new Map(trackIds.map((id, i) => [id, i]));
+  const oldQueue = player.playQueue;
+  const listed = oldQueue
+    .filter((t) => rank.has(t.id))
+    .sort((x, y) => rank.get(x.id)! - rank.get(y.id)!);
+  let next = 0;
+  const newQueue = oldQueue.map((t) => (rank.has(t.id) ? listed[next++] : t));
+  if (newQueue.every((t, i) => t === oldQueue[i])) return;
+
+  const newIndexOf = new Map(newQueue.map((t, i) => [t, i]));
+  const remap = (idx: number) => newIndexOf.get(oldQueue[idx]) ?? idx;
+  const oldIndex = player.currentIndex;
+  player.playQueue = newQueue;
+  if (oldIndex >= 0) {
+    player.currentIndex = remap(oldIndex);
+  }
+  if (player.shuffleEnabled && player.shuffledIndices.length > 0) {
+    player.shuffledIndices = player.shuffledIndices.map(remap);
+  }
+  requeueNext();
 }
 
 /** Go to previous track */
@@ -511,6 +597,10 @@ async function _handleTracksRemovedBatchInner(trackIds: Set<number>): Promise<vo
       player.durationSecs = 0;
       player.currentIndex = -1;
     }
+  } else {
+    // The removed tracks may include the one already queued for gapless
+    // playback — point the backend at the surviving next track.
+    requeueNext();
   }
 }
 
@@ -521,9 +611,7 @@ export function toggleShuffle(): void {
     player.shuffledIndices = generateShuffledIndices(player.playQueue.length, player.currentIndex);
   }
   // Re-queue next track so gapless playback respects new shuffle state
-  if (player.isPlaying) {
-    tryQueueNext();
-  }
+  requeueNext();
 }
 
 /** Cycle repeat mode: off -> repeat-all -> repeat-one -> off. */
@@ -531,4 +619,6 @@ export function cycleRepeat(): void {
   const modes: RepeatMode[] = ['off', 'repeat-all', 'repeat-one'];
   const currentIdx = modes.indexOf(player.repeatMode);
   player.repeatMode = modes[(currentIdx + 1) % modes.length];
+  // The repeat mode decides what follows the current track
+  requeueNext();
 }

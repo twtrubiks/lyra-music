@@ -72,6 +72,13 @@ pub fn queue_next_track(
 }
 
 #[tauri::command]
+pub fn clear_queued_next_track(player: State<SharedPlayer>) -> Result<(), AppError> {
+    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    p.clear_queued_next();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_player_state(player: State<SharedPlayer>) -> Result<PlayerState, AppError> {
     let p = player.lock().map_err(|_| AppError::LockPoisoned)?;
     Ok(PlayerState {

@@ -68,7 +68,7 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 
 **Mini Player + System Tray** -- 按 `m` 切換為 420x80 精簡視窗（always-on-top）。系統匣支援 Play/Pause、上一首、下一首、顯示視窗、退出。關閉視窗時自動最小化到系統匣。
 
-**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 42 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
+**Tauri 2 + Svelte 5 + Rust 架構** -- 前後端透過 43 個 Tauri commands 進行 IPC 通訊。前端以 Svelte 5 runes 管理狀態，後端以 Rust 處理音訊解碼、檔案 I/O、資料庫操作。
 
 其他功能：
 - 時間同步滾動歌詞與線上歌詞搜尋（LRCLIB）——取得方式見[歌詞](#歌詞)

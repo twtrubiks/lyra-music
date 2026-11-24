@@ -15,6 +15,7 @@ import {
   setVolume,
   getPlayerState,
   queueNextTrack,
+  clearQueuedNextTrack,
 } from './playback';
 
 // Command names and argument keys must match the Rust #[tauri::command]
@@ -50,6 +51,7 @@ describe('IPC command contract', () => {
       () => queueNextTrack('/b.mp3', 8, 200),
       ['queue_next_track', { path: '/b.mp3', nextId: 8, durationSecs: 200 }],
     ],
+    ['clearQueuedNextTrack', () => clearQueuedNextTrack(), ['clear_queued_next_track']],
   ] as const)('%s', async (_, call, expected) => {
     await call();
     expect(mockInvoke).toHaveBeenCalledExactlyOnceWith(...expected);

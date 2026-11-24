@@ -68,7 +68,7 @@ Further reading: [Why Rust](docs/why-rust.md), [Tauri 2 Introduction](docs/tauri
 
 **Mini Player + System Tray** -- Press `m` to switch to a compact 420x80 window (always-on-top). System tray supports Play/Pause, previous, next, show window, and quit. Closing the window automatically minimizes to the system tray.
 
-**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 42 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
+**Tauri 2 + Svelte 5 + Rust architecture** -- Frontend and backend communicate through 43 Tauri commands via IPC. The frontend manages state with Svelte 5 runes, while the backend handles audio decoding, file I/O, and database operations in Rust.
 
 Other features:
 - Time-synced scrolling lyrics and online lyrics search (LRCLIB) -- see [Lyrics](#lyrics) for how to get them

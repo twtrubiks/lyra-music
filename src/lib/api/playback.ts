@@ -40,3 +40,7 @@ export async function queueNextTrack(
 ): Promise<void> {
   return invoke('queue_next_track', { path, nextId, durationSecs });
 }
+
+export async function clearQueuedNextTrack(): Promise<void> {
+  return invoke('clear_queued_next_track');
+}

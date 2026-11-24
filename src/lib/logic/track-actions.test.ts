@@ -681,4 +681,59 @@ describe('optimisticPlaylistRemove', () => {
     expect(playlistState.playlists[0].track_ids).toEqual([1, 2]);
     expect(mockInvoke).not.toHaveBeenCalled();
   });
+
+  describe('playing queue', () => {
+    const player = getPlayerState();
+
+    function playFromPlaylist(tracks: ReturnType<typeof createMockTracks>, playlistId: number) {
+      player.playQueue = tracks;
+      player.currentIndex = 0;
+      player.currentTrack = tracks[0];
+      player.isPlaying = true;
+      player.queueSourcePlaylistId = playlistId;
+    }
+
+    afterEach(() => {
+      player.queueSourcePlaylistId = null;
+    });
+
+    it('removes the track from the queue playing that playlist', async () => {
+      // Regression: playing a of playlist [a, b, c], removing b from the
+      // playlist left b in the queue snapshot, so it still played next.
+      const tracks = createMockTracks(3);
+      playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [1, 2, 3] })];
+      playFromPlaylist(tracks, 10);
+
+      await optimisticPlaylistRemove(10, [tracks[1]]);
+
+      expect(player.playQueue.map((t) => t.id)).toEqual([1, 3]);
+      expect(mockInvoke).toHaveBeenCalledWith('queue_next_track', {
+        path: tracks[2].file_path,
+        nextId: tracks[2].id,
+        durationSecs: tracks[2].duration_secs,
+      });
+    });
+
+    it('leaves a queue playing another source untouched', async () => {
+      const tracks = createMockTracks(3);
+      playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [1, 2, 3] })];
+      playFromPlaylist(tracks, 20);
+
+      await optimisticPlaylistRemove(10, [tracks[1]]);
+
+      expect(player.playQueue).toHaveLength(3);
+      expect(mockInvoke).not.toHaveBeenCalledWith('queue_next_track', expect.anything());
+    });
+
+    it('leaves the queue untouched when the backend removal fails', async () => {
+      const tracks = createMockTracks(3);
+      playlistState.playlists = [createMockPlaylist({ id: 10, track_ids: [1, 2, 3] })];
+      playFromPlaylist(tracks, 10);
+      mockInvoke.mockRejectedValue(new Error('db error'));
+
+      await optimisticPlaylistRemove(10, [tracks[1]]);
+
+      expect(player.playQueue).toHaveLength(3);
+    });
+  });
 });
