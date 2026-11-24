@@ -864,3 +864,38 @@ fn test_queue_next_after_track_ended_is_noop() {
     assert!(!player.is_gapless_queued());
     assert!(!player.is_playing(), "nothing may start playing");
 }
+
+/// Without an output device the app must still start: the player is created
+/// without a stream and every idle operation stays harmless. Not gated —
+/// this path never touches the audio backend.
+#[test]
+fn test_player_without_device_is_idle_and_harmless() {
+    let mut player = AudioPlayer::without_device();
+    assert!(!player.is_playing());
+    assert_eq!(player.get_pos(), 0.0);
+    assert_eq!(player.get_duration(), 0.0);
+    assert!(!player.has_track_ended());
+    assert!(!player.check_gapless_transition());
+
+    player.set_volume(0.8);
+    assert!((player.get_volume() - 0.8).abs() < f32::EPSILON);
+    player.play();
+    player.pause();
+    player.stop();
+    player.clear_queued_next();
+    assert!(player.queue_next("/nonexistent.wav", 1, 1.0).is_err());
+    assert!(player.try_seek(1.0).is_err());
+}
+
+/// The device is opened on the first load, so playback works once a device
+/// is available even though none was opened at startup.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_player_without_device_opens_stream_on_first_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = common::create_test_wav_with_samples(dir.path(), "a.wav", 44100);
+
+    let mut player = AudioPlayer::without_device();
+    player.load_and_play(a.to_str().unwrap(), 1.0).unwrap();
+    assert!(player.is_playing());
+}

@@ -130,7 +130,12 @@ pub fn run() {
             let watcher = init_watcher(&db_arc, app.handle());
             app.manage(WatcherState(Mutex::new(watcher)));
 
-            let player = AudioPlayer::new()?;
+            // No output device must not keep the app from starting: the
+            // device is opened again on the next play.
+            let player = AudioPlayer::new().unwrap_or_else(|e| {
+                eprintln!("[lyra] audio output unavailable at startup: {e}");
+                AudioPlayer::without_device()
+            });
             app.manage(SharedPlayer::new(Mutex::new(player)));
             tray::create_tray(app)?;
 

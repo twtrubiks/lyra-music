@@ -11,7 +11,8 @@ use crate::error::AppError;
 pub type SharedPlayer = Arc<Mutex<AudioPlayer>>;
 
 pub struct AudioPlayer {
-    stream: MixerDeviceSink,
+    /// `None` until an output device could be opened — see `without_device`.
+    stream: Option<MixerDeviceSink>,
     sink: Option<Player>,
     current_file_path: Option<String>,
     volume: f32,
@@ -35,15 +36,39 @@ pub struct AudioPlayer {
 }
 
 impl AudioPlayer {
+    /// Create a player with the default output device already open.
     pub fn new() -> Result<Self, AppError> {
+        let mut player = Self::without_device();
+        player.ensure_stream()?;
+        Ok(player)
+    }
+
+    fn open_stream() -> Result<MixerDeviceSink, AppError> {
         let builder = DeviceSinkBuilder::from_default_device()
-            .map_err(|e| AppError::Audio(e.to_string()))?
+            .map_err(|e| AppError::Audio(format!("no audio output device: {e}")))?
             .with_buffer_size(rodio::cpal::BufferSize::Fixed(4096));
-        let stream = builder
+        builder
             .open_sink_or_fallback()
-            .map_err(|e| AppError::Audio(e.to_string()))?;
-        Ok(Self {
-            stream,
+            .map_err(|e| AppError::Audio(format!("no audio output device: {e}")))
+    }
+
+    /// Open the output device if it is not open yet. Called on every load,
+    /// so a device that appears after startup is picked up by the next play.
+    fn ensure_stream(&mut self) -> Result<&MixerDeviceSink, AppError> {
+        if self.stream.is_none() {
+            self.stream = Some(Self::open_stream()?);
+        }
+        self.stream
+            .as_ref()
+            .ok_or_else(|| AppError::Audio("no audio output device".to_string()))
+    }
+
+    /// Create a player with no output device. Used at startup when none can
+    /// be opened: the app must still come up (library, playlists, tags), and
+    /// playing a track reports the error instead.
+    pub fn without_device() -> Self {
+        Self {
+            stream: None,
             sink: None,
             current_file_path: None,
             volume: 0.5,
@@ -59,7 +84,7 @@ impl AudioPlayer {
             cumulative_duration: 0.0,
             completion_seq: 0,
             last_completed_track_id: None,
-        })
+        }
     }
 
     pub fn load_and_play(&mut self, path: &str, fallback_duration: f64) -> Result<(), AppError> {
@@ -72,8 +97,12 @@ impl AudioPlayer {
         }
 
         // Open file once, read duration, then append the same decoder
-        let decoder = match Self::open_decoder(path) {
-            Ok(d) => d,
+        let opened = Self::open_decoder(path).and_then(|decoder| {
+            let sink = Player::connect_new(self.ensure_stream()?.mixer());
+            Ok((decoder, sink))
+        });
+        let (decoder, sink) = match opened {
+            Ok(pair) => pair,
             Err(e) => {
                 // A failed load must leave no stale playback state: keeping the
                 // previous sink (empty, position at end-of-track) would re-arm
@@ -87,7 +116,6 @@ impl AudioPlayer {
             .total_duration()
             .map_or(fallback_duration, |d: std::time::Duration| d.as_secs_f64());
 
-        let sink = Player::connect_new(self.stream.mixer());
         sink.set_volume(self.volume * self.volume);
         sink.append(decoder);
 
@@ -166,7 +194,7 @@ impl AudioPlayer {
             sink.stop();
         }
 
-        let sink = Player::connect_new(self.stream.mixer());
+        let sink = Player::connect_new(self.ensure_stream()?.mixer());
         let decoder = Self::open_decoder(&path)?;
 
         sink.set_volume(self.volume * self.volume);
