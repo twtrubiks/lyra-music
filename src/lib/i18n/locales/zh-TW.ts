@@ -25,6 +25,8 @@ export const zhTW: Messages = {
   'sidebar.playlistNamePlaceholder': '播放清單名稱...',
   'sidebar.confirm': '確定',
   'sidebar.deletePlaylist': '刪除播放清單',
+  'sidebar.deletePlaylistConfirm':
+    '確定要刪除播放清單「{name}」嗎？刪除後無法復原，清單內的曲目仍會保留在音樂庫。',
   'sidebar.rename': '重新命名',
   'sidebar.delete': '刪除',
   'sidebar.shortcuts': '快捷鍵',

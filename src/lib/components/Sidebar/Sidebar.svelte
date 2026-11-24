@@ -3,6 +3,7 @@
   import { getPlaylistState } from '$lib/state/playlistState.svelte';
   import * as playlistApi from '$lib/api/playlist';
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
+  import { confirmDeletePlaylist } from '$lib/logic/confirm';
   import { moveByKeyboard } from '$lib/logic/reorder';
   import { parseTrackIdsFromDrop, TRACK_IDS_DRAG_TYPE } from '$lib/logic/format';
   import { t, getLocale, toggleLocale, LOCALE_NAMES } from '$lib/i18n/index.svelte';
@@ -112,7 +113,10 @@
   }
 
   async function handleDeletePlaylist(id: number) {
+    const playlist = playlistState.playlists.find((pl) => pl.id === id);
+    if (!playlist) return;
     try {
+      if (!(await confirmDeletePlaylist(playlist.name))) return;
       await playlistApi.deletePlaylist(id);
       const lists = await playlistApi.getAllPlaylists();
       playlistState.playlists = lists;

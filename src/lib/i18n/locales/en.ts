@@ -28,6 +28,8 @@ export const en = {
   'sidebar.playlistNamePlaceholder': 'Playlist name...',
   'sidebar.confirm': 'OK',
   'sidebar.deletePlaylist': 'Delete playlist',
+  'sidebar.deletePlaylistConfirm':
+    'Delete the playlist "{name}"? This cannot be undone. Its tracks stay in the library.',
   'sidebar.rename': 'Rename',
   'sidebar.delete': 'Delete',
   'sidebar.shortcuts': 'Shortcuts',
