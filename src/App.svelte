@@ -30,7 +30,8 @@
   import { loadLyricsForTrack } from '$lib/logic/lyrics-actions';
   import { updateExistingTracks, updateCurrentTrack } from '$lib/logic/library-sync';
   import { watchLibraryChanged } from '$lib/logic/watch-library-changed';
-  import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { createMiniWindowSync } from '$lib/logic/mini-window';
   import { listen } from '@tauri-apps/api/event';
   import { t } from '$lib/i18n/index.svelte';
   import { isTrackDrag } from '$lib/logic/format';
@@ -93,24 +94,12 @@
     };
   });
 
-  const MINI_SIZE = new LogicalSize(420, 80);
-  // Size to restore when leaving mini mode. Kept in logical pixels:
-  // innerSize() reports physical pixels, so feeding it back through
-  // LogicalSize would scale the window up on HiDPI displays.
-  let normalSize = new LogicalSize(1024, 680);
+  let miniWindowSync: ((mini: boolean) => Promise<void>) | undefined;
 
   async function syncWindowToMiniMode(mini: boolean) {
     try {
-      const win = getCurrentWindow();
-      if (mini) {
-        const [size, scaleFactor] = await Promise.all([win.innerSize(), win.scaleFactor()]);
-        normalSize = size.toLogical(scaleFactor);
-        await win.setSize(MINI_SIZE);
-        await win.setAlwaysOnTop(true);
-      } else {
-        await win.setAlwaysOnTop(false);
-        await win.setSize(normalSize);
-      }
+      miniWindowSync ??= createMiniWindowSync(getCurrentWindow());
+      await miniWindowSync(mini);
     } catch {
       // Window API not available (dev mode)
     }
