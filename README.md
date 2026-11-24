@@ -157,14 +157,16 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 
 **曲目列表聚焦時：**
 
-| 按鍵                                          | 動作                              |
-| --------------------------------------------- | --------------------------------- |
-| `ArrowUp` / `ArrowDown`                       | 上一首 / 下一首曲目               |
-| `Shift+ArrowUp` / `Shift+ArrowDown`           | 向上 / 向下擴展選取               |
-| `Ctrl+A` / `Cmd+A`                            | 全選曲目                          |
-| `Enter`                                       | 播放聚焦曲目                      |
-| `Home` / `End`                                | 跳到第一首 / 最後一首             |
-| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 上移 / 下移選取曲目（播放清單內） |
+| 按鍵                                          | 動作                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------ |
+| `ArrowUp` / `ArrowDown`                       | 上一首 / 下一首曲目                                                      |
+| `Shift+ArrowUp` / `Shift+ArrowDown`           | 向上 / 向下擴展選取                                                      |
+| `Ctrl+A` / `Cmd+A`                            | 全選曲目                                                                 |
+| `Enter`                                       | 播放聚焦曲目                                                             |
+| `Home` / `End`                                | 跳到第一首 / 最後一首                                                    |
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | 上移 / 下移選取曲目（播放清單內）                                        |
+| `Delete`                                      | 移除選取曲目（播放清單內只從該清單移除，其他檢視從音樂庫移除，檔案保留） |
+| `Shift+Delete`                                | 將選取曲目丟進垃圾桶                                                     |
 
 **播放清單檢視中：**
 

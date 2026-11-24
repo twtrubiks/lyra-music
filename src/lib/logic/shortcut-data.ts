@@ -48,6 +48,8 @@ export function getShortcutCategories(): ShortcutCategory[] {
         { keys: ['End'], description: t('shortcuts.jumpLast') },
         { keys: [mod, 'Shift', '↑'], description: t('shortcuts.moveTracksUp') },
         { keys: [mod, 'Shift', '↓'], description: t('shortcuts.moveTracksDown') },
+        { keys: ['Delete'], description: t('shortcuts.removeTracks') },
+        { keys: ['Shift', 'Delete'], description: t('shortcuts.trashTracks') },
       ],
     },
     {

@@ -142,6 +142,8 @@ export const en = {
   'shortcuts.jumpLast': 'Jump to last track',
   'shortcuts.moveTracksUp': 'Move selected tracks up',
   'shortcuts.moveTracksDown': 'Move selected tracks down',
+  'shortcuts.removeTracks': 'Remove selected tracks',
+  'shortcuts.trashTracks': 'Move selected tracks to trash',
   'shortcuts.movePlaylistUp': 'Move playlist up',
   'shortcuts.movePlaylistDown': 'Move playlist down',
 

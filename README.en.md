@@ -157,14 +157,16 @@ All shortcuts are disabled when an input field is focused.
 
 **When track list is focused:**
 
-| Key                                           | Action                                             |
-| --------------------------------------------- | -------------------------------------------------- |
-| `ArrowUp` / `ArrowDown`                       | Previous / Next track                              |
-| `Shift+ArrowUp` / `Shift+ArrowDown`           | Extend selection up / down                         |
-| `Ctrl+A` / `Cmd+A`                            | Select all tracks                                  |
-| `Enter`                                       | Play focused track                                 |
-| `Home` / `End`                                | Jump to first / last track                         |
-| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move selected tracks up / down (within a playlist) |
+| Key                                           | Action                                                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ArrowUp` / `ArrowDown`                       | Previous / Next track                                                                                   |
+| `Shift+ArrowUp` / `Shift+ArrowDown`           | Extend selection up / down                                                                              |
+| `Ctrl+A` / `Cmd+A`                            | Select all tracks                                                                                       |
+| `Enter`                                       | Play focused track                                                                                      |
+| `Home` / `End`                                | Jump to first / last track                                                                              |
+| `Ctrl+Shift+ArrowUp` / `Ctrl+Shift+ArrowDown` | Move selected tracks up / down (within a playlist)                                                      |
+| `Delete`                                      | Remove selected tracks (from the playlist in playlist view; from the library elsewhere, files are kept) |
+| `Shift+Delete`                                | Move selected tracks to trash                                                                           |
 
 **In playlist view:**
 

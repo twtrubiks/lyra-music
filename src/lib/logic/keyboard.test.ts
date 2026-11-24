@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapKeyToAction, resolveDismissTarget } from './keyboard';
+import { mapKeyToAction, mapTrackListDeleteKey, resolveDismissTarget } from './keyboard';
 
 describe('mapKeyToAction', () => {
   const base = { ctrlKey: false, metaKey: false };
@@ -105,5 +105,28 @@ describe('reveal-playing', () => {
 
   it('plain j does nothing', () => {
     expect(mapKeyToAction({ key: 'j', ctrlKey: false, metaKey: false })).toBeNull();
+  });
+});
+
+describe('mapTrackListDeleteKey', () => {
+  const base = { shiftKey: false, ctrlKey: false, metaKey: false, altKey: false };
+
+  it('Delete → remove', () => {
+    expect(mapTrackListDeleteKey({ key: 'Delete', ...base })).toBe('remove');
+  });
+
+  it('Shift+Delete → trash', () => {
+    expect(mapTrackListDeleteKey({ key: 'Delete', ...base, shiftKey: true })).toBe('trash');
+  });
+
+  it('ignores Delete combined with Ctrl / Cmd / Alt', () => {
+    expect(mapTrackListDeleteKey({ key: 'Delete', ...base, ctrlKey: true })).toBeNull();
+    expect(mapTrackListDeleteKey({ key: 'Delete', ...base, metaKey: true })).toBeNull();
+    expect(mapTrackListDeleteKey({ key: 'Delete', ...base, altKey: true })).toBeNull();
+  });
+
+  it('ignores other keys, including Backspace', () => {
+    expect(mapTrackListDeleteKey({ key: 'Backspace', ...base })).toBeNull();
+    expect(mapTrackListDeleteKey({ key: 'd', ...base })).toBeNull();
   });
 });

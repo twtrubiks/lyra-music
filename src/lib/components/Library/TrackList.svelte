@@ -30,6 +30,7 @@
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { mapTrackListDeleteKey } from '$lib/logic/keyboard';
   import { warnNonCritical } from '$lib/logic/error-handler';
   import { t, type MessageKey } from '$lib/i18n/index.svelte';
 
@@ -239,6 +240,14 @@
       const direction = e.key === 'ArrowUp' ? 'up' : 'down';
       const newOrder = moveByKeyboard(tracks, selection.selectedIds, direction);
       if (newOrder) onreorder(newOrder);
+      return;
+    }
+    const deleteAction = mapTrackListDeleteKey(e);
+    if (deleteAction) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (deleteAction === 'trash') handleMenuTrash();
+      else handleMenuRemove();
       return;
     }
     // Arrow/Enter/Home/End: stopPropagation prevents global volume handler from firing
@@ -511,6 +520,7 @@
       </svg>
       {t('common.remove')}{#if selectedCount > 1}
         ({selectedCount}){/if}
+      <span class="shortcut">Delete</span>
     </button>
     <button
       class="menu-item menu-item-danger"
@@ -525,6 +535,7 @@
       </svg>
       {t('trackList.trash')}{#if selectedCount > 1}
         ({selectedCount}){/if}
+      <span class="shortcut">Shift+Delete</span>
     </button>
     <div class="menu-divider"></div>
     <button

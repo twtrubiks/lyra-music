@@ -138,6 +138,8 @@ export const zhTW: Messages = {
   'shortcuts.jumpLast': '跳到最後一首',
   'shortcuts.moveTracksUp': '上移選取曲目',
   'shortcuts.moveTracksDown': '下移選取曲目',
+  'shortcuts.removeTracks': '移除選取曲目',
+  'shortcuts.trashTracks': '將選取曲目丟進垃圾桶',
   'shortcuts.movePlaylistUp': '上移播放清單',
   'shortcuts.movePlaylistDown': '下移播放清單',
 

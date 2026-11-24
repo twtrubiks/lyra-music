@@ -77,3 +77,18 @@ export function mapKeyToAction(e: { key: string; ctrlKey: boolean; metaKey: bool
 export function resolveDismissTarget(miniMode: boolean, showLyrics: boolean): 'lyrics' | 'mini' {
   return !miniMode && showLyrics ? 'lyrics' : 'mini';
 }
+
+/**
+ * 曲目列表聚焦時的刪除鍵：Delete 移除（與右鍵選單「移除」相同，依檢視而定），
+ * Shift+Delete 丟進垃圾桶。Backspace 刻意不對應，避免誤觸。
+ */
+export function mapTrackListDeleteKey(e: {
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+}): 'remove' | 'trash' | null {
+  if (e.key !== 'Delete' || e.ctrlKey || e.metaKey || e.altKey) return null;
+  return e.shiftKey ? 'trash' : 'remove';
+}
