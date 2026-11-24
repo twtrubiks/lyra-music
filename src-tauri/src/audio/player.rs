@@ -90,9 +90,14 @@ impl AudioPlayer {
         Ok(())
     }
 
+    /// Open via `TryFrom<File>` rather than `Decoder::new`: it passes the
+    /// file's byte length to symphonia and marks the stream seekable. Without
+    /// that, backward seeks fail (forcing the reload fallback in `try_seek`,
+    /// which drops the queued gapless track), headerless MP3s report no
+    /// duration, and m4a files with `moov` after `mdat` fail to open at all.
     fn open_decoder(path: &str) -> Result<Decoder<BufReader<File>>, AppError> {
         let file = File::open(path).map_err(|e| AppError::Audio(format!("{path}: {e}")))?;
-        Decoder::new(BufReader::new(file)).map_err(|e| AppError::Audio(format!("{path}: {e}")))
+        Decoder::try_from(file).map_err(|e| AppError::Audio(format!("{path}: {e}")))
     }
 
     pub fn play(&self) {
@@ -145,7 +150,8 @@ impl AudioPlayer {
             return Ok(());
         }
 
-        // Fallback: reload file and seek forward (workaround for MP3 backward seek)
+        // Fallback: reload file and seek forward. Kept as a safety net for
+        // sources whose native seek still fails.
         let path = self
             .current_file_path
             .clone()

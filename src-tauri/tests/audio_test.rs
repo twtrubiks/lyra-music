@@ -441,6 +441,56 @@ fn test_seek_preserves_gapless_on_native_seek() {
     );
 }
 
+/// Regression: the decoder was opened without the file's byte length, so
+/// symphonia could not seek backward and every backward seek fell into the
+/// reload fallback — which drops the queued gapless track. Opening the
+/// decoder from the `File` makes backward seeks native.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_backward_seek_preserves_gapless() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav1 = common::create_test_wav_with_samples(dir.path(), "back1.wav", 44100 * 3);
+    let wav2 = common::create_test_wav(dir.path(), "back2.wav");
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player.load_and_play(wav1.to_str().unwrap(), 3.0).unwrap();
+    player.queue_next(wav2.to_str().unwrap(), 2, 0.1).unwrap();
+
+    player.try_seek(2.0).unwrap();
+    player.try_seek(0.5).unwrap();
+
+    assert!(
+        player.is_gapless_queued(),
+        "backward seek should be native and keep the queued gapless track"
+    );
+    let pos = player.get_pos();
+    assert!(
+        (0.4..1.5).contains(&pos),
+        "position should be near 0.5s, got {pos}"
+    );
+}
+
+/// Regression: an m4a whose `moov` atom sits after `mdat` (ffmpeg's default,
+/// i.e. not faststart) failed to open with "format not recognized" because
+/// the demuxer could not seek to the end of a stream of unknown length.
+#[test]
+#[cfg_attr(not(feature = "audio-tests"), ignore)]
+fn test_load_m4a_with_moov_at_end() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("moov_at_end.m4a");
+    std::fs::write(&path, include_bytes!("fixtures/moov_at_end.m4a")).unwrap();
+
+    let mut player = AudioPlayer::new().expect("need audio device");
+    player
+        .load_and_play(path.to_str().unwrap(), 0.0)
+        .expect("m4a with moov after mdat must load");
+    assert!(
+        player.get_duration() > 0.0,
+        "duration should come from the decoder, got {}",
+        player.get_duration()
+    );
+}
+
 /// has_track_ended returns false while gapless is queued,
 /// even if the sink becomes empty (the queued track is playing).
 #[test]

@@ -75,11 +75,21 @@ pub fn create_test_track(idx: u32) -> Track {
 /// Create a minimal valid WAV file (PCM 16-bit mono, 44100 Hz) in the given directory.
 /// Returns the full path to the created file.
 pub fn create_test_wav(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    create_test_wav_with_samples(dir, name, 4410) // 0.1 seconds
+}
+
+/// Create a mono 44.1 kHz 16-bit sine-wave WAV holding `num_samples` samples.
+/// Use this when a test needs a track long enough to seek around in.
+#[allow(dead_code)]
+pub fn create_test_wav_with_samples(
+    dir: &std::path::Path,
+    name: &str,
+    num_samples: u32,
+) -> std::path::PathBuf {
     let path = dir.join(name);
     let sample_rate: u32 = 44100;
     let bits_per_sample: u16 = 16;
     let num_channels: u16 = 1;
-    let num_samples: u32 = 4410; // 0.1 seconds
     let byte_rate = sample_rate * (bits_per_sample as u32 / 8) * num_channels as u32;
     let block_align = num_channels * (bits_per_sample / 8);
     let data_size = num_samples * (bits_per_sample as u32 / 8) * num_channels as u32;
