@@ -104,7 +104,7 @@ Notes:
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.90+)
+- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.91+)
 - Tauri 2 system dependencies: see [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/) (macOS/Windows usually require no additional installation)
 
 Linux (Debian/Ubuntu) additionally requires:

@@ -84,9 +84,9 @@
       {:else if onlineStatus === 'searching'}
         <p class="hint">{t('lyrics.searching')}</p>
       {:else}
-        <button class="search-online" onclick={searchLyricsOnline}
-          >{t('lyrics.searchOnline')}</button
-        >
+        <button class="search-online" onclick={searchLyricsOnline}>
+          {t('lyrics.searchOnline')}
+        </button>
         {#if onlineStatus === 'notfound'}
           <p class="hint">{t('lyrics.onlineNotFound')}</p>
         {:else if onlineStatus === 'error'}
@@ -109,9 +109,9 @@
           {#if onlineStatus === 'searching'}
             <p class="hint">{t('lyrics.searching')}</p>
           {:else}
-            <button class="search-online" onclick={searchLyricsOnline}
-              >{t('lyrics.searchSynced')}</button
-            >
+            <button class="search-online" onclick={searchLyricsOnline}>
+              {t('lyrics.searchSynced')}
+            </button>
             {#if onlineStatus === 'notfound'}
               <p class="hint">{t('lyrics.onlineSyncedNotFound')}</p>
             {:else if onlineStatus === 'error'}

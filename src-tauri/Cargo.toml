@@ -6,7 +6,7 @@ authors = ["twtrubiks"]
 license = "MIT"
 repository = "https://github.com/twtrubiks/lyra-music"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.91"
 
 [lib]
 name = "lyra_music_lib"
@@ -18,7 +18,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-dialog = "2"
-rodio = "0.22"
+rodio = "0.23"
 lofty = "0.25"
 rusqlite = { version = "0.39", features = ["bundled"] }
 walkdir = "2.5"
@@ -27,7 +27,7 @@ serde_json = "1"
 base64 = "0.22"
 thiserror = "2"
 trash = "5"
-notify = "8"
+notify = "9"
 ureq = "3"
 
 [features]

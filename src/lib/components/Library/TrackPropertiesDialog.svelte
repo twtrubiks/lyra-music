@@ -127,13 +127,13 @@
         {#if details.channels != null}
           <div class="row">
             <span class="label">{t('properties.channels')}</span>
-            <span class="value"
-              >{details.channels === 1
+            <span class="value">
+              {details.channels === 1
                 ? t('properties.mono')
                 : details.channels === 2
                   ? t('properties.stereo')
-                  : `${details.channels} ch`}</span
-            >
+                  : `${details.channels} ch`}
+            </span>
           </div>
         {/if}
         {#if details.bits_per_sample != null}
@@ -160,9 +160,9 @@
       {#if onsave}
         <div class="dialog-actions">
           {#if isEditing}
-            <button class="btn btn-secondary" onclick={cancelEditing} disabled={isSaving}
-              >{t('common.cancel')}</button
-            >
+            <button class="btn btn-secondary" onclick={cancelEditing} disabled={isSaving}>
+              {t('common.cancel')}
+            </button>
             <button class="btn btn-primary" onclick={saveEditing} disabled={isSaving}>
               {#if isSaving}{t('common.saving')}{:else}{t('common.save')}{/if}
             </button>

@@ -104,7 +104,7 @@ AppImage 版本已收錄於 [AppImageHub](https://appimage.github.io/Lyra_Music/
 ## 前置需求
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.90+)
+- [Rust toolchain](https://rustup.rs/) (rustup, Rust 1.91+)
 - Tauri 2 系統依賴：參考 [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)（macOS/Windows 通常不需要額外安裝）
 
 Linux（Debian/Ubuntu）額外需要：

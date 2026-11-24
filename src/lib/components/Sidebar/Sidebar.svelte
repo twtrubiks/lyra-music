@@ -364,9 +364,9 @@
 
   <div class="section-label">
     <span>{t('sidebar.playlists')}</span>
-    <button class="add-btn" onclick={() => (showNewInput = true)} title={t('sidebar.newPlaylist')}
-      >+</button
-    >
+    <button class="add-btn" onclick={() => (showNewInput = true)} title={t('sidebar.newPlaylist')}>
+      +
+    </button>
   </div>
 
   {#if showNewInput}
@@ -451,12 +451,12 @@
         ▼ {t('common.moveDown')} <span class="shortcut">Ctrl+Shift+↓</span>
       </button>
       <div class="menu-divider"></div>
-      <button class="menu-item" role="menuitem" onclick={handleMenuRename}
-        >{t('sidebar.rename')}</button
-      >
-      <button class="menu-item menu-item-danger" role="menuitem" onclick={handleMenuDelete}
-        >{t('sidebar.delete')}</button
-      >
+      <button class="menu-item" role="menuitem" onclick={handleMenuRename}>
+        {t('sidebar.rename')}
+      </button>
+      <button class="menu-item menu-item-danger" role="menuitem" onclick={handleMenuDelete}>
+        {t('sidebar.delete')}
+      </button>
     </div>
   {/if}
 

@@ -399,9 +399,9 @@
       </thead>
       <tbody>
         {#if visibleRange.topPadding > 0}
-          <tr class="virtual-spacer" aria-hidden="true"
-            ><td colspan="5" style="height:{visibleRange.topPadding}px"></td></tr
-          >
+          <tr class="virtual-spacer" aria-hidden="true">
+            <td colspan="5" style="height:{visibleRange.topPadding}px"></td>
+          </tr>
         {/if}
         {#each visibleTracks as track, localIndex (track.id)}
           {@const globalIndex = visibleRange.startIndex + localIndex}
@@ -417,9 +417,9 @@
           />
         {/each}
         {#if visibleRange.bottomPadding > 0}
-          <tr class="virtual-spacer" aria-hidden="true"
-            ><td colspan="5" style="height:{visibleRange.bottomPadding}px"></td></tr
-          >
+          <tr class="virtual-spacer" aria-hidden="true">
+            <td colspan="5" style="height:{visibleRange.bottomPadding}px"></td>
+          </tr>
         {/if}
       </tbody>
     </table>

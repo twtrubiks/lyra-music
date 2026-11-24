@@ -103,8 +103,9 @@
             <div class="album-info">
               <span class="album-name">{album.name}</span>
               <span class="album-artist">{album.artist}</span>
-              <span class="album-count">{t('common.trackCount', { count: album.track_count })}</span
-              >
+              <span class="album-count">
+                {t('common.trackCount', { count: album.track_count })}
+              </span>
             </div>
           </button>
         {/each}
