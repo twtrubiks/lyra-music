@@ -66,6 +66,8 @@ export const en = {
   'player.miniPlayer': 'Mini player',
   'player.noTrack': 'No track playing',
   'player.cover': 'Cover',
+  'player.seek': 'Seek',
+  'player.volume': 'Volume',
 
   'lyrics.noTrack': 'No track playing',
   'lyrics.loading': 'Loading lyrics…',

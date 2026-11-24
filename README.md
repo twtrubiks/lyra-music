@@ -150,6 +150,7 @@ npm run quality                 # 程式碼品質檢查 (ESLint + Prettier + Sty
 | `l` | 切換歌詞面板 |
 | `Escape` | 關閉歌詞面板 / 退出 Mini Player |
 | `Ctrl+F` / `Cmd+F` | 聚焦搜尋框 |
+| 聚焦進度列後 `←` `→` / `PageUp` `PageDown` / `Home` `End` | 倒轉／快轉 5 秒、30 秒、跳到開頭／結尾 |
 | `?` | 顯示快捷鍵說明 |
 
 **曲目列表聚焦時：**

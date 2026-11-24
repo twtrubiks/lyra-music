@@ -63,6 +63,8 @@ export const zhTW: Messages = {
   'player.miniPlayer': '迷你播放器',
   'player.noTrack': '目前沒有播放曲目',
   'player.cover': '封面',
+  'player.seek': '播放進度',
+  'player.volume': '音量',
 
   'lyrics.noTrack': '目前沒有播放曲目',
   'lyrics.loading': '載入歌詞中…',

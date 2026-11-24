@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
+
   let {
     volume,
     onchange,
@@ -37,6 +39,8 @@
     max="1"
     step="0.02"
     value={volume}
+    aria-label={t('player.volume')}
+    aria-valuetext={`${Math.round(pct)}%`}
     oninput={handleInput}
     style="
 

@@ -150,6 +150,7 @@ All shortcuts are disabled when an input field is focused.
 | `l` | Toggle lyrics panel |
 | `Escape` | Close lyrics panel / Exit Mini Player |
 | `Ctrl+F` / `Cmd+F` | Focus search box |
+| `←` `→` / `PageUp` `PageDown` / `Home` `End` with the progress bar focused | Seek 5 s, 30 s, or jump to start / end |
 | `?` | Show keyboard shortcuts help |
 
 **When track list is focused:**

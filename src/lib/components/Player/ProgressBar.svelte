@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { t } from '$lib/i18n/index.svelte';
   import { formatDuration } from '$lib/logic/format';
+  import { seekKeyTarget } from '$lib/logic/seek-keys';
 
   let {
     positionSecs,
@@ -32,6 +34,16 @@
     dragging = false;
     onseek(parseFloat(target.value));
   }
+
+  // The native range keys only move the thumb (no mouseup, so no seek) and
+  // in half-second steps; seek directly instead.
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = seekKeyTarget(e.key, positionSecs, durationSecs);
+    if (target === null) return;
+    e.preventDefault();
+    onseek(target);
+  }
 </script>
 
 <div class="progress-bar">
@@ -43,7 +55,10 @@
       max={durationSecs || 1}
       step="0.5"
       value={displayPosition}
+      aria-label={t('player.seek')}
+      aria-valuetext={`${formatDuration(displayPosition)} / ${formatDuration(durationSecs)}`}
       oninput={handleInput}
+      onkeydown={handleKeydown}
       onmousedown={handleMouseDown}
       onmouseup={handleMouseUp}
       ontouchstart={handleMouseDown}
