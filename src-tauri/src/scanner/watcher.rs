@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::library::import_audio_files;
 use crate::error::AppError;
+use crate::lock::LockRecover;
 use crate::metadata::reader;
 use crate::scanner::folder_scanner;
 use crate::storage::library_repo;
@@ -50,18 +51,11 @@ pub struct PendingWatcherError(Arc<Mutex<Option<String>>>);
 
 impl PendingWatcherError {
     pub fn set(&self, message: String) {
-        *self.lock() = Some(message);
+        *self.0.lock_recover() = Some(message);
     }
 
     pub fn take(&self) -> Option<String> {
-        self.lock().take()
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<String>> {
-        // The slot holds a plain value; a poisoned lock is still usable.
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.0.lock_recover().take()
     }
 }
 
@@ -336,13 +330,7 @@ pub fn process_event_batch(
     // Import upserts the new one via ON CONFLICT.
     let mut stale_cover_paths: Vec<String> = Vec::new();
     let mut changed = {
-        let conn = match db.lock() {
-            Ok(c) => c,
-            Err(e) => {
-                log::error!("Failed to acquire database lock: {e}");
-                return (false, Vec::new());
-            }
-        };
+        let conn = db.lock_recover();
         let mut changed = apply_rename_events(
             &conn,
             &events,

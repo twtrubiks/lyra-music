@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod commands;
 pub mod error;
+pub mod lock;
 pub mod logging;
 pub mod metadata;
 pub mod models;
@@ -13,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use audio::AudioPlayer;
 use audio::SharedPlayer;
+use lock::LockRecover;
 use rusqlite::Connection;
 use storage::db;
 use tauri::{Emitter, Manager};
@@ -37,13 +39,7 @@ fn spawn_player_polling(
         while !shutdown.load(Ordering::Relaxed) {
             std::thread::sleep(std::time::Duration::from_millis(250));
             let state = {
-                let mut p = match player.lock() {
-                    Ok(p) => p,
-                    Err(e) => {
-                        log::error!("player lock poisoned in polling thread: {e}");
-                        continue;
-                    }
-                };
+                let mut p = player.lock_recover();
                 let transitioned = p.check_gapless_transition();
                 let ended = p.has_track_ended();
                 if ended {
@@ -69,15 +65,9 @@ fn spawn_player_polling(
             if state.completion_seq > credited_seq {
                 credited_seq = state.completion_seq;
                 if let Some(id) = state.last_completed_track_id {
-                    match db.lock() {
-                        Ok(conn) => {
-                            if let Err(e) = storage::library_repo::increment_play_count(&conn, id) {
-                                log::error!("failed to credit play count for track {id}: {e}");
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("db lock poisoned in polling thread: {e}");
-                        }
+                    let conn = db.lock_recover();
+                    if let Err(e) = storage::library_repo::increment_play_count(&conn, id) {
+                        log::error!("failed to credit play count for track {id}: {e}");
                     }
                 }
             }
@@ -107,18 +97,15 @@ fn init_watcher(
         }
     };
 
-    match db_arc.lock() {
-        Ok(conn) => match storage::library_repo::get_all_scan_folders(&conn) {
-            Ok(folders) => {
-                for folder in folders {
-                    if let Err(e) = watcher.watch(&folder) {
-                        log::warn!("failed to watch folder {folder}: {e}");
-                    }
+    match storage::library_repo::get_all_scan_folders(&db_arc.lock_recover()) {
+        Ok(folders) => {
+            for folder in folders {
+                if let Err(e) = watcher.watch(&folder) {
+                    log::warn!("failed to watch folder {folder}: {e}");
                 }
             }
-            Err(e) => log::error!("failed to load scan folders for watching: {e}"),
-        },
-        Err(e) => log::error!("failed to lock db while starting watcher: {e}"),
+        }
+        Err(e) => log::error!("failed to load scan folders for watching: {e}"),
     }
 
     Some(watcher)

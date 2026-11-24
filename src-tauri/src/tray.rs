@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::audio::SharedPlayer;
+use crate::lock::LockRecover;
 use tauri::{
     Emitter, Manager,
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -28,12 +29,11 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "tray_play_pause" => {
                 let player = Arc::clone(app.state::<SharedPlayer>().inner());
-                if let Ok(p) = player.lock() {
-                    if p.is_playing() {
-                        p.pause();
-                    } else {
-                        p.play();
-                    }
+                let p = player.lock_recover();
+                if p.is_playing() {
+                    p.pause();
+                } else {
+                    p.play();
                 }
             }
             "tray_prev" => {

@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::audio::SharedPlayer;
 use crate::error::AppError;
+use crate::lock::LockRecover;
 use crate::models::player_state::PlayerState;
 
 #[tauri::command]
@@ -11,7 +12,7 @@ pub fn play_track(
     track_id: i64,
     player: State<SharedPlayer>,
 ) -> Result<(), AppError> {
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.load_and_play(&path, duration_secs)?;
     // Keep current_track_id in sync on every play path (gapless transitions
     // set it in transition_to_queued_next; failure paths clear it via stop).
@@ -22,21 +23,21 @@ pub fn play_track(
 
 #[tauri::command]
 pub fn pause(player: State<SharedPlayer>) -> Result<(), AppError> {
-    let p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let p = player.lock_recover();
     p.pause();
     Ok(())
 }
 
 #[tauri::command]
 pub fn resume(player: State<SharedPlayer>) -> Result<(), AppError> {
-    let p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let p = player.lock_recover();
     p.play();
     Ok(())
 }
 
 #[tauri::command]
 pub fn stop(player: State<SharedPlayer>) -> Result<(), AppError> {
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.stop();
     Ok(())
 }
@@ -46,7 +47,7 @@ pub fn seek(position_secs: f64, player: State<SharedPlayer>) -> Result<(), AppEr
     if !position_secs.is_finite() || position_secs < 0.0 {
         return Err(AppError::Audio("invalid seek position".to_string()));
     }
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.try_seek(position_secs)
 }
 
@@ -55,7 +56,7 @@ pub fn set_volume(volume: f32, player: State<SharedPlayer>) -> Result<(), AppErr
     if !volume.is_finite() {
         return Err(AppError::Audio("invalid volume value".to_string()));
     }
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.set_volume(volume);
     Ok(())
 }
@@ -67,20 +68,20 @@ pub fn queue_next_track(
     duration_secs: f64,
     player: State<SharedPlayer>,
 ) -> Result<(), AppError> {
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.queue_next(&path, next_id, duration_secs)
 }
 
 #[tauri::command]
 pub fn clear_queued_next_track(player: State<SharedPlayer>) -> Result<(), AppError> {
-    let mut p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let mut p = player.lock_recover();
     p.clear_queued_next();
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_player_state(player: State<SharedPlayer>) -> Result<PlayerState, AppError> {
-    let p = player.lock().map_err(|_| AppError::LockPoisoned)?;
+    let p = player.lock_recover();
     Ok(PlayerState {
         is_playing: p.is_playing(),
         current_track_id: p.get_current_track_id(),

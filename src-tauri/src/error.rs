@@ -16,8 +16,6 @@ pub enum AppError {
     Watcher(String),
     #[error("Network error: {0}")]
     Network(String),
-    #[error("Lock poisoned")]
-    LockPoisoned,
     #[error("{0}")]
     Generic(String),
 }
