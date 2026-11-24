@@ -1,14 +1,16 @@
 import { pushError } from '$lib/state/errorState.svelte';
 import { t, type ActionKey } from '$lib/i18n/index.svelte';
+import { logToFile } from './frontend-log';
 import type { FailedFile, ImportResult } from '$lib/types';
 
 /**
  * For non-critical operations: seek, volume, queue-next, cover art.
- * Logs to console only.
+ * Logs to the console and the log file; nothing is shown to the user.
  */
 export function warnNonCritical(context: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.warn(`[lyra] ${context}: ${message}`);
+  logToFile('warn', `${context}: ${message}`);
 }
 
 /**
@@ -19,6 +21,7 @@ export function warnNonCritical(context: string, err: unknown): void {
 export function notifyCritical(action: ActionKey, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[lyra] ${action}: ${message}`);
+  logToFile('error', `${action}: ${message}`);
   pushError(t('error.failed', { context: t(action), message }));
 }
 

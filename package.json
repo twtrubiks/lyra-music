@@ -51,12 +51,26 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.0",
-    "@tauri-apps/plugin-dialog": "^2.8.0"
+    "@tauri-apps/plugin-dialog": "^2.8.0",
+    "@tauri-apps/plugin-log": "^2.10.2"
   },
   "lint-staged": {
-    "src/**/*.{ts,js}": ["prettier --write", "eslint --fix"],
-    "src/**/*.svelte": ["prettier --write", "eslint --fix", "stylelint --fix"],
-    "src/**/*.css": ["prettier --write", "stylelint --fix"],
-    "src-tauri/src/**/*.rs": ["rustfmt", "bash -c 'cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings'"]
+    "src/**/*.{ts,js}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "src/**/*.svelte": [
+      "prettier --write",
+      "eslint --fix",
+      "stylelint --fix"
+    ],
+    "src/**/*.css": [
+      "prettier --write",
+      "stylelint --fix"
+    ],
+    "src-tauri/src/**/*.rs": [
+      "rustfmt",
+      "bash -c 'cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings'"
+    ]
   }
 }

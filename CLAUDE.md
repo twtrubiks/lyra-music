@@ -73,7 +73,7 @@ Frontend (Svelte 5)  ──IPC (invoke/listen)──  Backend (Rust/Tauri 2)
 - `metadata/` — `reader.rs`（lofty 讀取；含歌詞：sidecar `.lrc` 優先、fallback 內嵌標籤）、`writer.rs`（標籤寫入）、`lyrics_online.rs`（LRCLIB 線上歌詞查詢，僅使用者手動觸發；兩段式：`/api/get` 精確匹配優先——duration 容差僅 ±2 秒，重轉檔/尾端靜音必漏——404 後 fallback `/api/search`，title 正規化後須完全相等（排除 medley），artist 採雙向包含比對——接受「Jay Chou 周杰倫」式裝飾異寫（部分曲目在 LRCLIB 上只有這種寫法），拒絕不同歌手，兩側須非空（`contains("")` 恆真）——並在 ±15 秒內取時長最接近本地檔者（更遠視為不同版本，寧可回報找不到）；同步歌詞以 `create_new` 快取為 sidecar，不覆蓋既有檔）
 - `models/` — Serde 結構體：Track、Playlist、PlayerState、ArtistSummary、AlbumSummary
 - `error.rs` — `AppError` 列舉（thiserror）
-- `logging.rs` — 診斷日誌（tauri-plugin-log 的設定）：`log::error!`／`warn!`／`info!` 同時寫 stderr 與 app log 目錄的 `lyra.log`（上限 1 MB，寫滿改名為 `lyra_<日期>_<時間>.log` 並只留一個，UTC 時間戳）；相依套件的訊息只收 warn 以上。模組另外補上外掛沒有的兩件事：panic hook 寫入日誌、日誌檔開不了時退回只寫 stderr（不擋啟動）。打包後沒有終端機，**後端要回報問題一律用 `log::` 巨集，不要用 `eprintln!`**。前端未接這個外掛（未加 `log:default` 權限）
+- `logging.rs` — 診斷日誌（tauri-plugin-log 的設定）：`log::error!`／`warn!`／`info!` 同時寫 stderr 與 app log 目錄的 `lyra.log`（上限 1 MB，寫滿改名為 `lyra_<日期>_<時間>.log` 並只留一個，UTC 時間戳）；相依套件的訊息只收 warn 以上。模組另外補上外掛沒有的兩件事：panic hook 寫入日誌、日誌檔開不了時退回只寫 stderr（不擋啟動）。打包後沒有終端機，**後端要回報問題一律用 `log::` 巨集，不要用 `eprintln!`**。前端經 `lib/logic/frontend-log.ts` 寫進同一個檔（`@tauri-apps/plugin-log` + `log:default` 權限）：`notifyCritical`／`warnNonCritical` 與全域未捕捉例外／未處理的 Promise 失敗，每分鐘上限 30 筆；前端回報錯誤一律走這兩個函式，不要直接 `console.error`
 - `tray.rs` — 系統匣整合
 - `lib.rs` — 應用程式初始化：DB 設定、音訊播放器、資料夾監控、系統匣、播放器輪詢執行緒（250ms；**play_count 在此入帳**——完成偵測與 DB 寫入同執行緒同鎖，前端僅透過 level-triggered 的 `completion_seq` 鏡像顯示，不再經 IPC 計數）
 

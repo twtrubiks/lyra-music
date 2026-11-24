@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+vi.mock('./frontend-log', () => ({ logToFile: vi.fn() }));
+
+import { logToFile } from './frontend-log';
 import {
   notifyCritical,
+  warnNonCritical,
   notifyFailedImports,
   notifyImportResult,
   notifyWatcherError,
@@ -228,5 +232,29 @@ describe('notifyWatcherError', () => {
     expect(state.errors[0].level).toBe('warn');
     expect(state.errors[0].message).toContain('資料夾監控');
     expect(state.errors[0].message).toContain('inotify watch limit reached');
+  });
+});
+
+describe('log file', () => {
+  beforeEach(() => {
+    vi.mocked(logToFile).mockClear();
+    getErrorState().errors = [];
+    setLocale('en');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('notifyCritical writes an error with the untranslated action key', () => {
+    notifyCritical('action.trashTracks', new Error('disk gone'));
+    expect(logToFile).toHaveBeenCalledWith('error', 'action.trashTracks: disk gone');
+  });
+
+  it('warnNonCritical writes a warning', () => {
+    warnNonCritical('Seek', 'out of range');
+    expect(logToFile).toHaveBeenCalledWith('warn', 'Seek: out of range');
   });
 });

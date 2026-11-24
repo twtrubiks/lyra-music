@@ -198,7 +198,7 @@ src-tauri/                        # Backend (Rust)
 
 ## Logs
 
-Backend errors and warnings (files skipped during a scan, folder watching failures, audio device errors, panics) are written to a log file. Please attach it when reporting a problem:
+Backend errors and warnings (files skipped during a scan, folder watching failures, audio device errors, panics) and UI errors (failed-action notifications, uncaught exceptions) are written to a log file. Please attach it when reporting a problem:
 
 | Platform | Location                                      |
 | -------- | --------------------------------------------- |
