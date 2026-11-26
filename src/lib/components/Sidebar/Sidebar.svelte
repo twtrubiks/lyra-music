@@ -5,6 +5,7 @@
   import { notifyCritical, warnNonCritical } from '$lib/logic/error-handler';
   import { confirmDeletePlaylist } from '$lib/logic/confirm';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { clampMenuPosition } from '$lib/logic/menu-position';
   import { parseTrackIdsFromDrop, TRACK_IDS_DRAG_TYPE } from '$lib/logic/format';
   import { t, getLocale, toggleLocale, LOCALE_NAMES } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
@@ -23,7 +24,20 @@
   let showPlaylistMenu = $state(false);
   let menuX = $state(0);
   let menuY = $state(0);
+  let menuEl = $state<HTMLDivElement | null>(null);
   let contextPlaylistId = $state<number | null>(null);
+
+  // Opened at the click position; pull it back if it would run past the window edge.
+  $effect(() => {
+    if (!showPlaylistMenu || !menuEl) return;
+    const pos = clampMenuPosition(
+      { x: menuX, y: menuY },
+      { width: menuEl.offsetWidth, height: menuEl.offsetHeight },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    menuX = pos.x;
+    menuY = pos.y;
+  });
 
   let canMoveUp = $derived(
     contextPlaylistId !== null &&
@@ -437,7 +451,12 @@
   </div>
 
   {#if showPlaylistMenu}
-    <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu">
+    <div
+      class="context-menu"
+      style="left: {menuX}px; top: {menuY}px;"
+      role="menu"
+      bind:this={menuEl}
+    >
       <button
         class="menu-item"
         class:menu-item-disabled={!canMoveUp}
@@ -715,6 +734,9 @@
     border-radius: 6px;
     padding: 4px 0;
     min-width: 180px;
+
+    /* Keep the size independent of how close the menu is to the window edge. */
+    width: max-content;
     box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
   }
 

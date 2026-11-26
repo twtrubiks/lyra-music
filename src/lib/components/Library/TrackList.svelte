@@ -30,6 +30,7 @@
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import { clampMenuPosition } from '$lib/logic/menu-position';
   import { mapTrackListDeleteKey } from '$lib/logic/keyboard';
   import { warnNonCritical } from '$lib/logic/error-handler';
   import { t, type MessageKey } from '$lib/i18n/index.svelte';
@@ -125,6 +126,19 @@
   let showMenu = $state(false);
   let menuX = $state(0);
   let menuY = $state(0);
+  let menuEl = $state<HTMLDivElement | null>(null);
+
+  // Opened at the click position; pull it back if it would run past the window edge.
+  $effect(() => {
+    if (!showMenu || !menuEl) return;
+    const pos = clampMenuPosition(
+      { x: menuX, y: menuY },
+      { width: menuEl.offsetWidth, height: menuEl.offsetHeight },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    menuX = pos.x;
+    menuY = pos.y;
+  });
 
   // Column resize state
   let columnWidths = $state(loadColumnWidths());
@@ -460,7 +474,7 @@
 </div>
 
 {#if showMenu}
-  <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu">
+  <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu" bind:this={menuEl}>
     {#if playlistState.playlists.length > 0}
       <div class="menu-header">{t('trackList.addToPlaylist')}</div>
       {#each playlistState.playlists as pl (pl.id)}
@@ -659,6 +673,9 @@
     border-radius: 6px;
     padding: 4px 0;
     min-width: 180px;
+
+    /* Keep the size independent of how close the menu is to the window edge. */
+    width: max-content;
     box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
   }
 
