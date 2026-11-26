@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
   import { t } from '$lib/i18n/index.svelte';
+  import { marqueeDurationSeconds, textOverflows } from '$lib/logic/marquee';
 
   let {
     track,
@@ -13,8 +14,14 @@
 
   let canReveal = $derived(track !== null && onreveal !== undefined);
 
+  // The box clips; the text inside keeps its natural width (see `.marquee`), so the
+  // comparison holds whether or not the marquee is currently running.
+  let titleBox = $state<HTMLDivElement | null>(null);
   let titleEl = $state<HTMLDivElement | null>(null);
+  let artistBox = $state<HTMLDivElement | null>(null);
   let artistEl = $state<HTMLDivElement | null>(null);
+  let titleWidth = $state(0);
+  let artistWidth = $state(0);
   let titleOverflows = $state(false);
   let artistOverflows = $state(false);
 
@@ -26,11 +33,13 @@
 
     // Wait for DOM update
     requestAnimationFrame(() => {
-      if (titleEl) {
-        titleOverflows = titleEl.scrollWidth > titleEl.clientWidth;
+      if (titleEl && titleBox) {
+        titleWidth = titleEl.offsetWidth;
+        titleOverflows = textOverflows(titleWidth, titleBox.clientWidth);
       }
-      if (artistEl) {
-        artistOverflows = artistEl.scrollWidth > artistEl.clientWidth;
+      if (artistEl && artistBox) {
+        artistWidth = artistEl.offsetWidth;
+        artistOverflows = textOverflows(artistWidth, artistBox.clientWidth);
       }
     });
   });
@@ -52,17 +61,29 @@
       {/if}
     </div>
     <div class="meta">
-      <div class="text-scroll" class:scrolling={titleOverflows}>
-        <div class="title" bind:this={titleEl}>{track.title}</div>
-        {#if titleOverflows}
-          <div class="title" aria-hidden="true">{track.title}</div>
-        {/if}
+      <div class="text-scroll" bind:this={titleBox}>
+        <div
+          class="marquee"
+          class:scrolling={titleOverflows}
+          style:animation-duration="{marqueeDurationSeconds(titleWidth)}s"
+        >
+          <div class="title" bind:this={titleEl}>{track.title}</div>
+          {#if titleOverflows}
+            <div class="title" aria-hidden="true">{track.title}</div>
+          {/if}
+        </div>
       </div>
-      <div class="text-scroll" class:scrolling={artistOverflows}>
-        <div class="artist" bind:this={artistEl}>{track.artist}</div>
-        {#if artistOverflows}
-          <div class="artist" aria-hidden="true">{track.artist}</div>
-        {/if}
+      <div class="text-scroll" bind:this={artistBox}>
+        <div
+          class="marquee"
+          class:scrolling={artistOverflows}
+          style:animation-duration="{marqueeDurationSeconds(artistWidth)}s"
+        >
+          <div class="artist" bind:this={artistEl}>{track.artist}</div>
+          {#if artistOverflows}
+            <div class="artist" aria-hidden="true">{track.artist}</div>
+          {/if}
+        </div>
       </div>
     </div>
   {:else}
@@ -136,10 +157,15 @@
     white-space: nowrap;
   }
 
-  .text-scroll.scrolling {
+  /* As wide as its text, so -50% in the keyframes is half the text, not half the box. */
+  .marquee {
     display: flex;
     gap: 3em;
-    animation: marquee 12s linear infinite;
+    width: max-content;
+  }
+
+  .marquee.scrolling {
+    animation: marquee linear infinite;
   }
 
   .title {
