@@ -32,6 +32,11 @@ ureq = "3"
 tauri-plugin-log = "2"
 log = "0.4"
 
+# MPRIS media controls. The D-Bus backend reuses the `dbus` crate tauri already
+# pulls in on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+souvlaki = "0.9"
+
 [features]
 audio-tests = []
 

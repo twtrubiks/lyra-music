@@ -3,6 +3,8 @@ pub mod commands;
 pub mod error;
 pub mod lock;
 pub mod logging;
+#[cfg(target_os = "linux")]
+pub mod media_controls;
 pub mod metadata;
 pub mod models;
 pub mod scanner;
@@ -29,6 +31,10 @@ fn spawn_player_polling(
     db: Arc<Mutex<Connection>>,
 ) {
     std::thread::spawn(move || {
+        #[cfg(target_os = "linux")]
+        let mut media_session =
+            media_controls::MediaSession::start(app_handle.clone(), Arc::clone(&player));
+
         // Play counts are credited here, not in the frontend: completion
         // detection (check_gapless_transition / acknowledge_track_ended)
         // and crediting happen in this one thread, so exactly-once holds by
@@ -70,6 +76,10 @@ fn spawn_player_polling(
                         log::error!("failed to credit play count for track {id}: {e}");
                     }
                 }
+            }
+            #[cfg(target_os = "linux")]
+            if let Some(session) = media_session.as_mut() {
+                session.update(&state, &db);
             }
             let _ = app_handle.emit("player-state-changed", &state);
         }
