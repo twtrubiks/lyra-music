@@ -40,6 +40,7 @@ export const zhTW: Messages = {
   'trackList.columnAlbum': '專輯',
   'trackList.columnPlays': '播放次數',
   'trackList.columnDuration': '時長',
+  'trackList.columns': '顯示欄位',
   'trackList.addToPlaylist': '加入播放清單',
   'trackList.trash': '丟進垃圾桶',
 

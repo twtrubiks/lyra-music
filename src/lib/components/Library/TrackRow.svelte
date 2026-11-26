@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
+  import { ALL_COLUMNS_VISIBLE } from '$lib/logic/column-visibility';
   import { formatDuration, TRACK_IDS_DRAG_TYPE } from '$lib/logic/format';
 
   let {
@@ -7,6 +8,7 @@
     isActive = false,
     isSelected = false,
     isFocused = false,
+    columnVisibility = ALL_COLUMNS_VISIBLE,
     dragIds,
     ondblclick,
     onclick,
@@ -16,6 +18,8 @@
     isActive?: boolean;
     isSelected?: boolean;
     isFocused?: boolean;
+    /** Which of the five columns to render, in display order. */
+    columnVisibility?: readonly boolean[];
     /** IDs carried by a drag started on this row; defaults to just this track. */
     dragIds?: () => number[];
     ondblclick: (track: Track) => void;
@@ -45,10 +49,14 @@
   ondragstart={handleDragStart}
 >
   <td class="col-title">{track.title}</td>
-  <td class="col-artist">{track.artist}</td>
-  <td class="col-album">{track.album}</td>
-  <td class="col-plays">{track.play_count > 0 ? track.play_count : ''}</td>
-  <td class="col-duration">{formatDuration(track.duration_secs)}</td>
+  {#if columnVisibility[1]}<td class="col-artist">{track.artist}</td>{/if}
+  {#if columnVisibility[2]}<td class="col-album">{track.album}</td>{/if}
+  {#if columnVisibility[3]}
+    <td class="col-plays">{track.play_count > 0 ? track.play_count : ''}</td>
+  {/if}
+  {#if columnVisibility[4]}
+    <td class="col-duration">{formatDuration(track.duration_secs)}</td>
+  {/if}
 </tr>
 
 <style>

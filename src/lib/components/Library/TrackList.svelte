@@ -30,6 +30,15 @@
     type SelectionState,
   } from '$lib/logic/selection';
   import { moveByKeyboard } from '$lib/logic/reorder';
+  import {
+    TITLE_COLUMN,
+    displayWidths,
+    loadColumnVisibility,
+    resizeColumnPair,
+    saveColumnVisibility,
+    toggleColumn,
+    visibleColumnIndices,
+  } from '$lib/logic/column-visibility';
   import { clampMenuPosition } from '$lib/logic/menu-position';
   import { mapTrackListDeleteKey } from '$lib/logic/keyboard';
   import { warnNonCritical } from '$lib/logic/error-handler';
@@ -128,9 +137,13 @@
   let menuY = $state(0);
   let menuEl = $state<HTMLDivElement | null>(null);
 
+  // Column chooser, opened by right-clicking the header row. Shares the
+  // position (and the edge clamping) with the track menu: only one is open.
+  let showColumnMenu = $state(false);
+
   // Opened at the click position; pull it back if it would run past the window edge.
   $effect(() => {
-    if (!showMenu || !menuEl) return;
+    if (!(showMenu || showColumnMenu) || !menuEl) return;
     const pos = clampMenuPosition(
       { x: menuX, y: menuY },
       { width: menuEl.offsetWidth, height: menuEl.offsetHeight },
@@ -142,9 +155,18 @@
 
   // Column resize state
   let columnWidths = $state(loadColumnWidths());
+  // Which columns are shown. One setting for every track list in the app.
+  let columnVisibility = $state(loadColumnVisibility());
+  let shownColumns = $derived(visibleColumnIndices(columnVisibility));
+  let shownWidths = $derived(displayWidths(columnWidths, columnVisibility));
   let tableEl: HTMLTableElement | undefined = $state(undefined);
 
+  // Columns on either side of the border being dragged (-1: not dragging)
   let resizingIndex = $state(-1);
+  let resizingRightIndex = -1;
+  // Stored widths cover all five columns; on screen the shown ones are
+  // stretched to fill the table, so a drag distance is scaled back by this.
+  let resizeScale = 1;
   let startX = 0;
   let startLeftW = 0;
   let startRightW = 0;
@@ -162,12 +184,14 @@
     };
   });
 
-  function onResizeStart(e: MouseEvent, colIndex: number) {
+  function onResizeStart(e: MouseEvent, colIndex: number, rightIndex: number) {
     e.preventDefault();
     resizingIndex = colIndex;
+    resizingRightIndex = rightIndex;
+    resizeScale = shownColumns.reduce((sum, i) => sum + columnWidths[i], 0);
     startX = e.clientX;
     startLeftW = columnWidths[colIndex];
-    startRightW = columnWidths[colIndex + 1];
+    startRightW = columnWidths[rightIndex];
     tableWidth = tableEl?.offsetWidth ?? 1;
 
     window.addEventListener('mousemove', onResizeMove);
@@ -179,20 +203,15 @@
     const deltaX = e.clientX - startX;
     const deltaPct = deltaX / tableWidth;
 
-    let newLeft = startLeftW + deltaPct;
-    let newRight = startRightW - deltaPct;
-
-    if (newLeft < MIN_WIDTHS[resizingIndex]) {
-      newLeft = MIN_WIDTHS[resizingIndex];
-      newRight = startLeftW + startRightW - newLeft;
-    }
-    if (newRight < MIN_WIDTHS[resizingIndex + 1]) {
-      newRight = MIN_WIDTHS[resizingIndex + 1];
-      newLeft = startLeftW + startRightW - newRight;
-    }
-
+    const [newLeft, newRight] = resizeColumnPair(
+      startLeftW,
+      startRightW,
+      deltaPct * resizeScale,
+      MIN_WIDTHS[resizingIndex] * resizeScale,
+      MIN_WIDTHS[resizingRightIndex] * resizeScale,
+    );
     columnWidths[resizingIndex] = newLeft;
-    columnWidths[resizingIndex + 1] = newRight;
+    columnWidths[resizingRightIndex] = newRight;
   }
 
   function onResizeEnd() {
@@ -225,7 +244,21 @@
     selection = resolveContextClick(selection, tracks, index);
     menuX = e.clientX;
     menuY = e.clientY;
+    showColumnMenu = false;
     showMenu = true;
+  }
+
+  function handleHeaderContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    menuX = e.clientX;
+    menuY = e.clientY;
+    showMenu = false;
+    showColumnMenu = true;
+  }
+
+  function handleToggleColumn(index: number) {
+    columnVisibility = toggleColumn(columnVisibility, index);
+    saveColumnVisibility(columnVisibility);
   }
 
   function scrollFocusedIntoView() {
@@ -305,6 +338,7 @@
   // Context menu actions
   function handleWindowClick() {
     if (showMenu) showMenu = false;
+    if (showColumnMenu) showColumnMenu = false;
   }
 
   async function handleMenuAddToPlaylist(pl: Playlist) {
@@ -384,6 +418,8 @@
     { label: 'trackList.columnDuration', column: 'duration_secs' },
   ];
 
+  const DURATION_COLUMN = headers.length - 1;
+
   function getSortIndicator(column: SortColumn): string {
     if (!sortConfig || sortConfig.column !== column) return '';
     return sortConfig.direction === 'asc' ? ' \u25B2' : ' \u25BC';
@@ -411,15 +447,17 @@
       }}
     >
       <colgroup>
-        {#each columnWidths as w, i (i)}
-          <col style="width: {w * 100}%" />
+        {#each shownColumns as col, pos (col)}
+          <col style="width: {shownWidths[pos] * 100}%" />
         {/each}
       </colgroup>
       <thead>
-        <tr>
-          {#each headers as header, i (header.column)}
+        <tr oncontextmenu={handleHeaderContextMenu}>
+          {#each shownColumns as col, pos (col)}
+            {@const header = headers[col]}
+            {@const nextCol = shownColumns[pos + 1]}
             <th
-              class:th-duration={i === 4}
+              class:th-duration={col === DURATION_COLUMN}
               class:th-sortable={!!onsort}
               class:th-sorted={sortConfig?.column === header.column}
               onclick={() => {
@@ -428,15 +466,15 @@
               }}
             >
               <span class="th-label">{t(header.label)}{getSortIndicator(header.column)}</span>
-              {#if i < 4}
+              {#if nextCol !== undefined}
                 <div
                   class="resize-handle"
-                  class:active={resizingIndex === i}
+                  class:active={resizingIndex === col}
                   role="separator"
                   aria-orientation="vertical"
                   onmousedown={(e) => {
                     e.stopPropagation();
-                    onResizeStart(e, i);
+                    onResizeStart(e, col, nextCol);
                   }}
                 ></div>
               {/if}
@@ -447,7 +485,7 @@
       <tbody>
         {#if visibleRange.topPadding > 0}
           <tr class="virtual-spacer" aria-hidden="true">
-            <td colspan="5" style="height:{visibleRange.topPadding}px"></td>
+            <td colspan={shownColumns.length} style="height:{visibleRange.topPadding}px"></td>
           </tr>
         {/if}
         {#each visibleTracks as track, localIndex (track.id)}
@@ -457,6 +495,7 @@
             isActive={track.id === currentTrackId}
             isSelected={selection.selectedIds.has(track.id)}
             isFocused={selection.focusedIndex === globalIndex}
+            {columnVisibility}
             dragIds={() => resolveDragIds(tracks, selection, track.id)}
             ondblclick={onplay}
             onclick={(e) => handleRowClick(globalIndex, e)}
@@ -465,13 +504,37 @@
         {/each}
         {#if visibleRange.bottomPadding > 0}
           <tr class="virtual-spacer" aria-hidden="true">
-            <td colspan="5" style="height:{visibleRange.bottomPadding}px"></td>
+            <td colspan={shownColumns.length} style="height:{visibleRange.bottomPadding}px"></td>
           </tr>
         {/if}
       </tbody>
     </table>
   {/if}
 </div>
+
+{#if showColumnMenu}
+  <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu" bind:this={menuEl}>
+    <div class="menu-header">{t('trackList.columns')}</div>
+    {#each headers as header, col (header.column)}
+      {@const locked = col === TITLE_COLUMN}
+      <button
+        class="menu-item"
+        class:menu-item-disabled={locked}
+        role="menuitemcheckbox"
+        aria-checked={columnVisibility[col]}
+        aria-disabled={locked}
+        onclick={(e) => {
+          // Stay open: several columns are usually switched in one go
+          e.stopPropagation();
+          handleToggleColumn(col);
+        }}
+      >
+        <span class="menu-check" aria-hidden="true">{columnVisibility[col] ? '\u2713' : ''}</span>
+        {t(header.label)}
+      </button>
+    {/each}
+  </div>
+{/if}
 
 {#if showMenu}
   <div class="context-menu" style="left: {menuX}px; top: {menuY}px;" role="menu" bind:this={menuEl}>
@@ -725,6 +788,11 @@
   .menu-item-disabled:hover {
     background: transparent;
     color: #555;
+  }
+
+  .menu-check {
+    width: 14px;
+    text-align: center;
   }
 
   .menu-divider {

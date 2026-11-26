@@ -43,6 +43,7 @@ export const en = {
   'trackList.columnAlbum': 'Album',
   'trackList.columnPlays': 'Plays',
   'trackList.columnDuration': 'Duration',
+  'trackList.columns': 'Columns',
   'trackList.addToPlaylist': 'Add to playlist',
   'trackList.trash': 'Move to trash',
 
